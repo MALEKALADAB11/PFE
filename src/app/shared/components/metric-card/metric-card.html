@@ -1,0 +1,59 @@
+<div class="metric-card" [class]="'metric-card--' + variant">
+
+  <!-- Header row -->
+  <div class="metric-card__header">
+    <span class="metric-card__label">{{ label }}</span>
+
+    @if (isNew) {
+      <span class="new-tag">NEW</span>
+    }
+
+    @if (trend) {
+      <span class="metric-card__trend"
+            [class.trend--up]="trendDir === 'up'"
+            [class.trend--down]="trendDir === 'down'">
+
+        @if (trendDir === 'up') {
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2.5">
+            <polyline points="18,15 12,9 6,15"/>
+          </svg>
+        } @else if (trendDir === 'down') {
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2.5">
+            <polyline points="6,9 12,15 18,9"/>
+          </svg>
+        }
+
+        {{ trend }}
+      </span>
+    }
+  </div>
+
+  <!-- Main value -->
+  <div class="metric-card__value-row">
+    <span class="metric-card__value">{{ value }}</span>
+    @if (suffix) {
+      <span class="metric-card__suffix">{{ suffix }}</span>
+    }
+  </div>
+
+  <!-- Sub value -->
+  @if (subValue) {
+    <p class="metric-card__sub">{{ subValue }}</p>
+  }
+
+  <!-- Progress bar -->
+  @if (progress !== undefined) {
+    <div class="metric-card__progress">
+      <div class="progress-track" style="margin-top: 10px;">
+        <div class="progress-fill"
+             [class]="progressColor"
+             [style.width.%]="progress">
+        </div>
+      </div>
+      <span class="metric-card__progress-label">{{ progress }}%</span>
+    </div>
+  }
+
+</div>

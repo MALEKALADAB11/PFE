@@ -1,0 +1,120 @@
+<aside class="sidebar" [class.sidebar--collapsed]="isCollapsed()">
+
+  <!-- Toggle button -->
+  <button class="sidebar__toggle" (click)="toggle()" [title]="isCollapsed() ? 'Ouvrir' : 'Réduire'">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+      @if (isCollapsed()) {
+        <polyline points="9,18 15,12 9,6"/>
+      } @else {
+        <polyline points="15,18 9,12 15,6"/>
+      }
+    </svg>
+  </button>
+
+  <div class="sidebar__content">
+
+    <!-- Store info -->
+    <div class="sidebar-section">
+      <div class="store-header">
+        <div class="store-avatar">L2</div>
+        @if (!isCollapsed()) {
+          <div class="store-info">
+            <span class="store-name">{{ store().name }}</span>
+            <span class="store-meta">Manager · 4 conseillers</span>
+          </div>
+        }
+      </div>
+    </div>
+
+    @if (!isCollapsed()) {
+
+      <!-- KPIs -->
+      <div class="sidebar-section">
+        <p class="sidebar-label">CA journalier</p>
+        <div class="kpi-row">
+          <span class="kpi-value">{{ store().caJournalier | number: '1.0-0' }} DT</span>
+          <span class="kpi-target">/ {{ store().caObjectif | number: '1.0-0' }}</span>
+        </div>
+        <div class="progress-track" style="margin-top: 6px;">
+          <div class="progress-fill"
+               [style.width.%]="caPercent()"
+               [class.amber]="caPercent() < 60"
+               [class.teal]="caPercent() >= 80">
+          </div>
+        </div>
+        <p class="kpi-percent">{{ caPercent() }}% de l'objectif</p>
+      </div>
+
+      <!-- Contexte -->
+      <div class="sidebar-section">
+        <p class="sidebar-label">Contexte</p>
+
+        <div class="context-item context-item--weather">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2">
+            <path d="M20 17.58A5 5 0 0018 8h-1.26A8 8 0 104 16.25"/>
+          </svg>
+          <span>{{ store().context.weather }}</span>
+        </div>
+
+        <div class="context-item context-item--event">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <polyline points="12,6 12,12 16,14"/>
+          </svg>
+          <span>{{ store().context.event }}</span>
+        </div>
+
+        @if (store().context.stockAlert) {
+          <div class="context-item context-item--alert">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2">
+              <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+              <line x1="12" y1="9" x2="12" y2="13"/>
+              <line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+            <span>{{ store().context.stockAlert }}</span>
+          </div>
+        }
+      </div>
+
+      <!-- Trafic -->
+      <div class="sidebar-section">
+        <p class="sidebar-label">Trafic boutique</p>
+        <div class="kpi-row">
+          <span class="kpi-value">{{ store().visitors }}</span>
+          <span class="kpi-target">visiteurs / h</span>
+        </div>
+        <div class="progress-track" style="margin-top: 6px;">
+          <div class="progress-fill teal"
+               [style.width.%]="traficPercent()">
+          </div>
+        </div>
+        <p class="kpi-percent">Capacité {{ traficPercent() }}%</p>
+      </div>
+
+      <!-- Agent status -->
+      <div class="sidebar-section">
+        <p class="sidebar-label">Agent Status</p>
+        <div class="agent-list">
+          @for (agent of agents(); track trackById($index, agent)) {
+            <div class="agent-row">
+              <div class="agent-dot"
+                   [style.background]="statusColor(agent.status)">
+              </div>
+              <span class="agent-name">{{ agent.name }}</span>
+              <span class="agent-status mono"
+                    [style.color]="statusColor(agent.status)">
+                {{ agent.status }}
+              </span>
+            </div>
+          }
+        </div>
+      </div>
+
+    }
+
+  </div>
+</aside>

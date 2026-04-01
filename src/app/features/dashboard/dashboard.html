@@ -1,0 +1,307 @@
+<div class="dashboard">
+
+  <!-- ══ PAGE HEADER ══ -->
+  <div class="page-header">
+    <div class="page-header__left">
+      <h1 class="page-title">Tableau de bord</h1>
+      <p class="page-sub">
+        <span class="status-dot"></span>
+        Système nominal · APP06 Agent LIVE · Mis à jour 14:32
+      </p>
+    </div>
+    <div class="page-header__right">
+      <button class="btn-outline">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2">
+          <polyline points="1,4 1,10 7,10"/>
+          <path d="M3.51 15a9 9 0 102.13-9.36L1 10"/>
+        </svg>
+        Actualiser
+      </button>
+      <button class="btn-primary">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2">
+          <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
+          <circle cx="9" cy="7" r="4"/>
+          <path d="M23 21v-2a4 4 0 00-3-3.87"/>
+          <path d="M16 3.13a4 4 0 010 7.75"/>
+        </svg>
+        Coaching équipe
+      </button>
+    </div>
+  </div>
+
+  <!-- ══ FLIP KPI ROW ══ -->
+  <div class="kpi-grid">
+    @for (card of flipCards; track card.label) {
+      <app-flip-kpi-card [data]="card" [height]="148" />
+    }
+  </div>
+
+  <!-- ══ MAIN GRID ══ -->
+  <div class="main-grid">
+
+    <!-- ── Chart + Heatmap (left 60%) ── -->
+    <div class="main-grid__left">
+
+      <!-- Hourly chart -->
+      <div class="card chart-card">
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">Ventes horaires vs Forecast</h2>
+            <p class="card-sub">APP03 TimesFM · APP01 POS · BTQ-14</p>
+          </div>
+          <div class="chart-legend">
+            <span class="legend-item">
+              <span class="legend-dot" style="background: var(--color-purple)"></span>Réalisé
+            </span>
+            <span class="legend-item">
+              <span class="legend-dot legend-dot--dashed" style="border-color: var(--color-teal)"></span>Forecast
+            </span>
+            <span class="legend-item">
+              <span class="legend-dot legend-dot--dashed" style="border-color: #ccc"></span>Objectif
+            </span>
+          </div>
+        </div>
+
+        <!-- Bar chart -->
+        <div class="chart-area">
+          <div class="chart-bars">
+            @for (point of hourlyData; track point.hour) {
+              <div class="bar-group">
+                <!-- Forecast bar (background) -->
+                <div class="bar-wrap">
+                  <div class="bar bar--forecast"
+                       [style.height.%]="barHeight(point.forecast)">
+                  </div>
+                  @if (point.actual !== null) {
+                    <div class="bar bar--actual"
+                         [style.height.%]="barHeight(point.actual)">
+                    </div>
+                  }
+                  @if (point.hour === '14h') {
+                    <div class="bar-now-label">NOW</div>
+                  }
+                </div>
+                <span class="bar-label">{{ point.hour }}</span>
+              </div>
+            }
+          </div>
+
+          <!-- Y axis labels -->
+          <div class="chart-yaxis">
+            <span>8</span>
+            <span>6</span>
+            <span>4</span>
+            <span>2</span>
+            <span>0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Context Heatmap -->
+      <div class="card heatmap-card">
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">Context Risk Heatmap</h2>
+            <p class="card-sub">APP02 Feature Eng. · APP12 Data Sources · LIVE</p>
+          </div>
+          <div class="heat-legend">
+            <span class="heat-leg" style="background:#EAF3DE;color:#3B6D11">Low</span>
+            <span class="heat-leg" style="background:#C0DD97;color:#27500A">Med</span>
+            <span class="heat-leg" style="background:#EF9F27;color:#633806">High</span>
+            <span class="heat-leg" style="background:#E74C3C;color:white">Crit</span>
+          </div>
+        </div>
+
+        <div class="heatmap-grid">
+          <!-- Hours header -->
+          <div class="heat-row heat-row--header">
+            <span class="heat-row-label"></span>
+            @for (h of heatHours; track h) {
+              <span class="heat-cell heat-cell--header">{{ h }}</span>
+            }
+          </div>
+
+          <!-- Data rows -->
+          @for (row of heatRows; track row.key) {
+            <div class="heat-row">
+              <span class="heat-row-label">{{ row.label }}</span>
+              @for (h of heatHours; track h; let i = $index) {
+                <div class="heat-cell"
+                     [style.background]="heatColor(heatData[row.key][i])"
+                     [title]="row.label + ' ' + h + ' : ' + heatLabel(heatData[row.key][i])">
+                </div>
+              }
+            </div>
+          }
+        </div>
+
+        <div class="heat-alert">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+               stroke="#E74C3C" stroke-width="2">
+            <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/>
+            <line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+          APP06 · Critical stock risk window 14h–20h — pivot strategy active
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ── Coaching cards + Classement (right 40%) ── -->
+    <div class="main-grid__right">
+
+      <!-- Coaching cards -->
+      <div class="card coaching-card-wrap">
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">Active Coaching Cards</h2>
+            <p class="card-sub">APP07 Coaching Agent · DSPy · vLLM Mistral-78</p>
+          </div>
+          <span class="live-badge">
+            <span class="live-badge__dot"></span>Agent Running
+          </span>
+        </div>
+
+        <div class="coaching-list">
+          @for (card of cards; track trackById($index, card)) {
+            <div class="coaching-item"
+                 [class.coaching-item--high]="card.priority === 'HIGH'"
+                 [class.coaching-item--med]="card.priority === 'MED'"
+                 [class.coaching-item--ok]="card.priority === 'OK'">
+
+              <!-- Priority strip -->
+              <div class="coaching-strip"
+                   [style.background]="priorityColor(card.priority)">
+              </div>
+
+              <div class="coaching-body">
+                <!-- Header -->
+                <div class="coaching-head">
+                  <div class="advisor-avatar"
+                       [style.background]="card.avatarColor">
+                    {{ card.advisorInitials }}
+                  </div>
+                  <div class="coaching-meta">
+                    <span class="coaching-name">{{ card.advisorName }}</span>
+                    <span class="coaching-target">
+                      ADV · {{ card.target }}% objectif
+                    </span>
+                  </div>
+                  <div class="coaching-priority-badge"
+                       [style.background]="priorityBg(card.priority)"
+                       [style.color]="priorityColor(card.priority)">
+                    {{ card.priority }}
+                  </div>
+                  <span class="coaching-time mono">{{ card.time }}</span>
+                </div>
+
+                <!-- Context -->
+                <p class="coaching-context">
+                  Gap {{ card.gap }}% · {{ card.context }}
+                </p>
+
+                <!-- Advice -->
+                <p class="coaching-advice">"{{ card.advice }}"</p>
+
+                <!-- Actions -->
+                @if (card.status === 'pending') {
+                  <div class="coaching-actions">
+                    <button class="btn-escalate"
+                            (click)="escalate(card.id)">
+                      Escalader
+                    </button>
+                    <button class="btn-approve"
+                            (click)="approve(card.id)">
+                      Approuver
+                    </button>
+                  </div>
+                } @else {
+                  <div class="coaching-status-row">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="2.5">
+                      <polyline points="20,6 9,17 4,12"/>
+                    </svg>
+                    <span>{{ statusLabel(card.status) }}</span>
+                    @if (card.status === 'approved') {
+                      <span class="auto-label">Auto-approved</span>
+                    }
+                  </div>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+
+      <!-- Classement équipe -->
+      <div class="card team-card">
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">Classement Équipe</h2>
+            <p class="card-sub">Performance du jour · LIVE</p>
+          </div>
+        </div>
+
+        <div class="team-list">
+          @for (adv of advisors; track trackById($index, adv); let i = $index) {
+            <div class="team-row">
+              <!-- Rank -->
+              <span class="team-rank"
+                    [class.team-rank--gold]="i === 0">
+                {{ i + 1 }}
+              </span>
+
+              <!-- Avatar -->
+              <div class="advisor-avatar advisor-avatar--sm"
+                   [style.background]="adv.avatarColor">
+                {{ adv.initials }}
+              </div>
+
+              <!-- Info -->
+              <div class="team-info">
+                <span class="team-name">{{ adv.name }}</span>
+                <span class="team-role">{{ adv.role }}</span>
+              </div>
+
+              <!-- CA + bar -->
+              <div class="team-perf">
+                <div class="team-values">
+                  <span class="team-ca">{{ adv.caRealized }} DT</span>
+                  <span class="team-pct"
+                        [style.color]="perfColor(adv.performance)">
+                    {{ adv.performance }}%
+                  </span>
+                </div>
+                <div class="progress-track">
+                  <div class="progress-fill"
+                       [style.width.%]="adv.performance"
+                       [style.background]="perfColor(adv.performance)">
+                  </div>
+                </div>
+              </div>
+
+              <!-- Status badge -->
+              <span class="badge" [class]="statusBadge(adv.status)">
+                {{ statusText(adv.status) }}
+              </span>
+            </div>
+          }
+        </div>
+
+        <!-- Team average -->
+        <div class="team-avg">
+          <span class="team-avg__label">Moy. équipe</span>
+          <div class="progress-track" style="flex:1">
+            <div class="progress-fill amber" style="width: 53%"></div>
+          </div>
+          <span class="team-avg__val">53%</span>
+          <span class="team-avg__obj">obj 8 000 DT</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>

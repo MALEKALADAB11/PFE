@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { Agent } from '../models/agent';
 import { Advisor, CoachingCard } from '../models/advisor';
-import { StoreMetrics } from '../models/store';
+import { ProductMix, StoreMetrics } from '../models/store';
 import { InventoryItem, InventoryAlert } from '../models/inventory';
 
 
@@ -133,4 +133,78 @@ export class MockDataService {
         time: '14:10' },
     ];
   }
+getProductMix(): ProductMix[] {
+  return [
+    {
+      id: 'pm1',
+      name: 'Forfait Mobile',
+      color: '#6C5CE7',
+      salesActual: 56,
+      salesForecast: 65,
+      revenue: 2380,
+      revenueForecast: 2760,
+      unitsSold: 14,
+      unitsForecast: 18,
+      trend: 'down',
+      trendVal: '-14%',
+      alert: false
+    },
+    {
+      id: 'pm2',
+      name: 'Fibre / Box',
+      color: '#00B894',
+      salesActual: 30,
+      salesForecast: 28,
+      revenue: 1470,
+      revenueForecast: 1372,
+      unitsSold: 9,
+      unitsForecast: 8,
+      trend: 'up',
+      trendVal: '+7%',
+      alert: false
+    },
+    {
+      id: 'pm3',
+      name: 'Terminaux',
+      color: '#2D9CDB',
+      salesActual: 48,
+      salesForecast: 60,
+      revenue: 3890,
+      revenueForecast: 4860,
+      unitsSold: 6,
+      unitsForecast: 8,
+      trend: 'down',
+      trendVal: '-25%',
+      alert: true
+    },
+    {
+      id: 'pm4',
+      name: 'SIM / Recharge',
+      color: '#F9A825',
+      salesActual: 72,
+      salesForecast: 55,
+      revenue: 864,
+      revenueForecast: 660,
+      unitsSold: 24,
+      unitsForecast: 18,
+      trend: 'up',
+      trendVal: '+31%',
+      alert: false
+    },
+    {
+      id: 'pm5',
+      name: 'Accessoires',
+      color: '#E74C3C',
+      salesActual: 18,
+      salesForecast: 40,
+      revenue: 420,
+      revenueForecast: 960,
+      unitsSold: 4,
+      unitsForecast: 9,
+      trend: 'down',
+      trendVal: '-56%',
+      alert: true
+    },
+  ];
+}
 }

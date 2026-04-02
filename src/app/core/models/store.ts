@@ -31,3 +31,17 @@ export interface Agent {
   status: AgentStatus;
   latency: number;
 }
+export interface ProductMix {
+  id:               string;
+  name:             string;
+  color:            string;
+  salesActual:      number;   // % du CA total
+  salesForecast:    number;   // % prévu
+  revenue:          number;   // DT réalisé
+  revenueForecast:  number;   // DT prévu
+  unitsSold:        number;   // unités vendues
+  unitsForecast:    number;   // unités prévues
+  trend:            'up' | 'down' | 'stable';
+  trendVal:         string;
+  alert:            boolean;
+}

@@ -1,7 +1,7 @@
 import { Component, computed, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Advisor, CoachingCard } from '../../core/models/advisor';
-import { StoreMetrics } from '../../core/models/store';
+import { ProductMix, StoreMetrics } from '../../core/models/store';
 import { MockDataService } from '../../core/services/mock-data';
 import { FlipKpiCardComponent, FlipCardData } from '../../shared/components/flip-kpi-card/flip-kpi-card';
 
@@ -36,11 +36,13 @@ export class DashboardComponent {
 
   activeCardId = signal<string | null>(null);
   chartRange   = signal<'7J' | '30J' | '90J'>('30J');
+  productMix = signal<ProductMix[]>([]);
 
   constructor(private data: MockDataService) {
     this.store = this.data.getStoreMetrics();
     this.advisors = this.data.getAdvisors();
     this.cards = this.data.getCoachingCards();
+    this.productMix.set(this.data.getProductMix());
   }
 
   // ── Flip KPI cards ──
@@ -159,4 +161,25 @@ export class DashboardComponent {
   }
 
   trackById(_: number, item: { id: string }) { return item.id; }
+
+  attainmentColor(actual: number, forecast: number): string {
+  const ratio = actual / forecast;
+  if (ratio >= 1)    return '#00B894';
+  if (ratio >= 0.75) return '#F9A825';
+  return '#E74C3C';
+}
+
+attainmentPct(actual: number, forecast: number): number {
+  return Math.min(Math.round((actual / forecast) * 100), 150);
+}
+
+forecastBarWidth(val: number): number {
+  const max = Math.max(...this.productMix().map(p => p.salesForecast));
+  return Math.round((val / max) * 100);
+}
+
+actualBarWidth(val: number): number {
+  const max = Math.max(...this.productMix().map(p => p.salesForecast));
+  return Math.round((val / max) * 100);
+}
 }

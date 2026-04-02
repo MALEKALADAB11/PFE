@@ -165,11 +165,13 @@
       <div class="products-grid">
         @for (product of products; track product.id) {
 
-          <div class="product-flip"
-               [class.flipped]="isFlipped(product.id)"
-               (click)="toggleFlip(product.id)">
+          <!-- Vérifier que c'est bien comme ça -->
+      <div class="product-flip"
+          [class.flipped]="isFlipped(product.id)"
+          (click)="toggleFlip(product.id)">
 
-            <div class="product-inner">
+          <div class="product-inner">
+            
 
               <!-- FRONT -->
               <div class="product-front">

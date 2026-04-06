@@ -315,7 +315,7 @@ export class ChatComponent implements AfterViewChecked {
       return ['Stock API', 'Inventory Agent', 'TimesFM'];
     if (m.includes('weather') || m.includes('rain') || m.includes('accessory'))
       return ['Météo API', 'RAG', 'Coaching Agent'];
-    if (m.includes('forecast') || m.includes('forecast'))
+    if (m.includes('forecast') || m.includes('prévision'))
       return ['TimesFM', 'Gap Detector', 'POS live'];
     if (m.includes('script') || m.includes('argument'))
       return ['RAG', 'Coaching Agent', 'DSPy'];

@@ -6,10 +6,10 @@
     <!-- PAGE HEADER -->
     <div class="page-header">
       <div>
-        <h1 class="page-title">Interface Conseiller</h1>
+        <h1 class="page-title">Advisor Interface</h1>
         <p class="page-sub">
           <span class="status-dot"></span>
-          Connecté · Lac 2 · Mis à jour 14:32
+          Connected · Lac 2 · Updated 14:32
         </p>
       </div>
       <button class="btn-coach" (click)="openChat()">
@@ -17,7 +17,7 @@
              stroke="currentColor" stroke-width="2">
           <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
         </svg>
-        Coach maintenant
+        Coach Now
       </button>
     </div>
 
@@ -41,25 +41,25 @@
       <div class="profile-kpis">
         <div class="profile-kpi">
           <span class="profile-kpi__val">{{ selected().caRealized }} DT</span>
-          <span class="profile-kpi__label">CA réalisé</span>
+          <span class="profile-kpi__label">Revenue</span>
         </div>
         <div class="profile-kpi">
           <span class="profile-kpi__val">{{ selected().caObjectif }} DT</span>
-          <span class="profile-kpi__label">Objectif</span>
+          <span class="profile-kpi__label">Target</span>
         </div>
         <div class="profile-kpi">
           <span class="profile-kpi__val"
                 [style.color]="perfColor()">
             {{ selected().performance }}%
           </span>
-          <span class="profile-kpi__label">Atteinte</span>
+          <span class="profile-kpi__label">Attainment</span>
         </div>
         <div class="profile-kpi">
           <span class="profile-kpi__val"
                 [style.color]="'#6C5CE7'">
             {{ selected().coachScore }}
           </span>
-          <span class="profile-kpi__label">Score IA</span>
+          <span class="profile-kpi__label">AI Score</span>
         </div>
         <div class="profile-kpi">
           <span class="profile-kpi__val">{{ selected().clients }}</span>
@@ -77,7 +77,7 @@
         </div>
         <span class="profile-progress__label"
               [style.color]="perfColor()">
-          Objectif journalier {{ caPercent() }}%
+          Daily target {{ caPercent() }}%
         </span>
       </div>
 
@@ -85,16 +85,16 @@
 
     <!-- ══ CLASSEMENT ÉQUIPE ══ -->
     <div class="section">
-      <h2 class="section-title">Classement équipe · Aujourd'hui</h2>
+      <h2 class="section-title">Team Rankings · Today</h2>
 
       <div class="team-table">
         <div class="team-table__header">
           <span>#</span>
-          <span>Conseiller</span>
-          <span>CA Réalisé</span>
+          <span>Advisor</span>
+          <span>Revenue</span>
           <span>Performance</span>
-          <span>Prévision EOD</span>
-          <span>Statut</span>
+          <span>EOD Forecast</span>
+          <span>Status</span>
         </div>
 
         @for (adv of advisors(); track trackById($index, adv); let i = $index) {
@@ -113,7 +113,7 @@
                 <span class="adv-name">
                   {{ adv.name }}
                   @if (adv.id === 'kb') {
-                    <span class="me-tag">Moi</span>
+                    <span class="me-tag">Me</span>
                   }
                 </span>
                 <span class="adv-role">{{ adv.role }}</span>
@@ -150,16 +150,16 @@
     <div class="section">
       <div class="section-header">
         <h2 class="section-title">
-          Produits recommandés · Contexte pluie
+          Recommended Products · Rain Context
           <span class="context-tag">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
                  stroke="currentColor" stroke-width="2">
               <path d="M20 17.58A5 5 0 0018 8h-1.26A8 8 0 104 16.25"/>
             </svg>
-            Pluie +40%
+            Rain +40%
           </span>
         </h2>
-        <p class="section-sub">Clique sur une carte pour voir le script IA</p>
+        <p class="section-sub">Click a card to see the AI script</p>
       </div>
 
       <div class="products-grid">
@@ -200,11 +200,11 @@
                        fill="currentColor">
                     <circle cx="12" cy="12" r="10"/>
                   </svg>
-                  Marge {{ product.margin }}
+                  Margin {{ product.margin }}
                 </div>
 
                 <div class="product-cta">
-                  <span>Script IA</span>
+                  <span>AI Script</span>
                   <svg width="12" height="12" viewBox="0 0 24 24"
                        fill="none" stroke="currentColor" stroke-width="2">
                     <polyline points="9,18 15,12 9,6"/>
@@ -218,7 +218,7 @@
                    [style.--accent]="product.accentColor">
 
                 <div class="back-script-header">
-                  <p class="back-script-label">Script IA</p>
+                  <p class="back-script-label">AI Script</p>
                   <h3 class="back-script-title">{{ product.script }}</h3>
                 </div>
 
@@ -237,7 +237,7 @@
                     <polyline points="1,4 1,10 7,10"/>
                     <path d="M3.51 15a9 9 0 102.13-9.36L1 10"/>
                   </svg>
-                  Retour
+                  Back
                 </div>
 
               </div>
@@ -272,7 +272,7 @@
             <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/>
             <path d="M13.73 21a2 2 0 01-3.46 0"/>
           </svg>
-          Alertes
+          Alerts
           @if (alerts().length > 0) {
             <span class="tab-count">{{ alerts().length }}</span>
           }
@@ -290,9 +290,9 @@
 
     <!-- Context pills -->
     <div class="chat-context">
-      <span class="ctx-pill ctx-pill--blue">Pluie +40%</span>
+      <span class="ctx-pill ctx-pill--blue">Rain +40%</span>
       <span class="ctx-pill ctx-pill--gray">3h28</span>
-      <span class="ctx-pill ctx-pill--purple">93% obj.</span>
+      <span class="ctx-pill ctx-pill--purple">93% target</span>
       <span class="ctx-pill ctx-pill--gray">12 vis.</span>
     </div>
 
@@ -335,7 +335,7 @@
         <textarea
           class="chat-input"
           rows="2"
-          placeholder="Pose ta question au coach… (↵ Envoyer)"
+          placeholder="Ask the coach your question… (↵ Send)"
           [value]="chatInput()"
           (input)="updateInput($event)"
           (keydown)="onKey($event)">
@@ -363,7 +363,7 @@
                  stroke="var(--text-tertiary)" stroke-width="1.5">
               <polyline points="20,6 9,17 4,12"/>
             </svg>
-            <p>Aucune alerte active</p>
+            <p>No active alerts</p>
           </div>
         }
 
@@ -389,7 +389,7 @@
                      fill="none" stroke="white" stroke-width="2">
                   <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
                 </svg>
-                Demander au coach
+                Ask coach
               </button>
 
               <button class="alert-dismiss-btn"

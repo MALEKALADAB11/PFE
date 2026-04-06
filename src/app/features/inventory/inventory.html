@@ -4,12 +4,12 @@
   <div class="page-header">
     <div class="page-header__left">
       <div class="page-title-row">
-        <h1 class="page-title">Stock & Inventaire</h1>
-        <span class="new-chip">NOUVEAU</span>
+        <h1 class="page-title">Stock & Inventory</h1>
+        <span class="new-chip">NEW</span>
       </div>
       <p class="page-sub">
         <span class="status-dot status-dot--teal"></span>
-        Inventory Agent · Risk Scorer · Reco NL · Mis à jour 14:32
+        Inventory Agent · Risk Scorer · NL Reco · Updated 14:32
       </p>
     </div>
     <div class="page-header__right">
@@ -19,7 +19,7 @@
           <polyline points="1,4 1,10 7,10"/>
           <path d="M3.51 15a9 9 0 102.13-9.36L1 10"/>
         </svg>
-        Actualiser
+        Refresh
       </button>
       <button class="btn-primary">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
@@ -28,7 +28,7 @@
           <polyline points="7,10 12,15 17,10"/>
           <line x1="12" y1="15" x2="12" y2="3"/>
         </svg>
-        Exporter rapport
+        Export Report
       </button>
     </div>
   </div>
@@ -47,7 +47,7 @@
       </div>
       <div class="kpi-card__body">
         <span class="kpi-card__val">{{ criticalCount() }}</span>
-        <span class="kpi-card__label">Ruptures critiques</span>
+        <span class="kpi-card__label">Critical Stockouts</span>
       </div>
     </div>
 
@@ -62,7 +62,7 @@
       </div>
       <div class="kpi-card__body">
         <span class="kpi-card__val">{{ highCount() }}</span>
-        <span class="kpi-card__label">Risque élevé</span>
+        <span class="kpi-card__label">High Risk</span>
       </div>
     </div>
 
@@ -75,7 +75,7 @@
       </div>
       <div class="kpi-card__body">
         <span class="kpi-card__val">{{ okCount() }}</span>
-        <span class="kpi-card__label">Stock optimal</span>
+        <span class="kpi-card__label">Optimal Stock</span>
       </div>
     </div>
 
@@ -90,7 +90,7 @@
       </div>
       <div class="kpi-card__body">
         <span class="kpi-card__val">{{ avgCoverage() }}x</span>
-        <span class="kpi-card__label">Coverage moyen</span>
+        <span class="kpi-card__label">Average Coverage</span>
       </div>
     </div>
 
@@ -103,7 +103,7 @@
       </div>
       <div class="kpi-card__body">
         <span class="kpi-card__val">{{ totalItems() }}</span>
-        <span class="kpi-card__label">SKUs surveillés</span>
+        <span class="kpi-card__label">SKUs Monitored</span>
       </div>
     </div>
 
@@ -118,7 +118,7 @@
           <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/>
           <path d="M13.73 21a2 2 0 01-3.46 0"/>
         </svg>
-        Alertes actives
+        Active Alerts
         <span class="alert-count">{{ alerts().length }}</span>
       </h2>
 
@@ -154,7 +154,7 @@
 
             <button class="alert-dismiss"
                     (click)="dismissAlert(alert.id)"
-                    title="Rejeter">
+                    title="Dismiss">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
                    stroke="currentColor" stroke-width="2.5">
                 <line x1="18" y1="6" x2="6" y2="18"/>
@@ -173,10 +173,10 @@
 
     <div class="filter-tabs">
       @for (f of ([
-        { key: 'all',      label: 'Tous' },
-        { key: 'critical', label: 'Critique' },
-        { key: 'high',     label: 'Élevé' },
-        { key: 'medium',   label: 'Moyen' },
+        { key: 'all',      label: 'All' },
+        { key: 'critical', label: 'Critical' },
+        { key: 'high',     label: 'High' },
+        { key: 'medium',   label: 'Medium' },
         { key: 'ok',       label: 'OK' }
       ]); track f.key) {
         <button class="filter-tab"
@@ -192,12 +192,12 @@
     </div>
 
     <div class="sort-group">
-      <span class="sort-label">Trier par</span>
+      <span class="sort-label">Sort by</span>
       @for (s of ([
-        { key: 'risk',     label: 'Risque' },
+        { key: 'risk',     label: 'Risk' },
         { key: 'stock',    label: 'Stock' },
         { key: 'coverage', label: 'Coverage' },
-        { key: 'name',     label: 'Nom' }
+        { key: 'name',     label: 'Name' }
       ]); track s.key) {
         <button class="sort-btn"
                 [class.is-active]="sortKey() === s.key"
@@ -253,13 +253,13 @@
                         [style.color]="riskColor(item.riskLevel)">
                     {{ item.stock }}
                   </span>
-                  <span class="stock-unit">en stock</span>
+                  <span class="stock-unit">in stock</span>
                 </div>
                 <div class="stock-num stock-num--right">
                   <span class="stock-val stock-val--sm">
                     {{ item.demandForecast24h }}
                   </span>
-                  <span class="stock-unit">demande 24h</span>
+                  <span class="stock-unit">24h demand</span>
                 </div>
               </div>
 
@@ -271,7 +271,7 @@
                 </div>
                 <div class="coverage-min-marker"
                      [style.left.%]="33"
-                     title="Seuil minimum">
+                     title="Minimum threshold">
                 </div>
               </div>
               <div class="coverage-labels">
@@ -305,7 +305,7 @@
                 <line x1="21" y1="3" x2="14" y2="10"/>
                 <line x1="3" y1="21" x2="10" y2="14"/>
               </svg>
-              Voir recommandation IA
+              View AI Recommendation
             </div>
 
           </div>
@@ -317,7 +317,7 @@
             <!-- Header -->
             <div class="back-header">
               <div>
-                <p class="back-label">Recommandation Inventory Agent</p>
+                <p class="back-label">Inventory Agent Recommendation</p>
                 <h3 class="back-name">{{ item.name }}</h3>
               </div>
               <div class="confidence-ring"
@@ -346,11 +346,11 @@
             <div class="back-stats">
               <div class="back-stat">
                 <span class="back-stat__val">{{ item.stock }}</span>
-                <span class="back-stat__label">En stock</span>
+                <span class="back-stat__label">In stock</span>
               </div>
               <div class="back-stat">
                 <span class="back-stat__val">{{ item.demandForecast24h }}</span>
-                <span class="back-stat__label">Demande 24h</span>
+                <span class="back-stat__label">24h Demand</span>
               </div>
               <div class="back-stat">
                 <span class="back-stat__val">{{ item.coverageRatio }}x</span>
@@ -360,7 +360,7 @@
 
             <!-- Timestamp -->
             <p class="back-footer mono">
-              Inventory Agent · Mis à jour {{ item.lastUpdated }}
+              Inventory Agent · Updated {{ item.lastUpdated }}
             </p>
 
             <!-- Back hint -->
@@ -370,7 +370,7 @@
                 <polyline points="1,4 1,10 7,10"/>
                 <path d="M3.51 15a9 9 0 102.13-9.36L1 10"/>
               </svg>
-              Retour
+              Back
             </div>
 
           </div>
@@ -386,7 +386,7 @@
            stroke="var(--text-tertiary)" stroke-width="1.5">
         <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
       </svg>
-      <p>Aucun produit pour ce filtre</p>
+      <p>No products for this filter</p>
     </div>
   }
 

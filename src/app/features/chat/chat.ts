@@ -57,30 +57,30 @@ export class ChatComponent implements AfterViewChecked {
   // ── Conversations ──
   conversations = signal<Conversation[]>([
     {
-      id: 'c1', title: 'Session coaching Karim', mode: 'advisor',
-      preview: 'Objectif 93% — stratégie pic trafic',
+      id: 'c1', title: 'Coaching session - Karim', mode: 'advisor',
+      preview: 'Target 93% — peak traffic strategy',
       time: '14:32', unread: 0,
       messages: [
         {
           id: 'm0', role: 'system',
-          text: 'Session coaching démarrée · Karim Benali · Lac 2 · 14:09',
+          text: 'Coaching session started · Karim Benali · Lac 2 · 14:09',
           time: '14:09'
         },
         {
           id: 'm1', role: 'coach',
-          text: 'Bonjour Karim ! Tu es à 93% de ton objectif avec 3h28 restantes. La pluie crée une opportunité sur les accessoires (+40%). Je surveille la boutique en temps réel. Que veux-tu travailler ?',
+          text: 'Hello Karim! You are at 93% of your target with 3h28 remaining. Rain creates an opportunity on accessories (+40%). I am monitoring the store in real time. What would you like to work on?',
           time: '14:09',
           sources: ['POS live', 'Météo API', 'TimesFM'],
           confidence: 0.91
         },
         {
           id: 'm2', role: 'user',
-          text: 'Comment profiter de la pluie pour les accessoires ?',
+          text: 'How to take advantage of the rain for accessories?',
           time: '14:10'
         },
         {
           id: 'm3', role: 'coach',
-          text: 'Signal météo actif +40% demande accessoires jusqu\'à 18h. Voici ma stratégie :\n\n1. Repositionner Amine en zone accessoires — il est à 38%, il a besoin de trafic facile.\n2. Mettre AirPods Pro et Apple Watch en vitrine — argument clé : résistance à l\'eau.\n3. Script d\'accroche : "Parfait par ce temps, et résistant à la pluie."\n4. Objectif : 5 ventes accessoires avant 17h = +200 DT CA.',
+          text: 'Active weather signal +40% accessory demand until 18h. Here is my strategy:\n\n1. Reposition Amine in the accessories zone — he is at 38%, he needs easy traffic.\n2. Display AirPods Pro and Apple Watch — key argument: water resistance.\n3. Opening script: "Perfect for this weather, and rain resistant."\n4. Target: 5 accessory sales before 17h = +200 DT revenue.',
           time: '14:10',
           sources: ['Météo API', 'Stock API', 'RAG'],
           confidence: 0.88
@@ -88,18 +88,18 @@ export class ChatComponent implements AfterViewChecked {
       ]
     },
     {
-      id: 'c2', title: 'Analyse stock critique', mode: 'inventory',
+      id: 'c2', title: 'Critical stock analysis', mode: 'inventory',
       preview: 'iPhone 16 Pro — 3 unités restantes',
       time: '14:15', unread: 2,
       messages: [
         {
           id: 's1', role: 'system',
-          text: 'Session inventaire · Inventory Agent · 14:15',
+          text: 'Inventory session · Inventory Agent · 14:15',
           time: '14:15'
         },
         {
           id: 's2', role: 'coach',
-          text: 'Alerte stock critique détectée : iPhone 16 Pro à 3 unités. Risque rupture 91% d\'ici 24h. Je recommande de commander 15 unités avant vendredi. Veux-tu que je génère le bon de commande ?',
+          text: 'Critical stock alert detected: iPhone 16 Pro at 3 units. 91% stockout risk within 24h. I recommend ordering 15 units before Friday. Would you like me to generate the purchase order?',
           time: '14:15',
           sources: ['Stock API', 'Forecast Agent', 'Inventory Agent'],
           confidence: 0.91
@@ -107,18 +107,18 @@ export class ChatComponent implements AfterViewChecked {
       ]
     },
     {
-      id: 'c3', title: 'Stratégie équipe soir', mode: 'strategy',
-      preview: 'Pic trafic 17h–19h · Concert',
+      id: 'c3', title: 'Evening team strategy', mode: 'strategy',
+      preview: 'Traffic peak 17h-19h · Concert',
       time: '13:50', unread: 0,
       messages: [
         {
           id: 'st1', role: 'system',
-          text: 'Session stratégie · Orchestrator · 13:50',
+          text: 'Strategy session · Orchestrator · 13:50',
           time: '13:50'
         },
         {
           id: 'st2', role: 'coach',
-          text: 'Concert ce soir à 2km. Pic de trafic prévu 17h–19h (+60%). Voici le plan équipe recommandé pour maximiser ce créneau.',
+          text: 'Concert tonight at 2km. Traffic peak expected 17h-19h (+60%). Here is the recommended team plan to maximize this time slot.',
           time: '13:50',
           sources: ['Events API', 'TimesFM', 'Gap Detector'],
           confidence: 0.85
@@ -142,14 +142,14 @@ export class ChatComponent implements AfterViewChecked {
 
   // ── Suggested prompts ──
   suggestions: SuggestedPrompt[] = [
-    { label: 'Script bundle assurance',   text: 'Donne-moi le script bundle assurance + terminal pour Karim.', category: 'Script',    color: '#6C5CE7' },
-    { label: 'Argument 5G vs SFR',        text: 'Quels arguments utiliser face à un client qui compare avec SFR 5G ?', category: 'Argument', color: '#00B894' },
-    { label: 'Gérer objection prix',      text: 'Comment reformuler le prix de l\'iPhone 16 Pro face à une objection ?', category: 'Objection', color: '#F9A825' },
-    { label: 'Stratégie pic 17h',         text: 'Stratégie optimale pour le pic trafic 17h–19h avec mon équipe actuelle ?', category: 'Stratégie', color: '#2D9CDB' },
-    { label: 'Upsell accessoires pluie',  text: 'Script upsell accessoires en contexte pluie — que dire exactement ?', category: 'Script',    color: '#00B894' },
-    { label: 'Analyser gap Sofia',        text: 'Analyse le gap de performance de Sofia L. et propose un plan d\'action.', category: 'Analyse',   color: '#E74C3C' },
-    { label: 'Prévision fin de journée',  text: 'Quelle est la prévision CA fin de journée pour Lac 2 ?', category: 'Forecast',  color: '#6C5CE7' },
-    { label: 'Redistribution stock',      text: 'Recommande une redistribution de stock entre boutiques pour l\'Apple Watch S10.', category: 'Stock',     color: '#F9A825' },
+    { label: 'Insurance bundle script',   text: 'Give me the insurance bundle + terminal script for Karim.', category: 'Script',    color: '#6C5CE7' },
+    { label: '5G argument vs SFR',        text: 'What arguments to use against a customer comparing with SFR 5G?', category: 'Argument', color: '#00B894' },
+    { label: 'Handle price objection',      text: 'Comment reformuler le prix de l\'iPhone 16 Pro face à une objection ?', category: 'Objection', color: '#F9A825' },
+    { label: 'Peak traffic strategy 17h',         text: 'Optimal strategy for the 17h-19h traffic peak with my current team?', category: 'Strategy', color: '#2D9CDB' },
+    { label: 'Rain accessories upsell',  text: 'Accessories upsell script in rain context — what exactly to say?', category: 'Script',    color: '#00B894' },
+    { label: 'Analyze Sofia gap',        text: 'Analyse le gap de performance de Sofia L. et propose un plan d\'action.', category: 'Analysis',   color: '#E74C3C' },
+    { label: 'End of day forecast',  text: 'What is the end-of-day revenue forecast for Lac 2?', category: 'Forecast',  color: '#6C5CE7' },
+    { label: 'Stock redistribution',      text: 'Recommend a stock redistribution between stores for the Apple Watch S10.', category: 'Stock',     color: '#F9A825' },
   ];
 
   modeColors: Record<ConvMode, string> = {
@@ -160,10 +160,10 @@ export class ChatComponent implements AfterViewChecked {
   };
 
   modeLabels: Record<ConvMode, string> = {
-    general:   'Général',
-    advisor:   'Conseiller',
-    inventory: 'Inventaire',
-    strategy:  'Stratégie',
+    general:   'General',
+    advisor:   'Advisor',
+    inventory: 'Inventory',
+    strategy:  'Strategy',
   };
 
   constructor(private data: MockDataService) {
@@ -229,19 +229,19 @@ export class ChatComponent implements AfterViewChecked {
   newConv() {
     const id = 'conv_' + Date.now();
     const conv: Conversation = {
-      id, title: 'Nouvelle session',
+      id, title: 'New session',
       mode: 'general',
-      preview: 'Session démarrée',
+      preview: 'Session started',
       time: this.now(), unread: 0,
       messages: [
         {
           id: 'sys_' + Date.now(), role: 'system',
-          text: `Nouvelle session démarrée · ${this.now()}`,
+          text: `New session started · ${this.now()}`,
           time: this.now()
         },
         {
           id: 'greet_' + Date.now(), role: 'coach',
-          text: 'Bonjour ! Je suis votre CoachAgent IA. Je surveille les performances de la boutique, le stock, la météo et les événements en temps réel. Comment puis-je vous aider ?',
+          text: 'Hello! I am your CoachAgent AI. I monitor store performance, stock, weather and events in real time. How can I help you?',
           time: this.now(),
           sources: ['Orchestrator', 'Data Agent'],
           confidence: 0.95
@@ -304,7 +304,7 @@ export class ChatComponent implements AfterViewChecked {
   }
 
   private now(): string {
-    return new Date().toLocaleTimeString('fr-FR', {
+    return new Date().toLocaleTimeString('en-US', {
       hour: '2-digit', minute: '2-digit'
     });
   }
@@ -313,9 +313,9 @@ export class ChatComponent implements AfterViewChecked {
     const m = msg.toLowerCase();
     if (m.includes('stock') || m.includes('iphone'))
       return ['Stock API', 'Inventory Agent', 'TimesFM'];
-    if (m.includes('météo') || m.includes('pluie') || m.includes('accessoire'))
+    if (m.includes('weather') || m.includes('rain') || m.includes('accessory'))
       return ['Météo API', 'RAG', 'Coaching Agent'];
-    if (m.includes('prévision') || m.includes('forecast'))
+    if (m.includes('forecast') || m.includes('forecast'))
       return ['TimesFM', 'Gap Detector', 'POS live'];
     if (m.includes('script') || m.includes('argument'))
       return ['RAG', 'Coaching Agent', 'DSPy'];
@@ -326,30 +326,30 @@ export class ChatComponent implements AfterViewChecked {
     const m = msg.toLowerCase();
 
     if (m.includes('assurance'))
-      return 'Script bundle assurance :\n\n1. Timing : proposer APRÈS validation de l\'achat terminal.\n2. Phrase clé : "Avec l\'assurance Premium, si vous cassez l\'écran demain, échange sous 48h. C\'est 9 DT/mois — soit un café par semaine."\n3. Levier visuel : montrer le tarif réparation écran = 280 DT sans assurance.\n4. Objectif taux conversion : 70% des ventes terminaux.';
+      return 'Insurance bundle script:\n\n1. Timing: offer AFTER terminal purchase is confirmed.\n2. Key phrase: "With Premium insurance, if you break the screen tomorrow, replacement within 48h. That is 9 DT/month — the price of a coffee per week."\n3. Visual lever: show screen repair cost = 280 DT without insurance.\n4. Target conversion rate: 70% of terminal sales.';
 
     if (m.includes('5g') || m.includes('sfr'))
-      return 'Arguments 5G face à SFR :\n\n1. Couverture réseau : 94% vs 87% pour SFR en Tunisie.\n2. Débit garanti vs partagé — faire tester en boutique.\n3. Compatibilité device : notre catalogue 5G est plus large.\n4. Prix : comparer sur 24 mois, pas le prix facial.\n5. Argument final : "Testez votre réseau SFR ici maintenant" — le test parle de lui-même.';
+      return '5G arguments against SFR:\n\n1. Network coverage: 94% vs 87% for SFR in Tunisia.\n2. Guaranteed vs shared speed — let them test it in the store.\n3. Device compatibility: our 5G catalog is wider.\n4. Price: compare over 24 months, not the sticker price.\n5. Final argument: "Test your SFR network here now" — the test speaks for itself.';
 
     if (m.includes('objection') || m.includes('prix'))
-      return 'Technique reformulation prix :\n\n1. Ne jamais répéter le prix brut. Décomposer : "1 299 DT = 54 DT/mois sur 24 mois."\n2. Comparaison concrète : "Moins que votre abonnement Netflix + Spotify."\n3. Valeur vs coût : photo pro, durabilité 5 ans, revente valeur résiduelle.\n4. Si blocage persiste : proposer financement 3x sans frais.';
+      return 'Price reframing technique:\n\n1. Never repeat the gross price. Break it down: "1,299 DT = 54 DT/month over 24 months."\n2. Concrete comparison: "Less than your Netflix + Spotify subscription."\n3. Value vs cost: pro camera, 5-year durability, residual resale value.\n4. If objection persists: offer 3x interest-free financing.';
 
     if (m.includes('pic') || m.includes('trafic') || m.includes('17h'))
-      return 'Plan équipe pour pic 17h–19h :\n\n1. Karim → zone terminaux haut de gamme (il est à 93%, il peut closer).\n2. Sara → fibre et offres Pro (clients qui attendent = temps de qualifier).\n3. Amine → accessoires (trafic facile, article rapide à vendre).\n4. Leila → accueil et orientation (réduire temps d\'attente < 3 min).\n5. Préparer 3 iPhones en vitrine dès 16h45.';
+      return 'Team plan for 17h-19h peak:\n\n1. Karim → premium terminal zone (he is at 93%, he can close).\n2. Sara → fiber and Pro offers (waiting customers = time to qualify).\n3. Amine → accessories (easy traffic, fast-selling item).\n4. Leila → welcome and guidance (reduce wait time < 3 min).\n5. Set up 3 iPhones in the display by 16h45.';
 
-    if (m.includes('pluie') || m.includes('accessoire'))
-      return 'Stratégie accessoires contexte pluie :\n\n1. Signal actif : +40% demande jusqu\'à 18h.\n2. Produits prioritaires : AirPods Pro 3 (résistant eau), Apple Watch S10 (étanche 50m), coques.\n3. Argument d\'accroche universel : "Parfait par ce temps, et certifié résistant à l\'eau."\n4. Repositionner Amine sur cette zone immédiatement.\n5. Objectif : 5 ventes accessoires avant 17h.';
+    if (m.includes('rain') || m.includes('accessory') || m.includes('pluie') || m.includes('accessoire'))
+      return 'Accessories strategy in rain context:\n\n1. Active signal: +40% demand until 18h.\n2. Priority products: AirPods Pro 3 (water resistant), Apple Watch S10 (waterproof 50m), cases.\n3. Universal opening argument: "Perfect for this weather, and certified water resistant."\n4. Reposition Amine in this zone immediately.\n5. Target: 5 accessory sales before 17h.';
 
     if (m.includes('sofia') || m.includes('gap'))
-      return 'Analyse gap Sofia L. :\n\nGap actuel : 60% — objectif 40% atteinte. Causes identifiées :\n1. Contexte pluie = moins de passage spontané sur sa zone fibre.\n2. Conversion 38% vs moy. 52% — problème de closing, pas de volume.\n\nPlan d\'action :\n1. Shift temporaire vers accessoires (trafic plus facile).\n2. Pairer avec Karim pour observer une démonstration closing.\n3. Focus closing : poser la question de décision directement.';
+      return 'Sofia L. gap analysis:\n\nCurrent gap: 60% — 40% target attainment. Identified causes:\n1. Rain context = less spontaneous traffic in her fiber zone.\n2. Conversion 38% vs avg. 52% — closing issue, not volume.\n\nAction plan:\n1. Temporary shift to accessories (easier traffic).\n2. Pair with Karim to observe a closing demonstration.\n3. Focus on closing: ask the decision question directly.';
 
     if (m.includes('prévision') || m.includes('forecast') || m.includes('eod'))
-      return 'Prévision fin de journée Lac 2 :\n\nTimesFM · MAPE 14.3% · IC 80%\n\n• Prévision EOD : 6 800 DT [5 400 – 8 200]\n• Objectif : 8 000 DT\n• Gap restant : ~1 200 DT en 3h28\n• Scénario optimiste (pic 17h) : 7 400 DT\n• Levier principal : accessoires pluie + pic concert soir.';
+      return 'End of day forecast Lac 2:\n\nTimesFM · MAPE 14.3% · CI 80%\n\n• EOD Forecast: 6,800 DT [5,400 - 8,200]\n• Target: 8,000 DT\n• Remaining gap: ~1,200 DT in 3h28\n• Optimistic scenario (17h peak): 7,400 DT\n• Key lever: rain accessories + evening concert peak.';
 
     if (m.includes('redistribution') || m.includes('apple watch'))
-      return 'Redistribution Apple Watch S10 :\n\nBTQ-14 (ici) : 2 unités · stock critique\nBTQ-08 (Menzah) : 12 unités · surstock\n\nRecommandation Inventory Agent :\nTransfert de 6 unités BTQ-08 → BTQ-14\nDélai livraison interne : 4h\nConfiance : 0.84\n\nAction requise : valider le bon de transfert dans le système logistique.';
+      return 'Apple Watch S10 redistribution:\n\nBTQ-14 (here): 2 units · critical stock\nBTQ-08 (Menzah): 12 units · overstock\n\nInventory Agent recommendation:\nTransfer of 6 units BTQ-08 → BTQ-14\nInternal delivery delay: 4h\nConfidence: 0.84\n\nRequired action: validate the transfer order in the logistics system.';
 
-    return `Analyse en cours pour : "${msg.slice(0, 60)}..."\n\nJe croise les données POS live, météo, stock et prévisions TimesFM. Voici ce que je détecte : la boutique est à 53% de l\'objectif journalier avec un pic de trafic prévu dans 3h. Veux-tu que j\'affine cette analyse sur un conseiller ou un produit spécifique ?`;
+    return `Analysis in progress for: "${msg.slice(0, 60)}..."\n\nI am cross-referencing live POS data, weather, stock and TimesFM forecasts. Here is what I detect: the store is at 53% of the daily target with a traffic peak expected in 3h. Would you like me to refine this analysis for a specific advisor or product?`;
   }
 
   trackById(_: number, item: { id: string }) { return item.id; }

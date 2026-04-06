@@ -3,10 +3,10 @@
   <!-- ══ PAGE HEADER ══ -->
   <div class="page-header">
     <div class="page-header__left">
-      <h1 class="page-title">Tableau de bord</h1>
+      <h1 class="page-title">Dashboard</h1>
       <p class="page-sub">
         <span class="status-dot"></span>
-        Système nominal · APP06 Agent LIVE · Mis à jour 14:32
+        System nominal · APP06 Agent LIVE · Updated 14:32
       </p>
     </div>
     <div class="page-header__right">
@@ -16,7 +16,7 @@
           <polyline points="1,4 1,10 7,10"/>
           <path d="M3.51 15a9 9 0 102.13-9.36L1 10"/>
         </svg>
-        Actualiser
+        Refresh
       </button>
       <button class="btn-primary">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
@@ -26,7 +26,7 @@
           <path d="M23 21v-2a4 4 0 00-3-3.87"/>
           <path d="M16 3.13a4 4 0 010 7.75"/>
         </svg>
-        Coaching équipe
+        Team Coaching
       </button>
     </div>
   </div>
@@ -48,14 +48,14 @@
       <div class="card chart-card">
         <div class="card-header">
           <div>
-            <h2 class="card-title">Ventes horaires vs Forecast</h2>
+            <h2 class="card-title">Hourly Sales vs Forecast</h2>
             <p class="card-sub">APP03 TimesFM · APP01 POS · BTQ-14</p>
           </div>
           <div class="chart-legend">
             <span class="legend-item">
               <span class="legend-dot"
                     style="background:var(--color-purple)"></span>
-              Réalisé
+              Actual
             </span>
             <span class="legend-item">
               <span class="legend-dot legend-dot--dashed"
@@ -65,7 +65,7 @@
             <span class="legend-item">
               <span class="legend-dot legend-dot--dashed"
                     style="border-color:#ccc"></span>
-              Objectif
+              Target
             </span>
           </div>
         </div>
@@ -163,7 +163,7 @@
           <div class="mix-legend">
             <span class="mix-leg">
               <span class="mix-leg__dot mix-leg__dot--actual"></span>
-              Réalisé
+              Actual
             </span>
             <span class="mix-leg">
               <span class="mix-leg__dot mix-leg__dot--forecast"></span>
@@ -267,17 +267,17 @@
         <!-- Footer -->
         <div class="mix-footer">
           <div class="mix-footer__item">
-            <span class="mix-footer__label">CA total réalisé</span>
+            <span class="mix-footer__label">Total Revenue</span>
             <span class="mix-footer__val">9 024 DT</span>
           </div>
           <div class="mix-footer__item">
-            <span class="mix-footer__label">CA forecast</span>
+            <span class="mix-footer__label">Revenue Forecast</span>
             <span class="mix-footer__val mix-footer__val--muted">
               10 612 DT
             </span>
           </div>
           <div class="mix-footer__item">
-            <span class="mix-footer__label">Sous forecast</span>
+            <span class="mix-footer__label">Below Forecast</span>
             <span class="mix-footer__val mix-footer__val--alert">
               2 / 5
               <svg width="11" height="11" viewBox="0 0 24 24"
@@ -330,7 +330,7 @@
                   <div class="coaching-meta">
                     <span class="coaching-name">{{ card.advisorName }}</span>
                     <span class="coaching-target">
-                      ADV · {{ card.target }}% objectif
+                      ADV · {{ card.target }}% target
                     </span>
                   </div>
                   <div class="coaching-priority-badge"
@@ -351,11 +351,11 @@
                   <div class="coaching-actions">
                     <button class="btn-escalate"
                             (click)="escalate(card.id)">
-                      Escalader
+                      Escalate
                     </button>
                     <button class="btn-approve"
                             (click)="approve(card.id)">
-                      Approuver
+                      Approve
                     </button>
                   </div>
                 } @else {
@@ -380,8 +380,8 @@
       <div class="card team-card">
         <div class="card-header">
           <div>
-            <h2 class="card-title">Classement Équipe</h2>
-            <p class="card-sub">Performance du jour · LIVE</p>
+            <h2 class="card-title">Team Rankings</h2>
+            <p class="card-sub">Today's Performance · LIVE</p>
           </div>
         </div>
 
@@ -423,12 +423,12 @@
         </div>
 
         <div class="team-avg">
-          <span class="team-avg__label">Moy. équipe</span>
+          <span class="team-avg__label">Team avg.</span>
           <div class="progress-track" style="flex:1">
             <div class="progress-fill amber" style="width:53%"></div>
           </div>
           <span class="team-avg__val">53%</span>
-          <span class="team-avg__obj">obj 8 000 DT</span>
+          <span class="team-avg__obj">target 8 000 DT</span>
         </div>
       </div>
 

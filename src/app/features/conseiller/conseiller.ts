@@ -10,7 +10,7 @@ interface Product {
   category: string;
   price: string;
   unit: string;
-  margin: 'Élevée' | 'Moyenne' | 'Haute';
+  margin: 'High' | 'Medium' | 'Premium';
   marginColor: string;
   hot: boolean;
   script: string;
@@ -71,42 +71,42 @@ export class ConseillerComponent implements AfterViewChecked {
   alerts = signal<Alert[]>([
     {
       id: 'a1',
-      label: 'Stock critique — iPhone 16 Pro',
-      detail: '3 unités restantes · Risque rupture 91%',
+      label: 'Critical stock — iPhone 16 Pro',
+      detail: '3 units remaining · 91% stockout risk',
       color: '#E74C3C', bg: '#FDEDEC',
-      chatMessage: 'Stock iPhone 16 Pro critique (3 unités). Comment gérer les clients intéressés ?'
+      chatMessage: 'Critical iPhone 16 Pro stock (3 units). How to handle interested customers?'
     },
     {
       id: 'a2',
-      label: 'Pic trafic prévu 17h–19h',
-      detail: 'Concert 20h à 2km · +60% visiteurs attendus',
+      label: 'Traffic peak expected 17h-19h',
+      detail: 'Concert 20h at 2km · +60% expected visitors',
       color: '#F9A825', bg: '#FFF8E1',
-      chatMessage: 'Stratégie pic trafic 16h30 ? Concert ce soir, comment préparer mon équipe ?'
+      chatMessage: 'Traffic peak strategy 16h30? Concert tonight, how to prepare my team?'
     },
     {
       id: 'a3',
-      label: 'Pluie +40% accessoires',
-      detail: 'Signal météo actif jusqu\'à 18h00',
+      label: 'Rain +40% accessories',
+      detail: 'Active weather signal until 18h00',
       color: '#2D9CDB', bg: '#E8F4FD',
-      chatMessage: 'Comment profiter de la pluie pour booster les ventes accessoires ?'
+      chatMessage: 'How to take advantage of the rain to boost accessory sales?'
     },
   ]);
 
   // ── Quick prompts ──
   quickPrompts = [
-    'Script bundle assurance ?',
-    'Argument 5G face à SFR ?',
-    'Comment gérer objection prix ?',
-    'Stratégie pic trafic 16h30 ?',
-    'Upsell accessoires pluie ?',
-    'Franchir palier 2 000 DT ?',
+    'Insurance bundle script?',
+    '5G argument against SFR?',
+    'How to handle price objection?',
+    'Traffic peak strategy 16h30?',
+    'Rain accessories upsell?',
+    'Reach 2,000 DT milestone?',
   ];
 
   // ── Chat messages ──
   messages = signal<ChatMessage[]>([
     {
       id: 'm0', role: 'coach',
-      text: `Bonjour Karim ! Tu es à 93% de ton objectif avec 3h28 restantes. La pluie crée une opportunité sur les accessoires (+40%). Je surveille la boutique en temps réel. Que veux-tu travailler ?`,
+      text: `Hello Karim! You are at 93% of your target with 3h28 remaining. Rain creates an opportunity on accessories (+40%). I am monitoring the store in real time. What would you like to work on?`,
       time: '10:09'
     }
   ]);
@@ -115,80 +115,80 @@ export class ConseillerComponent implements AfterViewChecked {
   products: Product[] = [
     {
       id: 'p1', name: 'iPhone 16 Pro', category: 'Smartphone',
-      price: '1 299', unit: 'DT', margin: 'Élevée', marginColor: '#00B894',
+      price: '1 299', unit: 'DT', margin: 'High', marginColor: '#00B894',
       hot: true, accentColor: '#6C5CE7',
-      script: 'Argumentaire iPhone 16 Pro',
+      script: 'iPhone 16 Pro Sales Script',
       scriptLines: [
-        'Ouvrir sur le besoin : "Vous utilisez votre téléphone pour quoi principalement ?"',
-        'Mettre en avant la puce A18 Pro — expliquer la différence concrète en photo et vidéo.',
-        'Bundle proposé : iPhone 16 Pro + coque Apple + AppleCare+ = panier moyen +340 DT.',
-        'Objection prix : "Sur 24 mois c\'est 54 DT/mois, moins qu\'un abonnement streaming."',
-        'Urgence : "Il nous reste 3 unités — je ne peux pas garantir le stock demain."',
+        'Open with the need: "What do you mainly use your phone for?"',
+        'Highlight the A18 Pro chip — explain the concrete difference in photo and video.',
+        'Proposed bundle: iPhone 16 Pro + Apple case + AppleCare+ = average basket +340 DT.',
+        'Price objection: "Over 24 months it is 54 DT/month, less than a streaming subscription."',
+        'Urgency: "We only have 3 units left — I cannot guarantee stock tomorrow."',
       ]
     },
     {
       id: 'p2', name: 'Fibre 2Gb Pro', category: 'Internet',
-      price: '49', unit: 'DT/m', margin: 'Moyenne', marginColor: '#F9A825',
+      price: '49', unit: 'DT/m', margin: 'Medium', marginColor: '#F9A825',
       hot: true, accentColor: '#00B894',
-      script: 'Argumentaire Fibre Pro',
+      script: 'Fiber Pro Sales Script',
       scriptLines: [
-        'Qualifier : "Vous avez combien de personnes chez vous qui utilisent internet ?"',
+        'Qualify: "How many people in your household use the internet?"',
         'Différenciation : 2Gb symétrique = upload rapide, idéal télétravail et gaming.',
-        'Bundle fibre + décodeur TV 4K = +15 DT mais rétention +60%.',
-        'Objection opérateur actuel : demander la date de fin d\'engagement.',
-        'Si fin < 3 mois : proposer pré-souscription avec activation différée.',
+        'Fiber bundle + 4K TV decoder = +15 DT but +60% retention.',
+        'Current operator objection: ask for the contract end date.',
+        'If end < 3 months: offer pre-subscription with deferred activation.',
       ]
     },
     {
       id: 'p3', name: 'Assurance Premium', category: 'Service',
-      price: '9', unit: 'DT/m', margin: 'Élevée', marginColor: '#00B894',
+      price: '9', unit: 'DT/m', margin: 'High', marginColor: '#00B894',
       hot: false, accentColor: '#E74C3C',
-      script: 'Script Assurance Premium',
+      script: 'Premium Insurance Script',
       scriptLines: [
-        'Timing idéal : proposer juste après validation de l\'achat du terminal.',
-        '"Avec l\'assurance Premium, si vous cassez l\'écran demain, échange sous 48h."',
-        'Reformulation : "C\'est 9 DT/mois — soit le prix d\'un café par semaine."',
-        'Levier psychologique : montrer le coût de réparation écran = 280 DT sans assurance.',
-        'Taux de conversion recommandé : viser 70% des ventes terminaux.',
+        'Ideal timing: offer just after the terminal purchase is confirmed.',
+        '"With Premium insurance, if you break the screen tomorrow, replacement within 48h."',
+        'Reframe: "It is 9 DT/month — the price of a coffee per week."',
+        'Psychological lever: show screen repair cost = 280 DT without insurance.',
+        'Recommended conversion rate: target 70% of terminal sales.',
       ]
     },
     {
-      id: 'p4', name: 'Apple Watch S10', category: 'Accessoire',
-      price: '449', unit: 'DT', margin: 'Élevée', marginColor: '#00B894',
+      id: 'p4', name: 'Apple Watch S10', category: 'Accessory',
+      price: '449', unit: 'DT', margin: 'High', marginColor: '#00B894',
       hot: true, accentColor: '#F9A825',
-      script: 'Script Apple Watch S10',
+      script: 'Apple Watch S10 Script',
       scriptLines: [
-        'Cibler les acheteurs iPhone : "Vous avez un iPhone ? La Watch se connecte parfaitement."',
-        'Démontrer en boutique : montrer les notifications, le suivi santé en direct.',
-        'Pluie = opportunité : "La Watch est étanche 50m, parfaite par ce temps."',
-        'Bundle : Watch + bracelet sport supplémentaire + AppleCare = +80 DT marge.',
-        'Financement : proposer 3x sans frais si hésitation sur le prix.',
+        'Target iPhone buyers: "Do you have an iPhone? The Watch connects perfectly."',
+        'Demonstrate in store: show notifications, live health tracking.',
+        'Rain = opportunity: "The Watch is waterproof 50m, perfect for this weather."',
+        'Bundle: Watch + extra sport band + AppleCare = +80 DT margin.',
+        'Financing: offer 3x interest-free if hesitation on price.',
       ]
     },
     {
-      id: 'p5', name: 'AirPods Pro 3', category: 'Accessoire',
-      price: '279', unit: 'DT', margin: 'Élevée', marginColor: '#00B894',
+      id: 'p5', name: 'AirPods Pro 3', category: 'Accessory',
+      price: '279', unit: 'DT', margin: 'High', marginColor: '#00B894',
       hot: true, accentColor: '#2D9CDB',
-      script: 'Script AirPods Pro 3',
+      script: 'AirPods Pro 3 Script',
       scriptLines: [
-        'Accroche : "Vous utilisez des écouteurs en ce moment ? Je peux vous faire écouter la différence."',
-        'Faire écouter la réduction de bruit active — l\'expérience vend mieux que l\'argumentation.',
-        'Contexte pluie : "Parfait pour les déplacements, résistant à l\'eau."',
-        'Objection prix : comparer au concurrent Samsung = qualité ANC supérieure.',
-        'Ajouter étui de protection = +25 DT, marge élevée.',
+        'Opening: "Are you using earphones right now? Let me let you hear the difference."',
+        'Let them hear the active noise cancellation — the experience sells better than arguments.',
+        'Rain context: "Perfect for travel, water resistant."',
+        'Price objection: compare to Samsung competitor = superior ANC quality.',
+        'Add protective case = +25 DT, high margin.',
       ]
     },
     {
       id: 'p6', name: 'Pack Pro Business', category: 'Bundle',
-      price: '89', unit: 'DT/m', margin: 'Haute', marginColor: '#6C5CE7',
+      price: '89', unit: 'DT/m', margin: 'Premium', marginColor: '#6C5CE7',
       hot: false, accentColor: '#6C5CE7',
-      script: 'Script Pack Pro Business',
+      script: 'Pack Pro Business Script',
       scriptLines: [
-        'Cible : clients professionnels, artisans, commerçants.',
-        '"Le Pack Pro inclut ligne mobile 5G Pro + fibre 1Gb + cloud backup 1To."',
-        'Avantage fiscal : déductible en charge professionnelle.',
-        'Durée d\'engagement 24 mois = stabilité pour le client + récurrence pour nous.',
-        'Proposer visite de déploiement gratuite = différenciateur vs concurrent.',
+        'Target: professional clients, craftsmen, traders.',
+        '"The Pro Pack includes 5G Pro mobile line + 1Gb fiber + 1TB cloud backup."',
+        'Tax advantage: deductible as a business expense.',
+        '24-month commitment = stability for the customer + recurring revenue for us.',
+        'Offer free deployment visit = differentiator vs competitor.',
       ]
     },
   ];
@@ -217,7 +217,7 @@ export class ConseillerComponent implements AfterViewChecked {
 
   statusText(s: string): string {
     const m: Record<string, string> = {
-      top: 'Top', ok: 'OK', urgent: 'Urgent', attente: 'Attente'
+      top: 'Top', ok: 'OK', urgent: 'Urgent', attente: 'Waiting'
     };
     return m[s] ?? s;
   }
@@ -247,7 +247,7 @@ export class ConseillerComponent implements AfterViewChecked {
       id:   'u' + Date.now(),
       role: 'user',
       text: msg,
-      time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+      time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
     }]);
 
     this.chatInput.set('');
@@ -259,7 +259,7 @@ export class ConseillerComponent implements AfterViewChecked {
         id:   'c' + Date.now(),
         role: 'coach',
         text: this.generateReply(msg),
-        time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+        time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
       }]);
       this.shouldScroll = true;
     }, 900);
@@ -296,18 +296,18 @@ export class ConseillerComponent implements AfterViewChecked {
   private generateReply(msg: string): string {
     const m = msg.toLowerCase();
     if (m.includes('assurance'))
-      return 'Pour l\'assurance : propose-la APRÈS validation de l\'achat terminal. Script : "C\'est 9 DT/mois — soit le prix d\'un café par semaine. Et si l\'écran casse, échange sous 48h." Taux cible : 70% des ventes terminaux.';
+      return 'For insurance: offer it AFTER the terminal purchase is confirmed. Script: "It is 9 DT/month — the price of a coffee per week. And if the screen breaks, replacement within 48h." Target rate: 70% of terminal sales.';
     if (m.includes('5g') || m.includes('sfr'))
-      return 'Face à SFR sur la 5G : notre réseau couvre 94% vs 87% pour SFR en Tunisie. Argument clé : débit garanti vs partagé. Demande au client de tester son réseau actuel en boutique — le résultat parle de lui-même.';
+      return 'Against SFR on 5G: our network covers 94% vs 87% for SFR in Tunisia. Key argument: guaranteed vs shared speed. Ask the customer to test their current network in the store — the result speaks for itself.';
     if (m.includes('prix') || m.includes('objection'))
-      return 'Technique de reformulation prix : "Ce n\'est pas 1 299 DT, c\'est 54 DT/mois sur 24 mois — moins que votre abonnement Netflix." Puis enchaîner sur la valeur : photo, durabilité, écosystème.';
+      return 'Price reframing technique: "It is not 1,299 DT, it is 54 DT/month over 24 months — less than your Netflix subscription." Then follow up on value: camera, durability, ecosystem.';
     if (m.includes('trafic') || m.includes('pic'))
-      return 'Pour le pic 17h–19h : repositionne Amine et Sara en zone accessoires. Karim prend les terminaux haut de gamme. Prépare 3 iPhones en vitrine. Objectif : réduire le temps d\'attente < 3 min par client.';
-    if (m.includes('pluie') || m.includes('accessoire'))
-      return 'Signal météo actif +40% demande accessoires. Mettre en avant : AirPods Pro (résistant eau), Apple Watch (suivi météo), coques étanches. Argument d\'accroche : "Parfait par ce temps."';
+      return 'For the 17h-19h peak: reposition Amine and Sara in the accessories zone. Karim takes the premium terminals. Set up 3 iPhones in the display. Target: reduce wait time < 3 min per customer.';
+    if (m.includes('pluie') || m.includes('accessoire') || m.includes('rain') || m.includes('accessory'))
+      return 'Active weather signal +40% accessory demand. Highlight: AirPods Pro (water resistant), Apple Watch (weather tracking), waterproof cases. Opening argument: "Perfect for this weather."';
     if (m.includes('stock') || m.includes('iphone'))
-      return 'Stock iPhone 16 Pro critique (3 unités). Stratégie : créer l\'urgence — "Il nous reste 3 en stock." Pour les clients qui hésitent, proposer réservation avec acompte 10%. Rediriger les autres vers Samsung A55 (stock 24 unités).';
-    return `Conseil en cours de génération pour : "${msg}". En attendant, vérifie les quick prompts ci-dessous pour des réponses immédiates.`;
+      return 'Critical iPhone 16 Pro stock (3 units). Strategy: create urgency — "We only have 3 left in stock." For hesitant customers, offer reservation with 10% deposit. Redirect others to Samsung A55 (24 units in stock).';
+    return `Generating advice for: "${msg}". In the meantime, check the quick prompts below for immediate answers.`;
   }
 
   private scrollChat() {

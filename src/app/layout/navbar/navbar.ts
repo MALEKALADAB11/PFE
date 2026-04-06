@@ -25,15 +25,15 @@ export class NavbarComponent {
   storeName = signal('Lac 2');
 
   navItems: NavItem[] = [
-    { label: 'Tableau de bord', route: '/dashboard',   icon: 'grid' },
-    { label: 'Conseiller',      route: '/conseiller',  icon: 'user' },
+    { label: 'Dashboard',       route: '/dashboard',   icon: 'grid' },
+    { label: 'Advisor',         route: '/conseiller',  icon: 'user' },
     { label: 'Coach Chat',      route: '/chat',        icon: 'message-circle' },
-    { label: 'Inventaire',      route: '/inventory',   icon: 'package', isNew: true },
+    { label: 'Inventory',       route: '/inventory',   icon: 'package', isNew: true },
     { label: 'Monitoring',      route: '/monitoring',  icon: 'activity' },
   ];
 
   private getTime(): string {
-    return new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    return new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
   }
 
   getIcon(name: string): string {

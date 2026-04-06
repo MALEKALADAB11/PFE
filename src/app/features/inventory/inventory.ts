@@ -106,7 +106,7 @@ export class InventoryComponent {
 
   riskLabel(r: string): string {
     const m: Record<string, string> = {
-      critical: 'CRITIQUE', high: 'ÉLEVÉ',
+      critical: 'CRITICAL', high: 'HIGH',
       ok: 'OK'
     };
     return m[r] ?? 'N/A';
@@ -160,9 +160,9 @@ export class InventoryComponent {
   }
 
   alertTypeLabel(type: string): string {
-    if (type === 'rupture')        return 'Rupture';
+    if (type === 'rupture')        return 'Stockout';
     if (type === 'redistribution') return 'Redistribution';
-    return 'Surstock';
+    return 'Overstock';
   }
 
   // ── Dismiss alert ──

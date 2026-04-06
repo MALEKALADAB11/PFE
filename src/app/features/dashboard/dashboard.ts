@@ -48,27 +48,27 @@ export class DashboardComponent {
   // ── Flip KPI cards ──
   flipCards: FlipCardData[] = [
     {
-      label: 'Visiteurs / h', value: '42', trend: '▼ 22% vs forecast',
+      label: 'Visitors / h', value: '42', trend: '▼ 22% vs forecast',
       trendDir: 'down', accentColor: 'blue',
-      backTitle: 'Analyse trafic',
-      backLines: ['Pic attendu 17h–19h : +60%', 'Concert 20h à 2km', 'Pluie réduit passage spontané']
+      backTitle: 'Traffic Analysis',
+      backLines: ['Expected peak 17h-19h: +60%', 'Concert 20h at 2km', 'Rain reduces spontaneous traffic']
     },
     {
       label: 'Revenue today', value: '4 250', suffix: 'DT',
-      trend: '▼ 28.7% vs cible', trendDir: 'down', accentColor: 'red',
-      backTitle: 'Répartition CA',
-      backLines: ['Forfaits Mobile : 56%', 'Fibre / Box : 30%', 'Accessoires : 14% (faible)']
+      trend: '▼ 28.7% vs target', trendDir: 'down', accentColor: 'red',
+      backTitle: 'Revenue Breakdown',
+      backLines: ['Mobile Plans: 56%', 'Fiber / Box: 30%', 'Accessories: 14% (low)']
     },
     {
       label: 'Daily target', value: '53', suffix: '%',
       trend: '30% gap — HIGH risk', trendDir: 'down', accentColor: 'amber',
-      backTitle: 'Projection EOD',
-      backLines: ['Prévision : 6 800 DT', 'Objectif : 8 000 DT', 'Pic 17h peut combler 800 DT']
+      backTitle: 'EOD Projection',
+      backLines: ['Forecast: 6 800 DT', 'Target: 8 000 DT', 'Peak at 17h can close 800 DT gap']
     },
     {
-      label: 'Agents actifs', value: '4', suffix: '/ 4',
-      trend: 'Tous opérationnels', trendDir: 'up', accentColor: 'teal',
-      backTitle: 'État système',
+      label: 'Active Agents', value: '4', suffix: '/ 4',
+      trend: 'All operational', trendDir: 'up', accentColor: 'teal',
+      backTitle: 'System State',
       backLines: ['Forecast MAPE : 14.3%', 'LLM latency p95 : 2.1s', 'Advice quality : 0.87']
     },
   ];
@@ -100,11 +100,11 @@ export class DashboardComponent {
   // ── Heat map ──
   heatHours = ['09h','10h','11h','12h','13h','14h','15h','16h','17h','18h','19h','20h'];
   heatRows: { key: string; label: string }[] = [
-    { key: 'traffic', label: 'Trafic'  },
-    { key: 'weather', label: 'Météo'   },
+    { key: 'traffic', label: 'Traffic' },
+    { key: 'weather', label: 'Weather' },
     { key: 'stock',   label: 'Stock'   },
-    { key: 'event',   label: 'Événement'},
-    { key: 'risk',    label: 'Risque'  },
+    { key: 'event',   label: 'Event'   },
+    { key: 'risk',    label: 'Risk'    },
   ];
 
   heatData: Record<string, number[]> = {
@@ -134,7 +134,7 @@ export class DashboardComponent {
   }
 
   statusLabel(s: string): string {
-    return s === 'pending' ? 'En attente' : s === 'approved' ? 'Approuvé' : 'Escalader';
+    return s === 'pending' ? 'Pending' : s === 'approved' ? 'Approved' : 'Escalate';
   }
 
   approve(id: string)  { this.cards = this.cards.map(c => c.id === id ? { ...c, status: 'approved' as const } : c); }
@@ -155,7 +155,7 @@ export class DashboardComponent {
 
   statusText(s: string): string {
     const m: Record<string, string> = {
-      top: 'Top', ok: 'OK', urgent: 'Urgent', attente: 'Attente'
+      top: 'Top', ok: 'OK', urgent: 'Urgent', attente: 'Waiting'
     };
     return m[s] ?? s;
   }

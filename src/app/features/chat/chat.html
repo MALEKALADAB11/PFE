@@ -14,11 +14,13 @@
         </div>
         <span class="conv-brand__label">CoachAgent</span>
       </div>
-      <button class="new-conv-btn" (click)="newConv()" title="Nouvelle session">
+      <button class="new-conv-btn"
+              (click)="newConv()"
+              title="New session">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
              stroke="currentColor" stroke-width="2.5">
-          <line x1="12" y1="5" x2="12" y2="19"/>
-          <line x1="5" y1="12" x2="19" y2="12"/>
+          <line x1="12" y1="5"  x2="12" y2="19"/>
+          <line x1="5"  y1="12" x2="19" y2="12"/>
         </svg>
       </button>
     </div>
@@ -32,7 +34,7 @@
       </svg>
       <input
         type="text"
-        placeholder="Rechercher…"
+        placeholder="Search sessions…"
         class="conv-search__input"
         (input)="onSearch($event)"/>
     </div>
@@ -44,7 +46,6 @@
              [class.is-active]="conv.id === activeConvId()"
              (click)="selectConv(conv.id)">
 
-          <!-- Mode dot -->
           <div class="conv-mode-dot"
                [style.background]="modeColors[conv.mode]">
           </div>
@@ -63,11 +64,11 @@
 
           <button class="conv-delete"
                   (click)="deleteConv(conv.id, $event)"
-                  title="Supprimer">
+                  title="Delete">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
                  stroke="currentColor" stroke-width="2.5">
-              <line x1="18" y1="6" x2="6" y2="18"/>
-              <line x1="6" y1="6" x2="18" y2="18"/>
+              <line x1="18" y1="6"  x2="6"  y2="18"/>
+              <line x1="6"  y1="6"  x2="18" y2="18"/>
             </svg>
           </button>
 
@@ -76,14 +77,14 @@
 
       @if (filteredConvs().length === 0) {
         <div class="conv-empty">
-          <p>Aucune session trouvée</p>
+          <p>No sessions found</p>
         </div>
       }
     </div>
 
     <!-- Advisors quick access -->
     <div class="conv-sidebar__footer">
-      <p class="footer-label">Conseillers actifs</p>
+      <p class="footer-label">Active advisors</p>
       <div class="advisor-chips">
         @for (adv of advisors; track adv.id) {
           <div class="adv-chip"
@@ -115,9 +116,9 @@
               title="Toggle sidebar">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
              stroke="currentColor" stroke-width="2">
-          <line x1="3" y1="6" x2="21" y2="6"/>
-          <line x1="3" y1="12" x2="21" y2="12"/>
-          <line x1="3" y1="18" x2="21" y2="18"/>
+          <line x1="3"  y1="6"  x2="21" y2="6"/>
+          <line x1="3"  y1="12" x2="21" y2="12"/>
+          <line x1="3"  y1="18" x2="21" y2="18"/>
         </svg>
       </button>
 
@@ -133,7 +134,6 @@
       <div class="chat-header__meta">
         <div class="agent-status">
           <span class="agent-status__dot"></span>
-          <span>Coaching Agent · DSPy · vLLM</span>
         </div>
         <div class="msg-count mono">
           {{ activeConv().messages.length }} messages
@@ -158,7 +158,6 @@
         <!-- Coach message -->
         @if (msg.role === 'coach') {
           <div class="msg-row msg-row--coach">
-
             <div class="msg-avatar msg-avatar--coach">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
                    stroke="white" stroke-width="2">
@@ -169,7 +168,6 @@
             </div>
 
             <div class="msg-content">
-
               @if (msg.typing) {
                 <div class="msg-bubble msg-bubble--coach typing-bubble">
                   <div class="typing-dots">
@@ -182,20 +180,21 @@
 
                   @if (msg.sources?.length) {
                     <div class="msg-sources">
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
-                           stroke="currentColor" stroke-width="2">
+                      <svg width="10" height="10" viewBox="0 0 24 24"
+                           fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="12" cy="12" r="10"/>
-                        <line x1="12" y1="8" x2="12" y2="12"/>
+                        <line x1="12" y1="8"  x2="12"    y2="12"/>
                         <line x1="12" y1="16" x2="12.01" y2="16"/>
                       </svg>
-                      <span>Sources :</span>
+                      <span>Sources:</span>
                       @for (src of msg.sources; track src) {
                         <span class="source-tag">{{ src }}</span>
                       }
                       @if (msg.confidence) {
                         <span class="confidence-tag"
-                              [style.color]="msg.confidence >= 0.85 ? '#00B894' : '#F9A825'">
-                          {{ (msg.confidence * 100).toFixed(0) }}% confiance
+                              [style.color]="msg.confidence >= 0.85
+                                ? '#00B894' : '#F9A825'">
+                          {{ (msg.confidence * 100).toFixed(0) }}% confidence
                         </span>
                       }
                     </div>
@@ -203,7 +202,6 @@
                 </div>
                 <span class="msg-time mono">{{ msg.time }}</span>
               }
-
             </div>
           </div>
         }
@@ -211,18 +209,15 @@
         <!-- User message -->
         @if (msg.role === 'user') {
           <div class="msg-row msg-row--user">
-
             <div class="msg-content msg-content--user">
               <div class="msg-bubble msg-bubble--user">
                 <p class="msg-text">{{ msg.text }}</p>
               </div>
               <span class="msg-time mono">{{ msg.time }}</span>
             </div>
-
             <div class="msg-avatar msg-avatar--user">
-              {{ advisors[0].initials }}
+              {{ advisors[0]?.initials ?? 'U' }}
             </div>
-
           </div>
         }
 
@@ -231,10 +226,10 @@
       <div #msgEnd></div>
     </div>
 
-    <!-- Suggestions (shown when few messages) -->
+    <!-- Suggestions -->
     @if (activeConv().messages.length <= 3) {
       <div class="suggestions-strip">
-        <p class="suggestions-label">Suggestions rapides</p>
+        <p class="suggestions-label">Quick suggestions</p>
         <div class="suggestions-grid">
           @for (s of suggestions; track s.label) {
             <button class="suggestion-card"
@@ -255,7 +250,7 @@
         <textarea
           class="chat-textarea"
           rows="1"
-          placeholder="Pose ta question au CoachAgent… (↵ Envoyer, Shift+↵ Nouvelle ligne)"
+          placeholder="Ask your CoachAgent… (↵ Send, Shift+↵ New line)"
           [value]="inputValue()"
           (input)="onInput($event)"
           (keydown)="onKey($event)">
@@ -269,7 +264,7 @@
                 <circle cx="11" cy="11" r="8"/>
                 <path d="M21 21l-4.35-4.35"/>
               </svg>
-              RAG actif
+              RAG active
             </span>
             <span class="input-hint input-hint--teal">
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
@@ -286,16 +281,14 @@
                   (click)="send()">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
                  stroke="currentColor" stroke-width="2">
-              <line x1="22" y1="2" x2="11" y2="13"/>
+              <line x1="22" y1="2"  x2="11" y2="13"/>
               <polygon points="22,2 15,22 11,13 2,9"/>
             </svg>
           </button>
         </div>
       </div>
 
-      <p class="input-footer">
-        CoachAgent IA · DSPy · vLLM Mistral-7B · Données boutique temps réel
-      </p>
+      
     </div>
 
   </div>

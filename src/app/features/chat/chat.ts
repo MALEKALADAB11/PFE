@@ -1,20 +1,20 @@
 import { Component, signal, computed, ViewChild,
          ElementRef, AfterViewChecked } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { MockDataService } from '../../core/services/mock-data';
-import { Advisor } from '../../core/models/advisor';
 
+import { Advisor } from '../../core/models/advisor';
+import { MockDataService } from '../../core/services/mock-data';
 
 type MessageRole = 'user' | 'coach' | 'system';
 type ConvMode    = 'general' | 'advisor' | 'inventory' | 'strategy';
 
 interface Message {
-  id:        string;
-  role:      MessageRole;
-  text:      string;
-  time:      string;
-  typing?:   boolean;
-  sources?:  string[];
+  id:          string;
+  role:        MessageRole;
+  text:        string;
+  time:        string;
+  typing?:     boolean;
+  sources?:    string[];
   confidence?: number;
 }
 
@@ -36,9 +36,9 @@ interface SuggestedPrompt {
 }
 
 @Component({
-  selector: 'app-chat',
-  standalone: true,
-  imports: [CommonModule],
+  selector:    'app-chat',
+  standalone:  true,
+  imports:     [CommonModule],
   templateUrl: './chat.html',
   styleUrl:    './chat.scss'
 })
@@ -46,80 +46,83 @@ export class ChatComponent implements AfterViewChecked {
 
   @ViewChild('msgEnd') msgEnd!: ElementRef;
 
-  advisors      : Advisor[] = [];
-  shouldScroll  = false;
-  inputValue    = signal('');
-  isTyping      = signal(false);
-  activeConvId  = signal('c1');
-  searchQuery   = signal('');
-  showSidebar   = signal(true);
+  advisors:    Advisor[] = [];
+  shouldScroll = false;
+  inputValue   = signal('');
+  isTyping     = signal(false);
+  activeConvId = signal('c1');
+  searchQuery  = signal('');
+  showSidebar  = signal(true);
 
   // ── Conversations ──
   conversations = signal<Conversation[]>([
     {
-      id: 'c1', title: 'Session coaching Karim', mode: 'advisor',
-      preview: 'Objectif 93% — stratégie pic trafic',
-      time: '14:32', unread: 0,
+      id: 'c1', title: 'Karim coaching session',
+      mode: 'advisor',
+      preview: '93% target — peak traffic strategy',
+      time: '2:32 PM', unread: 0,
       messages: [
         {
           id: 'm0', role: 'system',
-          text: 'Session coaching démarrée · Karim Benali · Lac 2 · 14:09',
-          time: '14:09'
+          text: 'Coaching session started · Karim Benali · Lac 2 · 2:09 PM',
+          time: '2:09 PM'
         },
         {
           id: 'm1', role: 'coach',
-          text: 'Bonjour Karim ! Tu es à 93% de ton objectif avec 3h28 restantes. La pluie crée une opportunité sur les accessoires (+40%). Je surveille la boutique en temps réel. Que veux-tu travailler ?',
-          time: '14:09',
-          sources: ['POS live', 'Météo API', 'TimesFM'],
+          text: 'Hi Karim! You are at 93% of your daily target with 3h28 remaining. The rain creates an opportunity for accessories (+40%). I\'m monitoring the store in real time. What do you want to work on?',
+          time: '2:09 PM',
+          sources: ['POS live', 'Weather API', 'TimesFM'],
           confidence: 0.91
         },
         {
           id: 'm2', role: 'user',
-          text: 'Comment profiter de la pluie pour les accessoires ?',
-          time: '14:10'
+          text: 'How can I take advantage of the rain for accessories?',
+          time: '2:10 PM'
         },
         {
           id: 'm3', role: 'coach',
-          text: 'Signal météo actif +40% demande accessoires jusqu\'à 18h. Voici ma stratégie :\n\n1. Repositionner Amine en zone accessoires — il est à 38%, il a besoin de trafic facile.\n2. Mettre AirPods Pro et Apple Watch en vitrine — argument clé : résistance à l\'eau.\n3. Script d\'accroche : "Parfait par ce temps, et résistant à la pluie."\n4. Objectif : 5 ventes accessoires avant 17h = +200 DT CA.',
-          time: '14:10',
-          sources: ['Météo API', 'Stock API', 'RAG'],
+          text: 'Rain signal active — +40% accessory demand until 6 PM. Here\'s my strategy:\n\n1. Move Amine to the accessories zone — he\'s at 38% and needs easy traffic.\n2. Place AirPods Pro and Apple Watch in the display window — key pitch: water resistance.\n3. Hook script: "Perfect in this weather, and certified water resistant."\n4. Target: 5 accessory sales before 5 PM = +200 DT revenue.',
+          time: '2:10 PM',
+          sources: ['Weather API', 'Stock API', 'RAG'],
           confidence: 0.88
         },
       ]
     },
     {
-      id: 'c2', title: 'Analyse stock critique', mode: 'inventory',
-      preview: 'iPhone 16 Pro — 3 unités restantes',
-      time: '14:15', unread: 2,
+      id: 'c2', title: 'Critical stock analysis',
+      mode: 'inventory',
+      preview: 'iPhone 16 Pro — 3 units remaining',
+      time: '2:15 PM', unread: 2,
       messages: [
         {
           id: 's1', role: 'system',
-          text: 'Session inventaire · Inventory Agent · 14:15',
-          time: '14:15'
+          text: 'Inventory session · Inventory Agent · 2:15 PM',
+          time: '2:15 PM'
         },
         {
           id: 's2', role: 'coach',
-          text: 'Alerte stock critique détectée : iPhone 16 Pro à 3 unités. Risque rupture 91% d\'ici 24h. Je recommande de commander 15 unités avant vendredi. Veux-tu que je génère le bon de commande ?',
-          time: '14:15',
+          text: 'Critical stock alert detected: iPhone 16 Pro at 3 units. 91% stockout risk within 24h. I recommend ordering 15 units before Friday. Should I generate the purchase order?',
+          time: '2:15 PM',
           sources: ['Stock API', 'Forecast Agent', 'Inventory Agent'],
           confidence: 0.91
         },
       ]
     },
     {
-      id: 'c3', title: 'Stratégie équipe soir', mode: 'strategy',
-      preview: 'Pic trafic 17h–19h · Concert',
-      time: '13:50', unread: 0,
+      id: 'c3', title: 'Evening team strategy',
+      mode: 'strategy',
+      preview: 'Peak traffic 5–7 PM · Concert',
+      time: '1:50 PM', unread: 0,
       messages: [
         {
           id: 'st1', role: 'system',
-          text: 'Session stratégie · Orchestrator · 13:50',
-          time: '13:50'
+          text: 'Strategy session · Orchestrator · 1:50 PM',
+          time: '1:50 PM'
         },
         {
           id: 'st2', role: 'coach',
-          text: 'Concert ce soir à 2km. Pic de trafic prévu 17h–19h (+60%). Voici le plan équipe recommandé pour maximiser ce créneau.',
-          time: '13:50',
+          text: 'Concert tonight 2km away. Peak traffic expected 5–7 PM (+60%). Here is the recommended team plan to maximize this window.',
+          time: '1:50 PM',
           sources: ['Events API', 'TimesFM', 'Gap Detector'],
           confidence: 0.85
         },
@@ -142,14 +145,46 @@ export class ChatComponent implements AfterViewChecked {
 
   // ── Suggested prompts ──
   suggestions: SuggestedPrompt[] = [
-    { label: 'Script bundle assurance',   text: 'Donne-moi le script bundle assurance + terminal pour Karim.', category: 'Script',    color: '#6C5CE7' },
-    { label: 'Argument 5G vs SFR',        text: 'Quels arguments utiliser face à un client qui compare avec SFR 5G ?', category: 'Argument', color: '#00B894' },
-    { label: 'Gérer objection prix',      text: 'Comment reformuler le prix de l\'iPhone 16 Pro face à une objection ?', category: 'Objection', color: '#F9A825' },
-    { label: 'Stratégie pic 17h',         text: 'Stratégie optimale pour le pic trafic 17h–19h avec mon équipe actuelle ?', category: 'Stratégie', color: '#2D9CDB' },
-    { label: 'Upsell accessoires pluie',  text: 'Script upsell accessoires en contexte pluie — que dire exactement ?', category: 'Script',    color: '#00B894' },
-    { label: 'Analyser gap Sofia',        text: 'Analyse le gap de performance de Sofia L. et propose un plan d\'action.', category: 'Analyse',   color: '#E74C3C' },
-    { label: 'Prévision fin de journée',  text: 'Quelle est la prévision CA fin de journée pour Lac 2 ?', category: 'Forecast',  color: '#6C5CE7' },
-    { label: 'Redistribution stock',      text: 'Recommande une redistribution de stock entre boutiques pour l\'Apple Watch S10.', category: 'Stock',     color: '#F9A825' },
+    {
+      label: 'Insurance bundle script',
+      text:  'Give me the insurance + device bundle script for Karim.',
+      category: 'Script', color: '#6C5CE7'
+    },
+    {
+      label: '5G argument vs competitors',
+      text:  'What arguments to use against a customer comparing with competitors on 5G?',
+      category: 'Argument', color: '#00B894'
+    },
+    {
+      label: 'Handle price objection',
+      text:  'How to reframe the iPhone 16 Pro price when a customer objects?',
+      category: 'Objection', color: '#F9A825'
+    },
+    {
+      label: '5 PM peak strategy',
+      text:  'Optimal strategy for the 5–7 PM traffic peak with my current team?',
+      category: 'Strategy', color: '#2D9CDB'
+    },
+    {
+      label: 'Accessory upsell — rain',
+      text:  'Accessory upsell script in rain context — what exactly should I say?',
+      category: 'Script', color: '#00B894'
+    },
+    {
+      label: 'Analyze Sofia\'s gap',
+      text:  'Analyze Sofia L.\'s performance gap and propose an action plan.',
+      category: 'Analysis', color: '#E74C3C'
+    },
+    {
+      label: 'End of day forecast',
+      text:  'What is the EOD revenue forecast for Lac 2?',
+      category: 'Forecast', color: '#6C5CE7'
+    },
+    {
+      label: 'Stock redistribution',
+      text:  'Recommend a stock redistribution between stores for Apple Watch S10.',
+      category: 'Stock', color: '#F9A825'
+    },
   ];
 
   modeColors: Record<ConvMode, string> = {
@@ -160,10 +195,10 @@ export class ChatComponent implements AfterViewChecked {
   };
 
   modeLabels: Record<ConvMode, string> = {
-    general:   'Général',
-    advisor:   'Conseiller',
-    inventory: 'Inventaire',
-    strategy:  'Stratégie',
+    general:   'General',
+    advisor:   'Advisor',
+    inventory: 'Inventory',
+    strategy:  'Strategy',
   };
 
   constructor(private data: MockDataService) {
@@ -182,44 +217,35 @@ export class ChatComponent implements AfterViewChecked {
     const msg = (text ?? this.inputValue()).trim();
     if (!msg || this.isTyping()) return;
 
-    const userMsg: Message = {
-      id:   'u' + Date.now(),
-      role: 'user',
-      text: msg,
-      time: this.now()
-    };
+    this.addMessage({
+      id: 'u' + Date.now(), role: 'user',
+      text: msg, time: this.now()
+    });
 
-    this.addMessage(userMsg);
     this.inputValue.set('');
     this.isTyping.set(true);
     this.shouldScroll = true;
 
-    // Add typing indicator
-    const typingMsg: Message = {
+    this.addMessage({
       id: 'typing', role: 'coach',
       text: '', time: this.now(), typing: true
-    };
-    this.addMessage(typingMsg);
+    });
 
     setTimeout(() => {
-      // Remove typing indicator
       this.conversations.update(convs =>
         convs.map(c => c.id === this.activeConvId()
           ? { ...c, messages: c.messages.filter(m => m.id !== 'typing') }
           : c
         )
       );
-
-      const reply: Message = {
+      this.addMessage({
         id:         'c' + Date.now(),
         role:       'coach',
         text:       this.generateReply(msg),
         time:       this.now(),
         sources:    this.getSources(msg),
         confidence: +(0.78 + Math.random() * 0.19).toFixed(2)
-      };
-
-      this.addMessage(reply);
+      });
       this.isTyping.set(false);
       this.shouldScroll = true;
     }, 1000 + Math.random() * 600);
@@ -229,21 +255,23 @@ export class ChatComponent implements AfterViewChecked {
   newConv() {
     const id = 'conv_' + Date.now();
     const conv: Conversation = {
-      id, title: 'Nouvelle session',
-      mode: 'general',
-      preview: 'Session démarrée',
-      time: this.now(), unread: 0,
+      id,
+      title:   'New session',
+      mode:    'general',
+      preview: 'Session started',
+      time:    this.now(),
+      unread:  0,
       messages: [
         {
-          id: 'sys_' + Date.now(), role: 'system',
-          text: `Nouvelle session démarrée · ${this.now()}`,
+          id:   'sys_' + Date.now(), role: 'system',
+          text: `New session started · ${this.now()}`,
           time: this.now()
         },
         {
-          id: 'greet_' + Date.now(), role: 'coach',
-          text: 'Bonjour ! Je suis votre CoachAgent IA. Je surveille les performances de la boutique, le stock, la météo et les événements en temps réel. Comment puis-je vous aider ?',
+          id:   'greet_' + Date.now(), role: 'coach',
+          text: 'Hello! I\'m your AI CoachAgent. I\'m monitoring store performance, stock levels, weather signals, and local events in real time. How can I help you?',
           time: this.now(),
-          sources: ['Orchestrator', 'Data Agent'],
+          sources:    ['Orchestrator', 'Data Agent'],
           confidence: 0.95
         }
       ]
@@ -304,7 +332,7 @@ export class ChatComponent implements AfterViewChecked {
   }
 
   private now(): string {
-    return new Date().toLocaleTimeString('fr-FR', {
+    return new Date().toLocaleTimeString('en-US', {
       hour: '2-digit', minute: '2-digit'
     });
   }
@@ -313,11 +341,11 @@ export class ChatComponent implements AfterViewChecked {
     const m = msg.toLowerCase();
     if (m.includes('stock') || m.includes('iphone'))
       return ['Stock API', 'Inventory Agent', 'TimesFM'];
-    if (m.includes('météo') || m.includes('pluie') || m.includes('accessoire'))
-      return ['Météo API', 'RAG', 'Coaching Agent'];
-    if (m.includes('prévision') || m.includes('forecast'))
+    if (m.includes('weather') || m.includes('rain') || m.includes('accessor'))
+      return ['Weather API', 'RAG', 'Coaching Agent'];
+    if (m.includes('forecast') || m.includes('eod'))
       return ['TimesFM', 'Gap Detector', 'POS live'];
-    if (m.includes('script') || m.includes('argument'))
+    if (m.includes('script') || m.includes('argument') || m.includes('objection'))
       return ['RAG', 'Coaching Agent', 'DSPy'];
     return ['Orchestrator', 'Coaching Agent'];
   }
@@ -325,31 +353,31 @@ export class ChatComponent implements AfterViewChecked {
   private generateReply(msg: string): string {
     const m = msg.toLowerCase();
 
-    if (m.includes('assurance'))
-      return 'Script bundle assurance :\n\n1. Timing : proposer APRÈS validation de l\'achat terminal.\n2. Phrase clé : "Avec l\'assurance Premium, si vous cassez l\'écran demain, échange sous 48h. C\'est 9 DT/mois — soit un café par semaine."\n3. Levier visuel : montrer le tarif réparation écran = 280 DT sans assurance.\n4. Objectif taux conversion : 70% des ventes terminaux.';
+    if (m.includes('insurance'))
+      return 'Insurance bundle script:\n\n1. Timing: offer AFTER device purchase is confirmed.\n2. Key phrase: "With Premium Insurance, if you break the screen tomorrow, replacement in 48h. It\'s 9 DT/month — a coffee per week."\n3. Visual lever: show screen repair cost = 280 DT without insurance.\n4. Target conversion rate: 70% of device sales.';
 
-    if (m.includes('5g') || m.includes('sfr'))
-      return 'Arguments 5G face à SFR :\n\n1. Couverture réseau : 94% vs 87% pour SFR en Tunisie.\n2. Débit garanti vs partagé — faire tester en boutique.\n3. Compatibilité device : notre catalogue 5G est plus large.\n4. Prix : comparer sur 24 mois, pas le prix facial.\n5. Argument final : "Testez votre réseau SFR ici maintenant" — le test parle de lui-même.';
+    if (m.includes('5g') || m.includes('competitor'))
+      return '5G arguments vs competitors:\n\n1. Network coverage: 94% vs 87% for competitors.\n2. Guaranteed speed vs shared bandwidth — let them test in store.\n3. Wider 5G device catalog.\n4. Price: compare over 24 months, not the upfront price.\n5. Final argument: "Test your current network here right now" — the result speaks for itself.';
 
-    if (m.includes('objection') || m.includes('prix'))
-      return 'Technique reformulation prix :\n\n1. Ne jamais répéter le prix brut. Décomposer : "1 299 DT = 54 DT/mois sur 24 mois."\n2. Comparaison concrète : "Moins que votre abonnement Netflix + Spotify."\n3. Valeur vs coût : photo pro, durabilité 5 ans, revente valeur résiduelle.\n4. Si blocage persiste : proposer financement 3x sans frais.';
+    if (m.includes('objection') || m.includes('price'))
+      return 'Price reframing technique:\n\n1. Never repeat the full price. Break it down: "1,299 DT = 54 DT/month over 24 months."\n2. Concrete comparison: "Less than your Netflix + Spotify subscription."\n3. Value vs cost: pro camera, 5-year durability, trade-in value.\n4. If still blocked: offer 3x installments with no fees.';
 
-    if (m.includes('pic') || m.includes('trafic') || m.includes('17h'))
-      return 'Plan équipe pour pic 17h–19h :\n\n1. Karim → zone terminaux haut de gamme (il est à 93%, il peut closer).\n2. Sara → fibre et offres Pro (clients qui attendent = temps de qualifier).\n3. Amine → accessoires (trafic facile, article rapide à vendre).\n4. Leila → accueil et orientation (réduire temps d\'attente < 3 min).\n5. Préparer 3 iPhones en vitrine dès 16h45.';
+    if (m.includes('peak') || m.includes('traffic') || m.includes('5 pm') || m.includes('5pm'))
+      return 'Team plan for the 5–7 PM peak:\n\n1. Karim → premium handsets (93%, he can close deals).\n2. Sara → fiber and Pro offers (waiting clients = time to qualify).\n3. Amine → accessories (easy traffic, fast to sell).\n4. Leila → welcome and orientation (reduce wait time < 3 min).\n5. Prepare 3 iPhones in the display window by 4:45 PM.';
 
-    if (m.includes('pluie') || m.includes('accessoire'))
-      return 'Stratégie accessoires contexte pluie :\n\n1. Signal actif : +40% demande jusqu\'à 18h.\n2. Produits prioritaires : AirPods Pro 3 (résistant eau), Apple Watch S10 (étanche 50m), coques.\n3. Argument d\'accroche universel : "Parfait par ce temps, et certifié résistant à l\'eau."\n4. Repositionner Amine sur cette zone immédiatement.\n5. Objectif : 5 ventes accessoires avant 17h.';
+    if (m.includes('rain') || m.includes('accessor'))
+      return 'Accessories strategy — rain context:\n\n1. Active signal: +40% demand until 6 PM.\n2. Priority products: AirPods Pro 3 (water resistant), Apple Watch S10 (waterproof 50m), protective cases.\n3. Universal hook: "Perfect in this weather, and certified water resistant."\n4. Move Amine to the accessories zone immediately.\n5. Target: 5 accessory sales before 5 PM.';
 
     if (m.includes('sofia') || m.includes('gap'))
-      return 'Analyse gap Sofia L. :\n\nGap actuel : 60% — objectif 40% atteinte. Causes identifiées :\n1. Contexte pluie = moins de passage spontané sur sa zone fibre.\n2. Conversion 38% vs moy. 52% — problème de closing, pas de volume.\n\nPlan d\'action :\n1. Shift temporaire vers accessoires (trafic plus facile).\n2. Pairer avec Karim pour observer une démonstration closing.\n3. Focus closing : poser la question de décision directement.';
+      return 'Sofia L. gap analysis:\n\nCurrent gap: 60% — only 40% of target reached. Root causes:\n1. Rain context = less spontaneous foot traffic in her fiber zone.\n2. 38% conversion rate vs 52% average — closing problem, not volume.\n\nAction plan:\n1. Temporary shift to accessories (easier traffic).\n2. Pair with Karim to observe a closing demo.\n3. Closing focus: ask the decision question directly.';
 
-    if (m.includes('prévision') || m.includes('forecast') || m.includes('eod'))
-      return 'Prévision fin de journée Lac 2 :\n\nTimesFM · MAPE 14.3% · IC 80%\n\n• Prévision EOD : 6 800 DT [5 400 – 8 200]\n• Objectif : 8 000 DT\n• Gap restant : ~1 200 DT en 3h28\n• Scénario optimiste (pic 17h) : 7 400 DT\n• Levier principal : accessoires pluie + pic concert soir.';
+    if (m.includes('forecast') || m.includes('eod'))
+      return 'EOD forecast — Lac 2:\n\nTimesFM · MAPE 14.3% · 80% CI\n\n• EOD forecast: 6,800 DT [5,400 – 8,200]\n• Target: 8,000 DT\n• Remaining gap: ~1,200 DT in 3h28\n• Optimistic scenario (5 PM peak): 7,400 DT\n• Main lever: accessories rain signal + concert evening peak.';
 
     if (m.includes('redistribution') || m.includes('apple watch'))
-      return 'Redistribution Apple Watch S10 :\n\nBTQ-14 (ici) : 2 unités · stock critique\nBTQ-08 (Menzah) : 12 unités · surstock\n\nRecommandation Inventory Agent :\nTransfert de 6 unités BTQ-08 → BTQ-14\nDélai livraison interne : 4h\nConfiance : 0.84\n\nAction requise : valider le bon de transfert dans le système logistique.';
+      return 'Apple Watch S10 redistribution:\n\nBTQ-14 (here): 2 units · critical stock\nBTQ-08 (Menzah): 12 units · overstock\n\nInventory Agent recommendation:\nTransfer 6 units BTQ-08 → BTQ-14\nInternal delivery lead time: 4h\nConfidence: 0.84\n\nRequired action: validate the transfer order in the logistics system.';
 
-    return `Analyse en cours pour : "${msg.slice(0, 60)}..."\n\nJe croise les données POS live, météo, stock et prévisions TimesFM. Voici ce que je détecte : la boutique est à 53% de l\'objectif journalier avec un pic de trafic prévu dans 3h. Veux-tu que j\'affine cette analyse sur un conseiller ou un produit spécifique ?`;
+    return `Analyzing your request: "${msg.slice(0, 60)}..."\n\nI\'m cross-referencing live POS data, weather signals, stock levels, and TimesFM forecasts. The store is at 53% of daily target with a traffic peak expected in 3h. Want me to drill down on a specific advisor or product?`;
   }
 
   trackById(_: number, item: { id: string }) { return item.id; }

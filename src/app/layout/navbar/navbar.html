@@ -24,13 +24,8 @@
         routerLinkActive="is-active"
         class="nav-link"
         [class.nav-link--new]="item.isNew">
-
         <span class="nav-link__icon" [innerHTML]="getIcon(item.icon)"></span>
         <span class="nav-link__label">{{ item.label }}</span>
-
-        @if (item.isNew) {
-          <span class="nav-new-badge">NEW</span>
-        }
       </a>
     }
   </nav>
@@ -38,13 +33,11 @@
   <!-- Right zone -->
   <div class="navbar__right">
 
-    <!-- Agents status pill -->
     <div class="agents-pill">
       <span class="agents-pill__dot"></span>
-      <span>{{ agentsActive() }} agents actifs</span>
+      <span>{{ agentsActive() }} active agents</span>
     </div>
 
-    <!-- Store selector -->
     <div class="store-selector">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
            stroke="currentColor" stroke-width="2">
@@ -53,7 +46,6 @@
       <span>{{ storeName() }}</span>
     </div>
 
-    <!-- Time -->
     <div class="navbar__time">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
            stroke="currentColor" stroke-width="2">
@@ -63,8 +55,8 @@
       <span class="mono">{{ currentTime() }}</span>
     </div>
 
-    <!-- Avatar -->
     <div class="navbar__avatar">MG</div>
 
   </div>
+
 </header>

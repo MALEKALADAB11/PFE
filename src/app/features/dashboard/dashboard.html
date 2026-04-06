@@ -3,10 +3,10 @@
   <!-- ══ PAGE HEADER ══ -->
   <div class="page-header">
     <div class="page-header__left">
-      <h1 class="page-title">Tableau de bord</h1>
+      <h1 class="page-title">Dashboard</h1>
       <p class="page-sub">
         <span class="status-dot"></span>
-        Système nominal · APP06 Agent LIVE · Mis à jour 14:32
+        System nominal · APP06 Agent LIVE · Updated 2:32 PM
       </p>
     </div>
     <div class="page-header__right">
@@ -16,7 +16,7 @@
           <polyline points="1,4 1,10 7,10"/>
           <path d="M3.51 15a9 9 0 102.13-9.36L1 10"/>
         </svg>
-        Actualiser
+        Refresh
       </button>
       <button class="btn-primary">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
@@ -26,7 +26,7 @@
           <path d="M23 21v-2a4 4 0 00-3-3.87"/>
           <path d="M16 3.13a4 4 0 010 7.75"/>
         </svg>
-        Coaching équipe
+        Team Coaching
       </button>
     </div>
   </div>
@@ -41,21 +41,21 @@
   <!-- ══ MAIN GRID ══ -->
   <div class="main-grid">
 
-    <!-- ── LEFT 60% ── -->
+    <!-- ── LEFT ── -->
     <div class="main-grid__left">
 
       <!-- Hourly chart -->
       <div class="card chart-card">
         <div class="card-header">
           <div>
-            <h2 class="card-title">Ventes horaires vs Forecast</h2>
+            <h2 class="card-title">Hourly Sales vs Forecast</h2>
             <p class="card-sub">APP03 TimesFM · APP01 POS · BTQ-14</p>
           </div>
           <div class="chart-legend">
             <span class="legend-item">
               <span class="legend-dot"
                     style="background:var(--color-purple)"></span>
-              Réalisé
+              Actual
             </span>
             <span class="legend-item">
               <span class="legend-dot legend-dot--dashed"
@@ -65,11 +65,10 @@
             <span class="legend-item">
               <span class="legend-dot legend-dot--dashed"
                     style="border-color:#ccc"></span>
-              Objectif
+              Target
             </span>
           </div>
         </div>
-
         <div class="chart-area">
           <div class="chart-bars">
             @for (point of hourlyData; track point.hour) {
@@ -83,7 +82,7 @@
                          [style.height.%]="barHeight(point.actual)">
                     </div>
                   }
-                  @if (point.hour === '14h') {
+                  @if (point.hour === '2 PM') {
                     <div class="bar-now-label">NOW</div>
                   }
                 </div>
@@ -92,36 +91,26 @@
             }
           </div>
           <div class="chart-yaxis">
-            <span>8</span>
-            <span>6</span>
-            <span>4</span>
-            <span>2</span>
-            <span>0</span>
+            <span>8</span><span>6</span>
+            <span>4</span><span>2</span><span>0</span>
           </div>
         </div>
       </div>
 
-      <!-- Context Heatmap -->
+      <!-- Heatmap -->
       <div class="card heatmap-card">
         <div class="card-header">
           <div>
             <h2 class="card-title">Context Risk Heatmap</h2>
-            <p class="card-sub">
-              APP02 Feature Eng. · APP12 Data Sources · LIVE
-            </p>
+            <p class="card-sub">APP02 Feature Eng. · APP12 Data Sources · LIVE</p>
           </div>
           <div class="heat-legend">
-            <span class="heat-leg"
-                  style="background:#EAF3DE;color:#3B6D11">Low</span>
-            <span class="heat-leg"
-                  style="background:#C0DD97;color:#27500A">Med</span>
-            <span class="heat-leg"
-                  style="background:#EF9F27;color:#633806">High</span>
-            <span class="heat-leg"
-                  style="background:#E74C3C;color:white">Crit</span>
+            <span class="heat-leg" style="background:#EAF3DE;color:#3B6D11">Low</span>
+            <span class="heat-leg" style="background:#C0DD97;color:#27500A">Med</span>
+            <span class="heat-leg" style="background:#EF9F27;color:#633806">High</span>
+            <span class="heat-leg" style="background:#E74C3C;color:white">Crit</span>
           </div>
         </div>
-
         <div class="heatmap-grid">
           <div class="heat-row heat-row--header">
             <span class="heat-row-label"></span>
@@ -141,19 +130,144 @@
             </div>
           }
         </div>
-
         <div class="heat-alert">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
                stroke="#E74C3C" stroke-width="2">
             <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
-            <line x1="12" y1="9" x2="12" y2="13"/>
+            <line x1="12" y1="9"  x2="12"    y2="13"/>
             <line x1="12" y1="17" x2="12.01" y2="17"/>
           </svg>
-          APP06 · Critical stock risk window 14h–20h — pivot strategy active
+          APP06 · Critical stock risk window 2 PM–8 PM — pivot strategy active
         </div>
       </div>
 
-      <!-- ══ PRODUCT MIX ENRICHI ══ -->
+      <!-- Lead Time Tracker -->
+      <div class="card lead-card">
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">Replenishment lead time tracker</h2>
+            <p class="card-sub">
+              Days from alert triggered → stock received · Target = 5 days
+            </p>
+          </div>
+        </div>
+        <div class="lt-legend">
+          <span class="lt-leg">
+            <span class="lt-leg__dash"></span>Target (5d)
+          </span>
+          <span class="lt-leg">
+            <span class="lt-leg__dot" style="background:#2D9CDB"></span>
+            Within target
+          </span>
+          <span class="lt-leg">
+            <span class="lt-leg__dot" style="background:#F9A825"></span>
+            Slightly late
+          </span>
+          <span class="lt-leg">
+            <span class="lt-leg__dot" style="background:#E74C3C"></span>
+            Too late
+          </span>
+        </div>
+        <div class="lt-chart">
+          <div class="lt-yaxis">
+            <span>12d</span><span>10d</span><span>8d</span>
+            <span>6d</span><span>4d</span><span>2d</span><span>0d</span>
+          </div>
+          <div class="lt-bars-area">
+            <div class="lt-target-line"
+                 [style.bottom.%]="targetLineBottom()">
+            </div>
+            @for (item of leadTimeData; track item.label) {
+              <div class="lt-bar-group">
+                <div class="lt-bar-wrap">
+                  <div class="lt-bar-bg"
+                       [style.background]="leadTimeBg(item.status)">
+                  </div>
+                  <div class="lt-bar"
+                       [style.height.%]="leadTimeBarHeight(item.days)"
+                       [style.background]="leadTimeColor(item.status)">
+                  </div>
+                  <span class="lt-bar-val"
+                        [style.color]="leadTimeColor(item.status)">
+                    {{ item.days }}d
+                  </span>
+                </div>
+                <span class="lt-bar-label">{{ item.label }}</span>
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+
+      <!-- Stock Status -->
+      <div class="card stock-status-card">
+        <div class="stock-status-header">
+          <div class="stock-status-left">
+            <span class="stock-status-label">STOCK STATUS</span>
+            <div class="stock-status-val-row">
+              <span class="stock-status-val"
+                    [style.color]="stockKpi.critical > 0 ? '#E74C3C' : '#00B894'">
+                {{ stockKpi.critical }}
+              </span>
+              <span class="stock-status-total">/ {{ stockKpi.total }}</span>
+              <span class="stock-status-unit">critical SKUs</span>
+            </div>
+          </div>
+          <div class="stock-status-dot"
+               [style.background]="stockKpi.critical > 0 ? '#E74C3C' : '#00B894'">
+          </div>
+        </div>
+        <div class="stock-status-line"
+             [class.stock-status-line--ok]="stockKpi.allOk"
+             [class.stock-status-line--crit]="stockKpi.critical > 0">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2.5">
+            @if (stockKpi.critical > 0) {
+              <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+              <line x1="12" y1="9"  x2="12"    y2="13"/>
+              <line x1="12" y1="17" x2="12.01" y2="17"/>
+            } @else {
+              <polyline points="20,6 9,17 4,12"/>
+            }
+          </svg>
+          <span>
+            {{ stockKpi.critical > 0
+              ? stockKpi.critical + ' SKU(s) below minimum threshold'
+              : 'All systems operational' }}
+          </span>
+        </div>
+        <div class="stock-status-stats">
+          <div class="stock-stat">
+            <span class="stock-stat__val" style="color:#00B894">
+              {{ stockKpi.okCount }}
+            </span>
+            <span class="stock-stat__label">Optimal</span>
+          </div>
+          <div class="stock-stat">
+            <span class="stock-stat__val" style="color:#E74C3C">
+              {{ stockKpi.critical }}
+            </span>
+            <span class="stock-stat__label">Critical</span>
+          </div>
+          <div class="stock-stat">
+            <span class="stock-stat__val">{{ stockKpi.avgCoverage }}x</span>
+            <span class="stock-stat__label">Avg coverage</span>
+          </div>
+          <div class="stock-stat">
+            <span class="stock-stat__val">{{ stockKpi.total }}</span>
+            <span class="stock-stat__label">Total SKUs</span>
+          </div>
+        </div>
+        <a class="stock-status-link" routerLink="/inventory">
+          View inventory details
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2">
+            <polyline points="9,18 15,12 9,6"/>
+          </svg>
+        </a>
+      </div>
+
+      <!-- Product Mix -->
       <div class="card product-mix-card">
         <div class="card-header">
           <div>
@@ -163,13 +277,23 @@
           <div class="mix-legend">
             <span class="mix-leg">
               <span class="mix-leg__dot mix-leg__dot--actual"></span>
-              Réalisé
+              Actual
             </span>
             <span class="mix-leg">
               <span class="mix-leg__dot mix-leg__dot--forecast"></span>
               Forecast
             </span>
           </div>
+        </div>
+
+        <!-- Column headers -->
+        <div class="mix-col-headers">
+          <span class="mix-col-h">Product</span>
+          <span class="mix-col-h">Sales vs Forecast</span>
+          <span class="mix-col-h mix-col-h--right">Attainment</span>
+          <span class="mix-col-h">Stock level</span>
+          <span class="mix-col-h mix-col-h--right">Revenue</span>
+          <span class="mix-col-h"></span>
         </div>
 
         <div class="product-mix-list">
@@ -182,17 +306,16 @@
 
               <!-- Name -->
               <div class="mix-name-col">
-                <div class="mix-color-bar"
-                     [style.background]="p.color"></div>
+                <div class="mix-color-bar" [style.background]="p.color"></div>
                 <div class="mix-name-info">
                   <span class="mix-name">{{ p.name }}</span>
                   <span class="mix-units mono">
-                    {{ p.unitsSold }} / {{ p.unitsForecast }} u.
+                    {{ p.unitsSold }} / {{ p.unitsForecast }} units
                   </span>
                 </div>
               </div>
 
-              <!-- Double bar -->
+              <!-- Sales bar -->
               <div class="mix-bars-col">
                 <div class="mix-bar-track">
                   <div class="mix-bar mix-bar--forecast"
@@ -213,6 +336,39 @@
                 </span>
                 <span class="mix-pct-sep">/</span>
                 <span class="mix-pct-forecast">{{ p.salesForecast }}%</span>
+              </div>
+
+              <!-- Stock level -->
+              <div class="mix-stock-col">
+                <div class="mix-stock-header">
+                  <span class="mix-stock-units"
+                        [style.color]="stockRiskColor(p.stockRisk)">
+                    @if (p.stockUnits >= 999) { ∞ } @else { {{ p.stockUnits }} }
+                  </span>
+                  <span class="mix-stock-badge"
+                        [style.background]="stockRiskBg(p.stockRisk)"
+                        [style.color]="stockRiskColor(p.stockRisk)">
+                    {{ stockRiskLabel(p.stockRisk) }}
+                  </span>
+                </div>
+                @if (p.stockUnits < 999) {
+                  <div class="mix-stock-bar-track">
+                    <div class="mix-stock-bar"
+                         [style.width.%]="stockBarWidth(p.stockUnits, p.stockMin)"
+                         [style.background]="stockRiskColor(p.stockRisk)">
+                    </div>
+                    <div class="mix-stock-min-marker"
+                         [style.left.%]="stockBarWidth(p.stockMin, p.stockMin)"
+                         [title]="'Min: ' + p.stockMin">
+                    </div>
+                  </div>
+                  <span class="mix-stock-min-label">Min: {{ p.stockMin }}</span>
+                } @else {
+                  <div class="mix-stock-bar-track">
+                    <div class="mix-stock-bar" style="width:100%;background:#00B894"></div>
+                  </div>
+                  <span class="mix-stock-min-label">Digital — no limit</span>
+                }
               </div>
 
               <!-- Revenue + trend -->
@@ -243,8 +399,7 @@
                    [style.color]="attainmentColor(p.salesActual, p.salesForecast)">
                 <svg width="32" height="32" viewBox="0 0 32 32">
                   <circle cx="16" cy="16" r="12"
-                          fill="none"
-                          stroke="var(--color-border)"
+                          fill="none" stroke="var(--color-border)"
                           stroke-width="3"/>
                   <circle cx="16" cy="16" r="12"
                           fill="none"
@@ -264,20 +419,17 @@
           }
         </div>
 
-        <!-- Footer -->
         <div class="mix-footer">
           <div class="mix-footer__item">
-            <span class="mix-footer__label">CA total réalisé</span>
-            <span class="mix-footer__val">9 024 DT</span>
+            <span class="mix-footer__label">Total revenue</span>
+            <span class="mix-footer__val">9,024 DT</span>
           </div>
           <div class="mix-footer__item">
-            <span class="mix-footer__label">CA forecast</span>
-            <span class="mix-footer__val mix-footer__val--muted">
-              10 612 DT
-            </span>
+            <span class="mix-footer__label">Forecast revenue</span>
+            <span class="mix-footer__val mix-footer__val--muted">10,612 DT</span>
           </div>
           <div class="mix-footer__item">
-            <span class="mix-footer__label">Sous forecast</span>
+            <span class="mix-footer__label">Below forecast</span>
             <span class="mix-footer__val mix-footer__val--alert">
               2 / 5
               <svg width="11" height="11" viewBox="0 0 24 24"
@@ -287,12 +439,11 @@
             </span>
           </div>
         </div>
-
       </div>
 
     </div>
 
-    <!-- ── RIGHT 40% ── -->
+    <!-- ── RIGHT ── -->
     <div class="main-grid__right">
 
       <!-- Coaching cards -->
@@ -300,27 +451,22 @@
         <div class="card-header">
           <div>
             <h2 class="card-title">Active Coaching Cards</h2>
-            <p class="card-sub">
-              APP07 Coaching Agent · DSPy · vLLM Mistral-78
-            </p>
+            <p class="card-sub">APP07 Coaching Agent · DSPy · vLLM Mistral-7B</p>
           </div>
           <span class="live-badge">
             <span class="live-badge__dot"></span>
             Agent Running
           </span>
         </div>
-
         <div class="coaching-list">
           @for (card of cards; track trackById($index, card)) {
             <div class="coaching-item"
                  [class.coaching-item--high]="card.priority === 'HIGH'"
                  [class.coaching-item--med]="card.priority === 'MED'"
                  [class.coaching-item--ok]="card.priority === 'OK'">
-
               <div class="coaching-strip"
                    [style.background]="priorityColor(card.priority)">
               </div>
-
               <div class="coaching-body">
                 <div class="coaching-head">
                   <div class="advisor-avatar"
@@ -329,9 +475,7 @@
                   </div>
                   <div class="coaching-meta">
                     <span class="coaching-name">{{ card.advisorName }}</span>
-                    <span class="coaching-target">
-                      ADV · {{ card.target }}% objectif
-                    </span>
+                    <span class="coaching-target">ADV · {{ card.target }}% target</span>
                   </div>
                   <div class="coaching-priority-badge"
                        [style.background]="priorityBg(card.priority)"
@@ -340,28 +484,21 @@
                   </div>
                   <span class="coaching-time mono">{{ card.time }}</span>
                 </div>
-
-                <p class="coaching-context">
-                  Gap {{ card.gap }}% · {{ card.context }}
-                </p>
-
+                <p class="coaching-context">Gap {{ card.gap }}% · {{ card.context }}</p>
                 <p class="coaching-advice">"{{ card.advice }}"</p>
-
                 @if (card.status === 'pending') {
                   <div class="coaching-actions">
-                    <button class="btn-escalate"
-                            (click)="escalate(card.id)">
-                      Escalader
+                    <button class="btn-escalate" (click)="escalate(card.id)">
+                      Escalate
                     </button>
-                    <button class="btn-approve"
-                            (click)="approve(card.id)">
-                      Approuver
+                    <button class="btn-approve" (click)="approve(card.id)">
+                      Approve
                     </button>
                   </div>
                 } @else {
                   <div class="coaching-status-row">
-                    <svg width="12" height="12" viewBox="0 0 24 24"
-                         fill="none" stroke="currentColor" stroke-width="2.5">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="2.5">
                       <polyline points="20,6 9,17 4,12"/>
                     </svg>
                     <span>{{ statusLabel(card.status) }}</span>
@@ -376,20 +513,18 @@
         </div>
       </div>
 
-      <!-- Classement équipe -->
+      <!-- Team ranking -->
       <div class="card team-card">
         <div class="card-header">
           <div>
-            <h2 class="card-title">Classement Équipe</h2>
-            <p class="card-sub">Performance du jour · LIVE</p>
+            <h2 class="card-title">Team Ranking</h2>
+            <p class="card-sub">Today's performance · LIVE</p>
           </div>
         </div>
-
         <div class="team-list">
           @for (adv of advisors; track trackById($index, adv); let i = $index) {
             <div class="team-row">
-              <span class="team-rank"
-                    [class.team-rank--gold]="i === 0">
+              <span class="team-rank" [class.team-rank--gold]="i === 0">
                 {{ i + 1 }}
               </span>
               <div class="advisor-avatar advisor-avatar--sm"
@@ -403,8 +538,7 @@
               <div class="team-perf">
                 <div class="team-values">
                   <span class="team-ca">{{ adv.caRealized }} DT</span>
-                  <span class="team-pct"
-                        [style.color]="perfColor(adv.performance)">
+                  <span class="team-pct" [style.color]="perfColor(adv.performance)">
                     {{ adv.performance }}%
                   </span>
                 </div>
@@ -421,14 +555,13 @@
             </div>
           }
         </div>
-
         <div class="team-avg">
-          <span class="team-avg__label">Moy. équipe</span>
+          <span class="team-avg__label">Team avg.</span>
           <div class="progress-track" style="flex:1">
             <div class="progress-fill amber" style="width:53%"></div>
           </div>
           <span class="team-avg__val">53%</span>
-          <span class="team-avg__obj">obj 8 000 DT</span>
+          <span class="team-avg__obj">target 8,000 DT</span>
         </div>
       </div>
 

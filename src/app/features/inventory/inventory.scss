@@ -763,3 +763,183 @@
   .kpi-row   { grid-template-columns: repeat(2, 1fr); }
   .toolbar   { flex-direction: column; align-items: flex-start; }
 }
+// ── Decision summary badges in section header ──
+.decision-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  margin-left: 6px;
+ 
+  &--approved {
+    background: #E6FAF5;
+    color: #00875A;
+    border: 1px solid rgba(0, 135, 90, 0.2);
+  }
+ 
+  &--rejected {
+    background: #FFF0EF;
+    color: #C0392B;
+    border: 1px solid rgba(192, 57, 43, 0.2);
+  }
+}
+ 
+// ── Alert item states ──
+.alert-item {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+ 
+  &--approved {
+    opacity: 0.75;
+    transform: scale(0.995);
+  }
+ 
+  &--rejected {
+    opacity: 0.65;
+    // Subtle crossed-out feel
+    filter: grayscale(20%);
+  }
+}
+ 
+// ── Recommendation line ──
+.alert-reco {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 4px;
+ 
+  svg {
+    flex-shrink: 0;
+    opacity: 0.5;
+  }
+ 
+  &__label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-tertiary, #9CA3AF);
+    white-space: nowrap;
+  }
+ 
+  &__text {
+    font-size: 12px;
+    color: var(--text-secondary, #5A5A78);
+    font-style: italic;
+  }
+}
+ 
+// ── Decision zone wrapper ──
+.alert-decision {
+  margin-top: 10px;
+}
+ 
+// ── Pending: two action buttons ──
+.decision-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+ 
+%decision-btn-base {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  border: 1.5px solid transparent;
+  transition: background 0.15s ease,
+              border-color 0.15s ease,
+              transform 0.1s ease,
+              box-shadow 0.15s ease;
+ 
+  &:active {
+    transform: scale(0.97);
+  }
+}
+ 
+.btn-approve {
+  @extend %decision-btn-base;
+  background: #E6FAF5;
+  color: #00875A;
+  border-color: rgba(0, 135, 90, 0.3);
+ 
+  &:hover {
+    background: #00875A;
+    color: #ffffff;
+    border-color: #00875A;
+    box-shadow: 0 2px 8px rgba(0, 135, 90, 0.25);
+  }
+}
+ 
+.btn-reject {
+  @extend %decision-btn-base;
+  background: #FFF0EF;
+  color: #C0392B;
+  border-color: rgba(192, 57, 43, 0.25);
+ 
+  &:hover {
+    background: #C0392B;
+    color: #ffffff;
+    border-color: #C0392B;
+    box-shadow: 0 2px 8px rgba(192, 57, 43, 0.25);
+  }
+}
+ 
+// ── Result states (after decision) ──
+.decision-result {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+ 
+  &--approved {
+    background: #E6FAF5;
+    color: #00875A;
+    border: 1px solid rgba(0, 135, 90, 0.2);
+ 
+    svg { color: #00875A; }
+  }
+ 
+  &--rejected {
+    background: #FFF0EF;
+    color: #C0392B;
+    border: 1px solid rgba(192, 57, 43, 0.2);
+ 
+    svg { color: #C0392B; }
+  }
+}
+ 
+// ── Undo small link button ──
+.btn-undo {
+  background: none;
+  border: none;
+  padding: 0 0 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary, #9CA3AF);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color 0.15s;
+ 
+  &:hover {
+    color: var(--text-primary, #0F0F1A);
+  }
+ 
+  // Separator before undo
+  &::before {
+    content: '·';
+    margin-right: 8px;
+    text-decoration: none;
+    display: inline-block;
+  }
+}

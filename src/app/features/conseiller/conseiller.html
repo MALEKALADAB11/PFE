@@ -6,10 +6,10 @@
     <!-- PAGE HEADER -->
     <div class="page-header">
       <div>
-        <h1 class="page-title">Interface Conseiller</h1>
+        <h1 class="page-title">Advisor</h1>
         <p class="page-sub">
           <span class="status-dot"></span>
-          Connecté · Lac 2 · Mis à jour 14:32
+          Connected · Lac 2 · Updated 2:32 PM
         </p>
       </div>
       <button class="btn-coach" (click)="openChat()">
@@ -17,84 +17,87 @@
              stroke="currentColor" stroke-width="2">
           <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
         </svg>
-        Coach maintenant
+        Coach now
       </button>
     </div>
 
-    <!-- ══ SELECTED ADVISOR PROFILE ══ -->
-    <div class="profile-card">
-
-      <div class="profile-card__left">
-        <div class="profile-avatar"
-             [style.background]="selected().avatarColor">
-          {{ selected().initials }}
-        </div>
-        <div class="profile-info">
-          <h2 class="profile-name">{{ selected().name }}</h2>
-          <p class="profile-role">{{ selected().role }}</p>
-          <span class="profile-status" [class]="statusClass(selected().status)">
-            {{ statusText(selected().status) }}
-          </span>
-        </div>
-      </div>
-
-      <div class="profile-kpis">
-        <div class="profile-kpi">
-          <span class="profile-kpi__val">{{ selected().caRealized }} DT</span>
-          <span class="profile-kpi__label">CA réalisé</span>
-        </div>
-        <div class="profile-kpi">
-          <span class="profile-kpi__val">{{ selected().caObjectif }} DT</span>
-          <span class="profile-kpi__label">Objectif</span>
-        </div>
-        <div class="profile-kpi">
-          <span class="profile-kpi__val"
-                [style.color]="perfColor()">
-            {{ selected().performance }}%
-          </span>
-          <span class="profile-kpi__label">Atteinte</span>
-        </div>
-        <div class="profile-kpi">
-          <span class="profile-kpi__val"
-                [style.color]="'#6C5CE7'">
-            {{ selected().coachScore }}
-          </span>
-          <span class="profile-kpi__label">Score IA</span>
-        </div>
-        <div class="profile-kpi">
-          <span class="profile-kpi__val">{{ selected().clients }}</span>
-          <span class="profile-kpi__label">Clients</span>
-        </div>
-      </div>
-
-      <!-- Progress bar -->
-      <div class="profile-progress">
-        <div class="profile-progress__track">
-          <div class="profile-progress__fill"
-               [style.width.%]="caPercent()"
-               [style.background]="perfColor()">
+    <!-- ══ ADVISOR PROFILE ══ -->
+    @if (selected()) {
+      <div class="profile-card">
+        <div class="profile-card__left">
+          <div class="profile-avatar"
+               [style.background]="selected().avatarColor">
+            {{ selected().initials }}
+          </div>
+          <div class="profile-info">
+            <h2 class="profile-name">{{ selected().name }}</h2>
+            <p class="profile-role">{{ selected().role }}</p>
+            <span class="profile-status"
+                  [class]="statusClass(selected().status)">
+              {{ statusText(selected().status) }}
+            </span>
           </div>
         </div>
-        <span class="profile-progress__label"
-              [style.color]="perfColor()">
-          Objectif journalier {{ caPercent() }}%
-        </span>
+
+        <div class="profile-kpis">
+          <div class="profile-kpi">
+            <span class="profile-kpi__val">
+              {{ selected().caRealized }} DT
+            </span>
+            <span class="profile-kpi__label">Revenue</span>
+          </div>
+          <div class="profile-kpi">
+            <span class="profile-kpi__val">
+              {{ selected().caObjectif }} DT
+            </span>
+            <span class="profile-kpi__label">Target</span>
+          </div>
+          <div class="profile-kpi">
+            <span class="profile-kpi__val"
+                  [style.color]="perfColor()">
+              {{ selected().performance }}%
+            </span>
+            <span class="profile-kpi__label">Attainment</span>
+          </div>
+          <div class="profile-kpi">
+            <span class="profile-kpi__val" style="color:#6C5CE7">
+              {{ selected().coachScore }}
+            </span>
+            <span class="profile-kpi__label">AI Score</span>
+          </div>
+          <div class="profile-kpi">
+            <span class="profile-kpi__val">{{ selected().clients }}</span>
+            <span class="profile-kpi__label">Clients</span>
+          </div>
+        </div>
+
+        <div class="profile-progress">
+          <div class="profile-progress__track">
+            <div class="profile-progress__fill"
+                 [style.width.%]="caPercent()"
+                 [style.background]="perfColor()">
+            </div>
+          </div>
+          <span class="profile-progress__label"
+                [style.color]="perfColor()">
+            Daily target {{ caPercent() }}%
+          </span>
+        </div>
       </div>
+    }
 
-    </div>
-
-    <!-- ══ CLASSEMENT ÉQUIPE ══ -->
+    <!-- ══ TEAM RANKING ══ -->
     <div class="section">
-      <h2 class="section-title">Classement équipe · Aujourd'hui</h2>
+      <h2 class="section-title">Team Ranking · Today</h2>
 
       <div class="team-table">
         <div class="team-table__header">
           <span>#</span>
-          <span>Conseiller</span>
-          <span>CA Réalisé</span>
+          <span>Advisor</span>
+          <span>Revenue</span>
           <span>Performance</span>
-          <span>Prévision EOD</span>
-          <span>Statut</span>
+          <span>EOD Forecast</span>
+          <span>Status</span>
         </div>
 
         @for (adv of advisors(); track trackById($index, adv); let i = $index) {
@@ -102,18 +105,19 @@
                [class.team-row--selected]="adv.id === selectedId()"
                (click)="selectAdvisor(adv.id)">
 
-            <span class="rank" [class.rank--gold]="i === 0">{{ i + 1 }}</span>
+            <span class="rank" [class.rank--gold]="i === 0">
+              {{ i + 1 }}
+            </span>
 
             <div class="team-advisor">
-              <div class="adv-avatar"
-                   [style.background]="adv.avatarColor">
+              <div class="adv-avatar" [style.background]="adv.avatarColor">
                 {{ adv.initials }}
               </div>
               <div class="adv-info">
                 <span class="adv-name">
                   {{ adv.name }}
                   @if (adv.id === 'kb') {
-                    <span class="me-tag">Moi</span>
+                    <span class="me-tag">Me</span>
                   }
                 </span>
                 <span class="adv-role">{{ adv.role }}</span>
@@ -137,7 +141,8 @@
 
             <span class="team-eod">{{ adv.previsionEod }} DT</span>
 
-            <span class="status-badge" [class]="statusClass(adv.status)">
+            <span class="status-badge"
+                  [class]="statusClass(adv.status)">
               {{ statusText(adv.status) }}
             </span>
 
@@ -146,32 +151,30 @@
       </div>
     </div>
 
-    <!-- ══ PRODUITS RECOMMANDÉS ══ -->
+    <!-- ══ RECOMMENDED PRODUCTS ══ -->
     <div class="section">
       <div class="section-header">
         <h2 class="section-title">
-          Produits recommandés · Contexte pluie
+          Recommended Products · Rain Context
           <span class="context-tag">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
                  stroke="currentColor" stroke-width="2">
               <path d="M20 17.58A5 5 0 0018 8h-1.26A8 8 0 104 16.25"/>
             </svg>
-            Pluie +40%
+            Rain +40%
           </span>
         </h2>
-        <p class="section-sub">Clique sur une carte pour voir le script IA</p>
+        <p class="section-sub">Click a card to reveal the AI sales script</p>
       </div>
 
       <div class="products-grid">
         @for (product of products; track product.id) {
 
-          <!-- Vérifier que c'est bien comme ça -->
-      <div class="product-flip"
-          [class.flipped]="isFlipped(product.id)"
-          (click)="toggleFlip(product.id)">
+          <div class="product-flip"
+               [class.flipped]="isFlipped(product.id)"
+               (click)="toggleFlip(product.id)">
 
-          <div class="product-inner">
-            
+            <div class="product-inner">
 
               <!-- FRONT -->
               <div class="product-front">
@@ -200,11 +203,11 @@
                        fill="currentColor">
                     <circle cx="12" cy="12" r="10"/>
                   </svg>
-                  Marge {{ product.margin }}
+                  {{ product.margin }} margin
                 </div>
 
                 <div class="product-cta">
-                  <span>Script IA</span>
+                  <span>AI Script</span>
                   <svg width="12" height="12" viewBox="0 0 24 24"
                        fill="none" stroke="currentColor" stroke-width="2">
                     <polyline points="9,18 15,12 9,6"/>
@@ -218,7 +221,7 @@
                    [style.--accent]="product.accentColor">
 
                 <div class="back-script-header">
-                  <p class="back-script-label">Script IA</p>
+                  <p class="back-script-label">AI Script</p>
                   <h3 class="back-script-title">{{ product.script }}</h3>
                 </div>
 
@@ -237,7 +240,7 @@
                     <polyline points="1,4 1,10 7,10"/>
                     <path d="M3.51 15a9 9 0 102.13-9.36L1 10"/>
                   </svg>
-                  Retour
+                  Back
                 </div>
 
               </div>
@@ -252,7 +255,6 @@
   <!-- ══ CHAT SIDEBAR ══ -->
   <aside class="chat-sidebar" [class.is-open]="chatOpen()">
 
-    <!-- Sidebar header -->
     <div class="chat-sidebar__header">
       <div class="chat-tabs">
         <button class="chat-tab"
@@ -272,7 +274,7 @@
             <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/>
             <path d="M13.73 21a2 2 0 01-3.46 0"/>
           </svg>
-          Alertes
+          Alerts
           @if (alerts().length > 0) {
             <span class="tab-count">{{ alerts().length }}</span>
           }
@@ -290,10 +292,10 @@
 
     <!-- Context pills -->
     <div class="chat-context">
-      <span class="ctx-pill ctx-pill--blue">Pluie +40%</span>
-      <span class="ctx-pill ctx-pill--gray">3h28</span>
-      <span class="ctx-pill ctx-pill--purple">93% obj.</span>
-      <span class="ctx-pill ctx-pill--gray">12 vis.</span>
+      <span class="ctx-pill ctx-pill--blue">Rain +40%</span>
+      <span class="ctx-pill ctx-pill--gray">3h28 left</span>
+      <span class="ctx-pill ctx-pill--purple">93% target</span>
+      <span class="ctx-pill ctx-pill--gray">12 visitors</span>
     </div>
 
     <!-- ── TAB: COACH ── -->
@@ -304,17 +306,18 @@
           <div class="chat-msg" [class.chat-msg--user]="msg.role === 'user'">
 
             @if (msg.role === 'coach') {
-              <div class="msg-avatar msg-avatar--coach">IA</div>
+              <div class="msg-avatar msg-avatar--coach">AI</div>
             }
 
-            <div class="msg-bubble" [class.msg-bubble--user]="msg.role === 'user'">
+            <div class="msg-bubble"
+                 [class.msg-bubble--user]="msg.role === 'user'">
               <p class="msg-text">{{ msg.text }}</p>
               <span class="msg-time mono">{{ msg.time }}</span>
             </div>
 
             @if (msg.role === 'user') {
               <div class="msg-avatar msg-avatar--user">
-                {{ selected().initials }}
+                {{ selected()?.initials ?? 'U' }}
               </div>
             }
 
@@ -335,7 +338,7 @@
         <textarea
           class="chat-input"
           rows="2"
-          placeholder="Pose ta question au coach… (↵ Envoyer)"
+          placeholder="Ask your coach… (↵ Send, Shift+↵ New line)"
           [value]="chatInput()"
           (input)="updateInput($event)"
           (keydown)="onKey($event)">
@@ -353,17 +356,18 @@
 
     }
 
-    <!-- ── TAB: ALERTES ── -->
+    <!-- ── TAB: ALERTS ── -->
     @if (chatTab() === 'alertes') {
 
       <div class="alerts-panel">
+
         @if (alerts().length === 0) {
           <div class="no-alerts">
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none"
                  stroke="var(--text-tertiary)" stroke-width="1.5">
               <polyline points="20,6 9,17 4,12"/>
             </svg>
-            <p>Aucune alerte active</p>
+            <p>No active alerts</p>
           </div>
         }
 
@@ -381,7 +385,6 @@
             </div>
 
             <div class="alert-card__actions">
-              <!-- Redirect to chat -->
               <button class="alert-ask-btn"
                       [style.background]="alert.color"
                       (click)="alertToChat(alert)">
@@ -389,7 +392,7 @@
                      fill="none" stroke="white" stroke-width="2">
                   <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
                 </svg>
-                Demander au coach
+                Ask the coach
               </button>
 
               <button class="alert-dismiss-btn"
@@ -410,7 +413,7 @@
 
   </aside>
 
-  <!-- Toggle chat btn (when closed) -->
+  <!-- FAB when chat is closed -->
   @if (!chatOpen()) {
     <button class="chat-toggle-fab" (click)="openChat()">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none"

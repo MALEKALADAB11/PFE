@@ -44,4 +44,7 @@ export interface ProductMix {
   trend:            'up' | 'down' | 'stable';
   trendVal:         string;
   alert:            boolean;
+  stockUnits:      number;
+  stockMin:        number;
+  stockRisk:       'critical' | 'low' | 'ok';
 }

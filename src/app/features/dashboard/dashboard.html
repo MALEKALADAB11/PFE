@@ -246,74 +246,7 @@
         </div>
       </div>
 
-      <!-- Stock Status -->
-      <div class="card stock-status-card">
-        <div class="stock-status-header">
-          <div class="stock-status-left">
-            <span class="stock-status-label">STOCK STATUS</span>
-            <div class="stock-status-val-row">
-              <span class="stock-status-val"
-                    [style.color]="stockKpi.critical > 0 ? '#E74C3C' : '#00B894'">
-                {{ stockKpi.critical }}
-              </span>
-              <span class="stock-status-total">/ {{ stockKpi.total }}</span>
-              <span class="stock-status-unit">critical SKUs</span>
-            </div>
-          </div>
-          <div class="stock-status-dot"
-               [style.background]="stockKpi.critical > 0 ? '#E74C3C' : '#00B894'">
-          </div>
-        </div>
-        <div class="stock-status-line"
-             [class.stock-status-line--ok]="stockKpi.allOk"
-             [class.stock-status-line--crit]="stockKpi.critical > 0">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-               stroke="currentColor" stroke-width="2.5">
-            @if (stockKpi.critical > 0) {
-              <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
-              <line x1="12" y1="9"  x2="12"    y2="13"/>
-              <line x1="12" y1="17" x2="12.01" y2="17"/>
-            } @else {
-              <polyline points="20,6 9,17 4,12"/>
-            }
-          </svg>
-          <span>
-            {{ stockKpi.critical > 0
-              ? stockKpi.critical + ' SKU(s) below minimum threshold'
-              : 'All systems operational' }}
-          </span>
-        </div>
-        <div class="stock-status-stats">
-          <div class="stock-stat">
-            <span class="stock-stat__val" style="color:#00B894">
-              {{ stockKpi.okCount }}
-            </span>
-            <span class="stock-stat__label">Optimal</span>
-          </div>
-          <div class="stock-stat">
-            <span class="stock-stat__val" style="color:#E74C3C">
-              {{ stockKpi.critical }}
-            </span>
-            <span class="stock-stat__label">Critical</span>
-          </div>
-          <div class="stock-stat">
-            <span class="stock-stat__val">{{ stockKpi.avgCoverage }}x</span>
-            <span class="stock-stat__label">Avg coverage</span>
-          </div>
-          <div class="stock-stat">
-            <span class="stock-stat__val">{{ stockKpi.total }}</span>
-            <span class="stock-stat__label">Total SKUs</span>
-          </div>
-        </div>
-        <a class="stock-status-link" routerLink="/inventory">
-          View inventory details
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-               stroke="currentColor" stroke-width="2">
-            <polyline points="9,18 15,12 9,6"/>
-          </svg>
-        </a>
-      </div>
-
+      
       <!-- Product Mix -->
       <div class="card product-mix-card">
         <div class="card-header">

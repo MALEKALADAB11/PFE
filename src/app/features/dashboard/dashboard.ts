@@ -343,4 +343,88 @@ export class DashboardComponent {
   }
 
   trackById(_: number, item: { id: string }) { return item.id; }
+  // ── Inventory vs Sales — histogram ──
+inventoryVsSales = [
+  {
+    id: 'p1', name: 'iPhone 16 Pro',     shortName: 'iPhone 16',
+    color: '#6C5CE7', risk: 'critical' as const,
+    stock: 3,   stockMax: 40,  demand24h: 11, sold: 14, target: 18,
+    revenue: 2380
+  },
+  {
+    id: 'p2', name: 'Samsung A55',        shortName: 'Samsung A55',
+    color: '#2D9CDB', risk: 'ok' as const,
+    stock: 24,  stockMax: 35,  demand24h: 8,  sold: 9,  target: 8,
+    revenue: 1470
+  },
+  {
+    id: 'p3', name: 'AirPods Pro 3',      shortName: 'AirPods',
+    color: '#F9A825', risk: 'high' as const,
+    stock: 7,   stockMax: 25,  demand24h: 9,  sold: 4,  target: 9,
+    revenue: 420
+  },
+  {
+    id: 'p4', name: 'Apple Watch S10',    shortName: 'Watch S10',
+    color: '#E74C3C', risk: 'critical' as const,
+    stock: 2,   stockMax: 20,  demand24h: 6,  sold: 3,  target: 6,
+    revenue: 1347
+  },
+  {
+    id: 'p5', name: 'Fiber Box 2G Pro',   shortName: 'Fiber 2G',
+    color: '#00B894', risk: 'ok' as const,
+    stock: 18,  stockMax: 30,  demand24h: 5,  sold: 9,  target: 8,
+    revenue: 1470
+  },
+  {
+    id: 'p6', name: 'Premium Insurance',  shortName: 'Insurance',
+    color: '#A29BFE', risk: 'ok' as const,
+    stock: 999, stockMax: 999, demand24h: 12, sold: 7,  target: 10,
+    revenue: 630
+  },
+];
+
+invChartMax = computed(() => {
+  const vals = this.inventoryVsSales.flatMap(p => [
+    p.stock >= 999 ? 0 : p.stock,
+    p.demand24h,
+    p.sold,
+    p.target,
+    p.stockMax >= 999 ? 0 : p.stockMax
+  ]);
+  return Math.max(...vals) * 1.15;
+});
+
+invBarH(val: number): number {
+  if (val >= 999) return 100;
+  return Math.round((val / this.invChartMax()) * 100);
+}
+
+invRiskColor(r: string): string {
+  if (r === 'critical') return '#E74C3C';
+  if (r === 'high')     return '#F9A825';
+  return '#00B894';
+}
+
+invRiskBg(r: string): string {
+  if (r === 'critical') return '#FDEDEC';
+  if (r === 'high')     return '#FFF8E1';
+  return '#E0FAF4';
+}
+
+invRiskLabel(r: string): string {
+  if (r === 'critical') return 'Critical';
+  if (r === 'high')     return 'High';
+  return 'OK';
+}
+
+invCoverage(stock: number, demand: number): string {
+  if (stock >= 999) return '∞';
+  return (stock / demand).toFixed(1) + 'x';
+}
+
+invCoverageColor(stock: number, demand: number): string {
+  if (stock >= 999) return '#00B894';
+  const r = stock / demand;
+  return r < 0.5 ? '#E74C3C' : r < 1.0 ? '#F9A825' : '#00B894';
+}
 }

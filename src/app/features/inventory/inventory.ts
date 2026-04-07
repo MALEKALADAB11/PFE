@@ -3,9 +3,10 @@ import { CommonModule } from '@angular/common';
 import { InventoryItem, InventoryAlert } from '../../core/models/inventory';
 import { MockDataService } from '../../core/services/mock-data';
 
-type FilterRisk    = 'all' | 'critical' | 'high' | 'medium' | 'ok';
-type SortKey       = 'risk' | 'stock' | 'coverage' | 'name';
-type AlertDecision = 'approved' | 'rejected' | null;
+
+type FilterRisk = 'all' | 'critical' | 'high' | 'medium' | 'ok';
+type SortKey    = 'risk' | 'stock' | 'coverage' | 'name';
+type Decision   = 'approved' | 'rejected' | null;
 
 @Component({
   selector:    'app-inventory',
@@ -23,8 +24,8 @@ export class InventoryComponent {
   sortKey    = signal<SortKey>('risk');
   flippedId  = signal<string | null>(null);
 
-  // ── Per-alert decision state: Map<alertId, 'approved'|'rejected'|null> ──
-  alertDecisions = signal<Record<string, AlertDecision>>({});
+  // alert decisions map
+  decisions = signal<Record<string, Decision>>({});
 
   // ── Summary KPIs ──
   totalItems    = computed(() => this.items().length);
@@ -37,6 +38,30 @@ export class InventoryComponent {
     const sum   = valid.reduce((a, b) => a + b.coverageRatio, 0);
     return valid.length ? (sum / valid.length).toFixed(2) : '—';
   });
+
+  approvedCount = computed(() =>
+    Object.values(this.decisions()).filter(d => d === 'approved').length
+  );
+
+  rejectedCount = computed(() =>
+    Object.values(this.decisions()).filter(d => d === 'rejected').length
+  );
+
+  // ── Histogram ──
+  invChartMax = computed(() => {
+    const vals = this.items().flatMap(p => [
+      p.stock >= 999    ? 0 : p.stock,
+      p.demandForecast24h,
+      p.stockMin,
+      p.stockMax >= 999 ? 0 : p.stockMax
+    ]);
+    return Math.max(...vals, 1) * 1.15;
+  });
+
+  invBarH(val: number): number {
+    if (val >= 999) return 100;
+    return Math.round((val / this.invChartMax()) * 100);
+  }
 
   // ── Filtered + sorted items ──
   displayItems = computed(() => {
@@ -67,14 +92,6 @@ export class InventoryComponent {
     };
   });
 
-  // ── Decision counters for header badge ──
-  approvedCount = computed(() =>
-    Object.values(this.alertDecisions()).filter(v => v === 'approved').length
-  );
-  rejectedCount = computed(() =>
-    Object.values(this.alertDecisions()).filter(v => v === 'rejected').length
-  );
-
   constructor(private data: MockDataService) {
     this.items.set(this.data.getInventoryItems());
     this.alerts.set(this.data.getInventoryAlerts());
@@ -86,7 +103,7 @@ export class InventoryComponent {
   }
   isFlipped(id: string) { return this.flippedId() === id; }
 
-  // ── Filters / Sort ──
+  // ── Filters ──
   setFilter(f: string) { this.filterRisk.set(f as FilterRisk); }
   setSort(s: string)   { this.sortKey.set(s as SortKey); }
 
@@ -94,40 +111,28 @@ export class InventoryComponent {
     return (this.filterCounts() as Record<string, number>)[key] ?? 0;
   }
 
-  // ── Alert decision actions ──
-  getDecision(id: string): AlertDecision {
-    return this.alertDecisions()[id] ?? null;
+  // ── Alert decisions ──
+  getDecision(id: string): Decision {
+    return this.decisions()[id] ?? null;
   }
 
-  approveAlert(id: string, event: Event) {
-    event.stopPropagation();
-    this.alertDecisions.update(d => ({ ...d, [id]: 'approved' }));
-    // Auto-dismiss after short delay to keep list clean
-    setTimeout(() => this.dismissAlert(id), 1800);
+  approveAlert(id: string, e: Event) {
+    e.stopPropagation();
+    this.decisions.update(d => ({ ...d, [id]: 'approved' }));
   }
 
-  rejectAlert(id: string, event: Event) {
-    event.stopPropagation();
-    this.alertDecisions.update(d => ({ ...d, [id]: 'rejected' }));
-    // Keep rejected visible so manager sees what was declined
+  rejectAlert(id: string, e: Event) {
+    e.stopPropagation();
+    this.decisions.update(d => ({ ...d, [id]: 'rejected' }));
   }
 
-  undoDecision(id: string, event: Event) {
-    event.stopPropagation();
-    this.alertDecisions.update(d => {
-      const copy = { ...d };
-      delete copy[id];
-      return copy;
-    });
+  undoDecision(id: string, e: Event) {
+    e.stopPropagation();
+    this.decisions.update(d => ({ ...d, [id]: null }));
   }
 
   dismissAlert(id: string) {
     this.alerts.update(list => list.filter(a => a.id !== id));
-    this.alertDecisions.update(d => {
-      const copy = { ...d };
-      delete copy[id];
-      return copy;
-    });
   }
 
   // ── Risk styling ──
@@ -150,20 +155,20 @@ export class InventoryComponent {
   riskLabel(r: string): string {
     const m: Record<string, string> = {
       critical: 'CRITICAL', high: 'HIGH',
-      medium:   'MEDIUM',   ok:   'OK',   low: 'LOW'
+      medium:   'MEDIUM',   ok:   'OK',  low: 'LOW'
     };
     return m[r] ?? 'N/A';
   }
 
   riskBackColor(r: string): string {
     const m: Record<string, string> = {
-      critical: '#C0392B', high:   '#B45309',
-      medium:   '#1A6FA8', ok:     '#007A63', low: '#6B7280'
+      critical: '#C0392B', high: '#B45309',
+      medium:   '#1A6FA8', ok:   '#007A63', low: '#6B7280'
     };
     return m[r] ?? '#6B7280';
   }
 
-  // ── Coverage bar ──
+  // ── Coverage ──
   coverageWidth(ratio: number): number {
     return Math.min(Math.round((ratio / 3) * 100), 100);
   }

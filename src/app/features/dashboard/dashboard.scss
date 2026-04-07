@@ -1145,3 +1145,322 @@
 @media (max-width: 640px) {
   .kpi-grid { grid-template-columns: 1fr; }
 }
+.heatmap-grid--compact {
+  padding: 8px 16px;
+
+  .heat-row-label { width: 52px; font-size: 10px; }
+  .heat-cell      { height: 18px; min-width: 24px; }
+}
+.risk-hours {
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border);
+}
+
+.risk-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #E74C3C;
+  margin-bottom: 10px;
+}
+
+.risk-row {
+  display: grid;
+  grid-template-columns: 40px 1fr 90px;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.risk-hour {
+  font-size: 12px;
+  color: #888;
+}
+
+.risk-bar-track {
+  height: 6px;
+  background: #eee;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.risk-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #E74C3C, #ff7675);
+  border-radius: 6px;
+  transition: width 0.3s ease;
+}
+
+.risk-info {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+}
+
+.risk-pct {
+  color: #E67E22;
+  font-weight: 600;
+}
+
+.risk-gap {
+  color: #999;
+}
+// ══ HOURLY PERFORMANCE CHART ══
+.perf-card { padding-bottom: 0; overflow: hidden; }
+
+// ── Filter ──
+.perf-filter {
+  display: flex;
+  gap: 4px;
+  background: var(--color-surface-2);
+  padding: 3px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+}
+
+.perf-filter-btn {
+  padding: 4px 12px;
+  border-radius: calc(var(--radius-md) - 2px);
+  font-size: 11px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  background: transparent;
+  color: var(--text-secondary);
+  transition: var(--transition);
+
+  &.is-active {
+    background: var(--color-surface);
+    color: var(--text-primary);
+    box-shadow: var(--shadow-sm);
+  }
+}
+
+// ── Legend ──
+.perf-legend {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  justify-content: center;
+  padding: 10px 20px 6px;
+}
+
+.perf-leg {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  color: var(--text-secondary);
+
+  &__rect {
+    width: 28px;
+    height: 12px;
+    border-radius: 3px;
+    &--blue { background: #5B84B8; }
+    &--pink { background: rgba(192,57,43,0.35); }
+  }
+
+  &__line {
+    width: 28px;
+    height: 2px;
+    border-radius: 1px;
+
+    &--dashed {
+      background: repeating-linear-gradient(
+        90deg,
+        #C0392B 0px, #C0392B 5px,
+        transparent 5px, transparent 9px
+      );
+    }
+
+    &--green { background: #27AE60; }
+  }
+}
+
+// ── Chart wrap ──
+.perf-chart-wrap {
+  display: flex;
+  padding: 8px 20px 0;
+  gap: 8px;
+  height: 220px;
+}
+
+.perf-yaxis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding-bottom: 24px;
+  flex-shrink: 0;
+  width: 28px;
+
+  span {
+    font-size: 9px;
+    color: var(--text-tertiary);
+    font-family: 'JetBrains Mono', monospace;
+    text-align: right;
+    line-height: 1;
+  }
+}
+
+.perf-chart {
+  flex: 1;
+  position: relative;
+  padding-bottom: 24px;
+  border-left: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+}
+
+// ── Grid ──
+.perf-grid {
+  position: absolute;
+  inset: 0 0 24px 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.perf-grid-line {
+  width: 100%;
+  height: 1px;
+  background: var(--color-border);
+  opacity: 0.5;
+}
+
+// ── Bars ──
+.perf-bars {
+  position: absolute;
+  inset: 0 0 24px 0;
+  display: flex;
+  align-items: flex-end;
+  z-index: 1;
+}
+
+.perf-bar-group {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  position: relative;
+
+  &--risk { }
+}
+
+.risk-zone-bg {
+  position: absolute;
+  inset: 0;
+  background: rgba(231, 76, 60, 0.07);
+  border-left: 1px solid rgba(231,76,60,0.15);
+  border-right: 1px solid rgba(231,76,60,0.15);
+  z-index: 0;
+  pointer-events: none;
+}
+
+.perf-bar-wrap {
+  width: 65%;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  position: relative;
+  z-index: 1;
+}
+
+.perf-bar {
+  width: 100%;
+  border-radius: 3px 3px 0 0;
+  transition: height 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  min-height: 3px;
+  background: #5B84B8;
+
+  &--risk { background: rgba(192, 57, 43, 0.6); }
+}
+
+.perf-bar-label {
+  position: absolute;
+  bottom: -20px;
+  font-size: 9px;
+  color: var(--text-tertiary);
+  font-family: 'JetBrains Mono', monospace;
+  white-space: nowrap;
+}
+
+// ── SVG lines ──
+.perf-lines-svg {
+  position: absolute;
+  inset: 0 0 24px 0;
+  width: 100%;
+  height: 100%;
+  z-index: 2;
+  pointer-events: none;
+  overflow: visible;
+}
+
+// ── Risk section ──
+.perf-risk-section {
+  border-top: 1px solid var(--color-border);
+  padding: 12px 20px 16px;
+  background: #FFFDF5;
+}
+
+.perf-risk-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #854F0B;
+  margin-bottom: 10px;
+}
+
+.perf-risk-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.perf-risk-row {
+  display: grid;
+  grid-template-columns: 44px 1fr 90px 70px;
+  align-items: center;
+  gap: 12px;
+}
+
+.perf-risk-hour {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.perf-risk-bar-track {
+  height: 8px;
+  background: var(--color-surface-2);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.perf-risk-bar {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.6s ease;
+}
+
+.perf-risk-pct {
+  font-size: 11px;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  text-align: right;
+}
+
+.perf-risk-gap {
+  font-size: 11px;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  text-align: right;
+}

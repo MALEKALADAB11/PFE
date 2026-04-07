@@ -99,7 +99,54 @@
         </div>
         <p class="kpi-percent">Capacity {{ traficPercent() }}%</p>
       </div>
+      <!-- Stock Status -->
+<div class="sidebar-section">
+  <p class="sidebar-label">Stock Status</p>
 
+  <div class="stock-status-mini">
+    <div class="stock-mini-top">
+      <div class="stock-mini-val-row">
+        <span class="stock-mini-val" style="color:#E74C3C">2</span>
+        <span class="stock-mini-total">/ 6</span>
+        <span class="stock-mini-unit">critical SKUs</span>
+      </div>
+      <div class="stock-mini-dot" style="background:#E74C3C"></div>
+    </div>
+
+    <div class="stock-mini-alert">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+           stroke="#E74C3C" stroke-width="2">
+        <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+        <line x1="12" y1="9"  x2="12"    y2="13"/>
+        <line x1="12" y1="17" x2="12.01" y2="17"/>
+      </svg>
+      <span>2 SKU(s) below threshold</span>
+    </div>
+
+    <div class="stock-mini-stats">
+      <div class="stock-mini-stat">
+        <span class="stock-mini-stat__val" style="color:#00B894">3</span>
+        <span class="stock-mini-stat__label">Optimal</span>
+      </div>
+      <div class="stock-mini-stat">
+        <span class="stock-mini-stat__val" style="color:#E74C3C">2</span>
+        <span class="stock-mini-stat__label">Critical</span>
+      </div>
+      <div class="stock-mini-stat">
+        <span class="stock-mini-stat__val">1.8x</span>
+        <span class="stock-mini-stat__label">Coverage</span>
+      </div>
+    </div>
+
+    <a class="stock-mini-link" routerLink="/inventory">
+      View details
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2">
+        <polyline points="9,18 15,12 9,6"/>
+      </svg>
+    </a>
+  </div>
+</div>
       <!-- Agent Status — monitoring page only -->
       @if (showAgentStatus()) {
         <div class="sidebar-section">

@@ -44,100 +44,147 @@
     <!-- ── LEFT ── -->
     <div class="main-grid__left">
 
-      <!-- Hourly chart -->
-      <div class="card chart-card">
+      <!-- ══ HOURLY PERFORMANCE CHART ══ -->
+      <div class="card perf-card">
         <div class="card-header">
           <div>
-            <h2 class="card-title">Hourly Sales vs Forecast</h2>
-            <p class="card-sub">APP03 TimesFM · APP01 POS · BTQ-14</p>
+            <h2 class="card-title">
+              Hourly Performance · Target vs Actual vs Forecast
+            </h2>
+            <p class="card-sub">Red zones = risk hours</p>
           </div>
-          <div class="chart-legend">
-            <span class="legend-item">
-              <span class="legend-dot"
-                    style="background:var(--color-purple)"></span>
-              Actual
-            </span>
-            <span class="legend-item">
-              <span class="legend-dot legend-dot--dashed"
-                    style="border-color:var(--color-teal)"></span>
-              Forecast
-            </span>
-            <span class="legend-item">
-              <span class="legend-dot legend-dot--dashed"
-                    style="border-color:#ccc"></span>
-              Target
-            </span>
+          <div class="perf-filter">
+            <button class="perf-filter-btn"
+                    [class.is-active]="hourlyPerfFilter() === 'all'"
+                    (click)="hourlyPerfFilter.set('all')">
+              All
+            </button>
+            <button class="perf-filter-btn"
+                    [class.is-active]="hourlyPerfFilter() === 'risk'"
+                    (click)="hourlyPerfFilter.set('risk')">
+              Risk only
+            </button>
           </div>
         </div>
-        <div class="chart-area">
-          <div class="chart-bars">
-            @for (point of hourlyData; track point.hour) {
-              <div class="bar-group">
-                <div class="bar-wrap">
-                  <div class="bar bar--forecast"
-                       [style.height.%]="barHeight(point.forecast)">
-                  </div>
-                  @if (point.actual !== null) {
-                    <div class="bar bar--actual"
-                         [style.height.%]="barHeight(point.actual)">
-                    </div>
-                  }
-                  @if (point.hour === '2 PM') {
-                    <div class="bar-now-label">NOW</div>
-                  }
-                </div>
-                <span class="bar-label">{{ point.hour }}</span>
-              </div>
-            }
-          </div>
-          <div class="chart-yaxis">
-            <span>8</span><span>6</span>
-            <span>4</span><span>2</span><span>0</span>
-          </div>
-        </div>
-      </div>
 
-      <!-- Heatmap -->
-      <div class="card heatmap-card">
-        <div class="card-header">
-          <div>
-            <h2 class="card-title">Context Risk Heatmap</h2>
-            <p class="card-sub">APP02 Feature Eng. · APP12 Data Sources · LIVE</p>
-          </div>
-          <div class="heat-legend">
-            <span class="heat-leg" style="background:#EAF3DE;color:#3B6D11">Low</span>
-            <span class="heat-leg" style="background:#C0DD97;color:#27500A">Med</span>
-            <span class="heat-leg" style="background:#EF9F27;color:#633806">High</span>
-            <span class="heat-leg" style="background:#E74C3C;color:white">Crit</span>
-          </div>
+        <!-- Legend -->
+        <div class="perf-legend">
+          <span class="perf-leg">
+            <span class="perf-leg__rect perf-leg__rect--blue"></span>
+            Actual
+          </span>
+          <span class="perf-leg">
+            <span class="perf-leg__line perf-leg__line--dashed"></span>
+            Target
+          </span>
+          <span class="perf-leg">
+            <span class="perf-leg__line perf-leg__line--green"></span>
+            Forecast
+          </span>
         </div>
-        <div class="heatmap-grid">
-          <div class="heat-row heat-row--header">
-            <span class="heat-row-label"></span>
-            @for (h of heatHours; track h) {
-              <span class="heat-cell heat-cell--header">{{ h }}</span>
-            }
+
+        <!-- Chart -->
+        <div class="perf-chart-wrap">
+          <div class="perf-yaxis">
+            <span>160</span><span>140</span><span>120</span>
+            <span>100</span><span>80</span><span>60</span>
+            <span>40</span><span>20</span><span>0</span>
           </div>
-          @for (row of heatRows; track row.key) {
-            <div class="heat-row">
-              <span class="heat-row-label">{{ row.label }}</span>
-              @for (h of heatHours; track h; let i = $index) {
-                <div class="heat-cell"
-                     [style.background]="heatColor(heatData[row.key][i])"
-                     [title]="row.label+' '+h+' : '+heatLabel(heatData[row.key][i])">
+
+          <div class="perf-chart">
+            <!-- Grid -->
+            <div class="perf-grid">
+              @for (line of [0,1,2,3,4,5,6,7,8]; track line) {
+                <div class="perf-grid-line"></div>
+              }
+            </div>
+
+            <!-- Bars -->
+            <div class="perf-bars">
+              @for (h of hourlyPerf; track h.hour) {
+                <div class="perf-bar-group"
+                     [class.perf-bar-group--risk]="h.risk">
+                  @if (h.risk) {
+                    <div class="risk-zone-bg"></div>
+                  }
+                  <div class="perf-bar-wrap">
+                    <div class="perf-bar"
+                         [class.perf-bar--risk]="h.risk"
+                         [style.height.%]="perfBarHeight(h.actual)">
+                    </div>
+                  </div>
+                  <span class="perf-bar-label">{{ h.hour }}</span>
                 </div>
               }
             </div>
-          }
+
+            <!-- SVG overlay -->
+            <svg class="perf-lines-svg"
+                 viewBox="0 0 1200 200"
+                 preserveAspectRatio="none">
+
+              <polyline
+                [attr.points]="targetPoints()"
+                fill="none"
+                stroke="#C0392B"
+                stroke-width="2"
+                stroke-dasharray="6,4"
+                opacity="0.85"/>
+
+              <polyline
+                [attr.points]="forecastPoints()"
+                fill="none"
+                stroke="#27AE60"
+                stroke-width="2.5"
+                opacity="0.9"/>
+
+              @for (h of hourlyPerf; track h.hour; let i = $index) {
+                <circle
+                  [attr.cx]="(i / (hourlyPerf.length - 1)) * 1200"
+                  [attr.cy]="perfLineY(h.forecast)"
+                  r="4"
+                  fill="white"
+                  stroke="#27AE60"
+                  stroke-width="2"/>
+              }
+
+            </svg>
+          </div>
         </div>
-        <div class="heat-alert">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-               stroke="#E74C3C" stroke-width="2">
-            <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
-            <line x1="12" y1="9"  x2="12"    y2="13"/>
-            <line x1="12" y1="17" x2="12.01" y2="17"/>
-          </svg>
-          APP06 · Critical stock risk window 2 PM–8 PM — pivot strategy active
+
+        <!-- Risk section -->
+        <div class="perf-risk-section">
+          <div class="perf-risk-title">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                 stroke="#F9A825" stroke-width="2">
+              <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+              <line x1="12" y1="9"  x2="12"    y2="13"/>
+              <line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+            <span>Risk hours detected</span>
+          </div>
+
+          <div class="perf-risk-rows">
+            @for (r of riskHours; track r.hour) {
+              <div class="perf-risk-row">
+                <span class="perf-risk-hour mono">{{ r.hour }}</span>
+                <div class="perf-risk-bar-track">
+                  <div class="perf-risk-bar"
+                       [style.width.%]="riskBarWidth(r.actualPct)"
+                       [style.background]="gapColor(r.gap)">
+                  </div>
+                </div>
+                <span class="perf-risk-pct"
+                      [style.color]="gapColor(r.gap)">
+                  {{ r.actualPct }}% target
+                </span>
+                <span class="perf-risk-gap"
+                      [style.color]="gapColor(r.gap)">
+                  {{ r.gap }} units
+                </span>
+              </div>
+            }
+          </div>
         </div>
       </div>
 
@@ -286,7 +333,6 @@
           </div>
         </div>
 
-        <!-- Column headers -->
         <div class="mix-col-headers">
           <span class="mix-col-h">Product</span>
           <span class="mix-col-h">Sales vs Forecast</span>
@@ -299,12 +345,9 @@
         <div class="product-mix-list">
           @for (p of productMix(); track p.id) {
             <div class="mix-row" [class.mix-row--alert]="p.alert">
-
               @if (p.alert) {
                 <div class="mix-alert-dot"></div>
               }
-
-              <!-- Name -->
               <div class="mix-name-col">
                 <div class="mix-color-bar" [style.background]="p.color"></div>
                 <div class="mix-name-info">
@@ -314,8 +357,6 @@
                   </span>
                 </div>
               </div>
-
-              <!-- Sales bar -->
               <div class="mix-bars-col">
                 <div class="mix-bar-track">
                   <div class="mix-bar mix-bar--forecast"
@@ -327,8 +368,6 @@
                   </div>
                 </div>
               </div>
-
-              <!-- Pct -->
               <div class="mix-pct-col">
                 <span class="mix-pct-actual"
                       [style.color]="attainmentColor(p.salesActual, p.salesForecast)">
@@ -337,8 +376,6 @@
                 <span class="mix-pct-sep">/</span>
                 <span class="mix-pct-forecast">{{ p.salesForecast }}%</span>
               </div>
-
-              <!-- Stock level -->
               <div class="mix-stock-col">
                 <div class="mix-stock-header">
                   <span class="mix-stock-units"
@@ -365,13 +402,13 @@
                   <span class="mix-stock-min-label">Min: {{ p.stockMin }}</span>
                 } @else {
                   <div class="mix-stock-bar-track">
-                    <div class="mix-stock-bar" style="width:100%;background:#00B894"></div>
+                    <div class="mix-stock-bar"
+                         style="width:100%;background:#00B894">
+                    </div>
                   </div>
                   <span class="mix-stock-min-label">Digital — no limit</span>
                 }
               </div>
-
-              <!-- Revenue + trend -->
               <div class="mix-revenue-col">
                 <span class="mix-revenue">
                   {{ p.revenue | number:'1.0-0' }} DT
@@ -393,8 +430,6 @@
                   {{ p.trendVal }}
                 </span>
               </div>
-
-              <!-- Ring -->
               <div class="mix-attainment"
                    [style.color]="attainmentColor(p.salesActual, p.salesForecast)">
                 <svg width="32" height="32" viewBox="0 0 32 32">
@@ -414,7 +449,6 @@
                   {{ attainmentPct(p.salesActual, p.salesForecast) }}%
                 </span>
               </div>
-
             </div>
           }
         </div>
@@ -475,7 +509,9 @@
                   </div>
                   <div class="coaching-meta">
                     <span class="coaching-name">{{ card.advisorName }}</span>
-                    <span class="coaching-target">ADV · {{ card.target }}% target</span>
+                    <span class="coaching-target">
+                      ADV · {{ card.target }}% target
+                    </span>
                   </div>
                   <div class="coaching-priority-badge"
                        [style.background]="priorityBg(card.priority)"
@@ -484,7 +520,9 @@
                   </div>
                   <span class="coaching-time mono">{{ card.time }}</span>
                 </div>
-                <p class="coaching-context">Gap {{ card.gap }}% · {{ card.context }}</p>
+                <p class="coaching-context">
+                  Gap {{ card.gap }}% · {{ card.context }}
+                </p>
                 <p class="coaching-advice">"{{ card.advice }}"</p>
                 @if (card.status === 'pending') {
                   <div class="coaching-actions">
@@ -497,8 +535,8 @@
                   </div>
                 } @else {
                   <div class="coaching-status-row">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-                         stroke="currentColor" stroke-width="2.5">
+                    <svg width="12" height="12" viewBox="0 0 24 24"
+                         fill="none" stroke="currentColor" stroke-width="2.5">
                       <polyline points="20,6 9,17 4,12"/>
                     </svg>
                     <span>{{ statusLabel(card.status) }}</span>
@@ -513,7 +551,57 @@
         </div>
       </div>
 
-      <!-- Team ranking -->
+      <!-- Context Risk Heatmap compact -->
+      <div class="card heatmap-card">
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">Context Risk Heatmap</h2>
+            <p class="card-sub">
+              APP02 Feature Eng. · APP12 Data Sources · LIVE
+            </p>
+          </div>
+          <div class="heat-legend">
+            <span class="heat-leg"
+                  style="background:#EAF3DE;color:#3B6D11">Low</span>
+            <span class="heat-leg"
+                  style="background:#C0DD97;color:#27500A">Med</span>
+            <span class="heat-leg"
+                  style="background:#EF9F27;color:#633806">High</span>
+            <span class="heat-leg"
+                  style="background:#E74C3C;color:white">Crit</span>
+          </div>
+        </div>
+        <div class="heatmap-grid heatmap-grid--compact">
+          <div class="heat-row heat-row--header">
+            <span class="heat-row-label"></span>
+            @for (h of heatHours; track h) {
+              <span class="heat-cell heat-cell--header">{{ h }}</span>
+            }
+          </div>
+          @for (row of heatRows; track row.key) {
+            <div class="heat-row">
+              <span class="heat-row-label">{{ row.label }}</span>
+              @for (h of heatHours; track h; let i = $index) {
+                <div class="heat-cell"
+                     [style.background]="heatColor(heatData[row.key][i])"
+                     [title]="row.label+' '+h+' : '+heatLabel(heatData[row.key][i])">
+                </div>
+              }
+            </div>
+          }
+        </div>
+        <div class="heat-alert">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+               stroke="#E74C3C" stroke-width="2">
+            <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+            <line x1="12" y1="9"  x2="12"    y2="13"/>
+            <line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+          APP06 · Critical stock risk window 2 PM–8 PM — pivot strategy active
+        </div>
+      </div>
+
+      <!-- Team Ranking -->
       <div class="card team-card">
         <div class="card-header">
           <div>
@@ -538,7 +626,8 @@
               <div class="team-perf">
                 <div class="team-values">
                   <span class="team-ca">{{ adv.caRealized }} DT</span>
-                  <span class="team-pct" [style.color]="perfColor(adv.performance)">
+                  <span class="team-pct"
+                        [style.color]="perfColor(adv.performance)">
                     {{ adv.performance }}%
                   </span>
                 </div>

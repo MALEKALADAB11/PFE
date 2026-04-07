@@ -15,6 +15,20 @@ interface HourlyPoint {
   target:   number;
 }
 
+interface HourlyPerf {
+  hour:     string;
+  actual:   number;
+  target:   number;
+  forecast: number;
+  risk:     boolean;
+}
+
+interface RiskHour {
+  hour:      string;
+  actualPct: number;
+  gap:       number;
+}
+
 @Component({
   selector:    'app-dashboard',
   standalone:  true,
@@ -80,7 +94,7 @@ export class DashboardComponent {
     },
   ];
 
-  // ── Hourly chart ──
+  // ── Hourly sales chart ──
   hourlyData: HourlyPoint[] = [
     { hour: '9 AM',  actual: 1,    forecast: 1.2, target: 2 },
     { hour: '10 AM', actual: 2,    forecast: 2.1, target: 2 },
@@ -106,8 +120,68 @@ export class DashboardComponent {
     return Math.round((val / this.maxChart()) * 100);
   }
 
+  // ── Hourly performance chart ──
+  hourlyPerf: HourlyPerf[] = [
+    { hour: '9AM',  actual: 38,  target: 60,  forecast: 65,  risk: false },
+    { hour: '10AM', actual: 82,  target: 95,  forecast: 90,  risk: false },
+    { hour: '11AM', actual: 95,  target: 110, forecast: 118, risk: false },
+    { hour: '12PM', actual: 88,  target: 120, forecast: 125, risk: true  },
+    { hour: '1PM',  actual: 72,  target: 92,  forecast: 88,  risk: true  },
+    { hour: '2PM',  actual: 128, target: 115, forecast: 110, risk: false },
+    { hour: '3PM',  actual: 112, target: 118, forecast: 120, risk: false },
+    { hour: '4PM',  actual: 138, target: 135, forecast: 130, risk: false },
+    { hour: '5PM',  actual: 155, target: 148, forecast: 145, risk: false },
+    { hour: '6PM',  actual: 130, target: 125, forecast: 128, risk: false },
+    { hour: '7PM',  actual: 98,  target: 110, forecast: 105, risk: false },
+    { hour: '8PM',  actual: 42,  target: 50,  forecast: 48,  risk: false },
+  ];
+
+  hourlyPerfFilter = signal<'all' | 'risk'>('all');
+
+  riskHours: RiskHour[] = [
+    { hour: '12PM', actualPct: 73, gap: -32 },
+    { hour: '1PM',  actualPct: 78, gap: -20 },
+    { hour: '6PM',  actualPct: 82, gap: -22 },
+  ];
+
+  perfMax = computed(() =>
+    Math.max(...this.hourlyPerf.map(h =>
+      Math.max(h.actual, h.target, h.forecast)
+    )) * 1.1
+  );
+
+  perfBarHeight(val: number): number {
+    return Math.round((val / this.perfMax()) * 100);
+  }
+
+  perfLineY(val: number, chartHeight: number = 200): number {
+    return chartHeight - Math.round((val / this.perfMax()) * chartHeight);
+  }
+
+  targetPoints(): string {
+    return this.hourlyPerf.map((h, i) => {
+      const x = (i / (this.hourlyPerf.length - 1)) * 1200;
+      const y = this.perfLineY(h.target);
+      return `${x},${y}`;
+    }).join(' ');
+  }
+
+  forecastPoints(): string {
+    return this.hourlyPerf.map((h, i) => {
+      const x = (i / (this.hourlyPerf.length - 1)) * 1200;
+      const y = this.perfLineY(h.forecast);
+      return `${x},${y}`;
+    }).join(' ');
+  }
+
+  riskBarWidth(pct: number): number { return pct; }
+
+  gapColor(gap: number): string {
+    return gap < -25 ? '#E74C3C' : gap < -15 ? '#F9A825' : '#00B894';
+  }
+
   // ── Heatmap ──
-  heatHours = ['9AM','10AM','11AM','12PM','1PM','2PM','3PM','4PM','5PM','6PM','7PM','8PM'];
+  heatHours = ['11AM','12PM','1PM','2PM','3PM','4PM','5PM','6PM'];
 
   heatRows: { key: string; label: string }[] = [
     { key: 'traffic', label: 'Traffic' },
@@ -118,11 +192,11 @@ export class DashboardComponent {
   ];
 
   heatData: Record<string, number[]> = {
-    traffic: [2, 3, 4, 4, 3, 3, 4, 5, 5, 4, 3, 2],
-    weather: [1, 1, 1, 2, 2, 3, 3, 3, 2, 2, 2, 1],
-    stock:   [1, 1, 1, 1, 2, 3, 3, 4, 4, 3, 2, 1],
-    event:   [1, 1, 1, 1, 1, 1, 2, 3, 4, 5, 4, 3],
-    risk:    [1, 1, 2, 2, 2, 3, 3, 4, 5, 4, 3, 2],
+    traffic: [4, 4, 3, 3, 4, 5, 5, 4],
+    weather: [1, 2, 2, 3, 3, 2, 2, 2],
+    stock:   [1, 1, 2, 3, 3, 4, 4, 3],
+    event:   [1, 1, 1, 2, 3, 4, 5, 4],
+    risk:    [2, 2, 2, 3, 3, 4, 5, 4],
   };
 
   heatColor(val: number): string {

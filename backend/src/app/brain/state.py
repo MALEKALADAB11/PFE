@@ -623,7 +623,7 @@ class MCPState(TypedDict):
     weather_data: Optional[WeatherData]
     """
     Current weather conditions and 24-h forecast for the store location.
-    Fetched from the external weather API (mcp_urlib tool).
+    Fetched from the external weather API (mcp_urllib tool).
     """
 
     kafka_events: List[KafkaEvent]
@@ -888,7 +888,7 @@ def validate_state(state: MCPState) -> List[str]:
             errors.append("appox_output.meta.status is 'ERROR' but meta.error is empty")
 
     if (app03 := state.get("app03_output")) is not None:
-        if not 0.0 <= app03.get("model_version", "0") and not app03.get("model_version"):
+        if not app03.get("model_version"):
             errors.append("app03_output.model_version must be set")
         for sku, forecast in app03.get("demand_forecast", {}).items():
             if len(forecast) != 24:

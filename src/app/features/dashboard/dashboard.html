@@ -10,14 +10,14 @@
       </p>
     </div>
     <div class="page-header__right">
-      <button class="btn-outline">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2">
-          <polyline points="1,4 1,10 7,10"/>
-          <path d="M3.51 15a9 9 0 102.13-9.36L1 10"/>
-        </svg>
-        Refresh
-      </button>
+      <button class="btn-outline" (click)="simulatePOS()">
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+       stroke="currentColor" stroke-width="2">
+    <polyline points="1,4 1,10 7,10"/>
+    <path d="M3.51 15a9 9 0 102.13-9.36L1 10"/>
+  </svg>
+  Simulate POS
+</button>
       <button class="btn-primary">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
              stroke="currentColor" stroke-width="2">
@@ -165,7 +165,7 @@
           </div>
 
           <div class="perf-risk-rows">
-            @for (r of riskHours; track r.hour) {
+            @for (r of riskHours(); track r.hour) {
               <div class="perf-risk-row">
                 <span class="perf-risk-hour mono">{{ r.hour }}</span>
                 <div class="perf-risk-bar-track">
@@ -541,6 +541,11 @@
             <h2 class="card-title">Team Ranking</h2>
             <p class="card-sub">Today's performance · LIVE</p>
           </div>
+          <!-- Indicateur WebSocket -->
+          <span class="ws-badge" [class.ws-badge--on]="ws.connected()">
+            <span class="ws-dot"></span>
+            {{ ws.connected() ? 'Live' : 'Polling' }}
+          </span>
         </div>
         <div class="team-list">
           @for (adv of advisors; track trackById($index, adv); let i = $index) {
@@ -549,7 +554,7 @@
                 {{ i + 1 }}
               </span>
               <div class="advisor-avatar advisor-avatar--sm"
-                   [style.background]="adv.avatarColor">
+                  [style.background]="adv.avatarColor">
                 {{ adv.initials }}
               </div>
               <div class="team-info">
@@ -566,8 +571,8 @@
                 </div>
                 <div class="progress-track">
                   <div class="progress-fill"
-                       [style.width.%]="adv.performance"
-                       [style.background]="perfColor(adv.performance)">
+                      [style.width.%]="adv.performance"
+                      [style.background]="perfColor(adv.performance)">
                   </div>
                 </div>
               </div>
@@ -580,10 +585,14 @@
         <div class="team-avg">
           <span class="team-avg__label">Team avg.</span>
           <div class="progress-track" style="flex:1">
-            <div class="progress-fill amber" style="width:53%"></div>
+            <div class="progress-fill amber"
+                [style.width.%]="attainment()">
+            </div>
           </div>
-          <span class="team-avg__val">53%</span>
-          <span class="team-avg__obj">target 8,000 DT</span>
+          <span class="team-avg__val">{{ attainment() }}%</span>
+          <span class="team-avg__obj">
+            target {{ caTarget() | number:'1.0-0' }} DT
+          </span>
         </div>
       </div>
 

@@ -1,16 +1,16 @@
 export interface Advisor {
-  id: string;
-  name: string;
-  initials: string;
-  role: string;
-  avatarColor: string;
-  caRealized: number;
-  caObjectif: number;
-  performance: number;
+  id:           string;
+  name:         string;
+  initials:     string;
+  role:         string;
+  avatarColor:  string;
+  caRealized:   number;
+  caObjectif:   number;
+  performance:  number;
   previsionEod: number;
-  status: 'top' | 'ok' | 'urgent' | 'attente';
-  coachScore: number;
-  clients: number;
+  coachScore:   number;
+  clients:      number;
+  status:       'ok' | 'top' | 'urgent' | 'attente';  
   coachAdvice?: string;
 }
 

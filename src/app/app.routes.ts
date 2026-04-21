@@ -1,6 +1,8 @@
 import { Routes } from '@angular/router';
+import { RealtimePageComponent } from './features/admin/realtime-page';
 
 export const routes: Routes = [
+  { path: 'admin/realtime', component: RealtimePageComponent },
   {
     path: '',
     redirectTo: 'dashboard',
@@ -10,7 +12,7 @@ export const routes: Routes = [
     path: 'dashboard',
     loadComponent: () =>
       import('./features/dashboard/dashboard')
-        .then(m => m.DashboardComponent)
+        .then(m => m.Dashboard)
   },
   {
     path: 'inventory',

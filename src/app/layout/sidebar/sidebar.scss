@@ -303,3 +303,200 @@
   0%, 100% { opacity: 1;   transform: scale(1);    }
   50%       { opacity: 0.5; transform: scale(0.75); }
 }
+
+
+
+// ══════════════════════════════════════════════════════
+//  Daily Revenue — Live sidebar section
+//  Add these rules to sidebar.scss
+// ══════════════════════════════════════════════════════
+
+// ── Header row ─────────────────────────────────────────
+.rev-header {
+  display:         flex;
+  align-items:     center;
+  justify-content: space-between;
+  margin-bottom:   8px;
+}
+
+// ── Risk / loading badge ────────────────────────────────
+.rev-badge {
+  display:       inline-flex;
+  align-items:   center;
+  gap:           4px;
+  font-size:     10px;
+  font-weight:   600;
+  padding:       2px 7px;
+  border-radius: 20px;
+  letter-spacing: .3px;
+  transition:    background .3s, color .3s;
+
+  &--loading {
+    background: #F0F0F0;
+    color:      #9CA3AF;
+  }
+
+  &__dot {
+    width:         6px;
+    height:        6px;
+    border-radius: 50%;
+    flex-shrink:   0;
+
+    &--pulse {
+      animation: pulse-dot 1.2s ease-in-out infinite;
+    }
+  }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1;   transform: scale(1);   }
+  50%       { opacity: 0.4; transform: scale(.7);  }
+}
+
+// ── Main KPI value ──────────────────────────────────────
+.rev-kpi-row {
+  display:     flex;
+  align-items: baseline;
+  gap:         8px;
+  margin:      4px 0 2px;
+}
+
+.rev-kpi-main {
+  font-size:   22px;
+  font-weight: 700;
+  line-height: 1;
+  color:       var(--text-primary, #1A1A2E);
+  transition:  color .4s;
+}
+
+.rev-kpi-unit {
+  font-size:   13px;
+  font-weight: 500;
+  color:       var(--text-muted, #9CA3AF);
+}
+
+// ── vs yesterday trend pill ────────────────────────────
+.rev-trend {
+  font-size:   10px;
+  font-weight: 600;
+  padding:     2px 6px;
+  border-radius: 10px;
+
+  &--up   { background: #E0FAF4; color: #00B894; }
+  &--down { background: #FDEDEC; color: #E74C3C; }
+}
+
+// ── Target sub-row ─────────────────────────────────────
+.rev-target-row {
+  display:     flex;
+  align-items: center;
+  gap:         5px;
+  margin:      4px 0 0;
+}
+
+.rev-target-label {
+  font-size:  10px;
+  color:      var(--text-muted, #9CA3AF);
+  flex-shrink: 0;
+}
+
+.rev-target-val {
+  font-size:   11px;
+  font-weight: 500;
+  color:       var(--text-secondary, #6B7280);
+  flex:        1;
+}
+
+.rev-pct-pill {
+  font-size:     10px;
+  font-weight:   700;
+  padding:       2px 6px;
+  border-radius: 10px;
+  transition:    background .3s, color .3s;
+}
+
+// ── Mini sparkline chart ───────────────────────────────
+.rev-spark {
+  display:     flex;
+  align-items: flex-end;
+  gap:         2px;
+  height:      40px;
+  margin:      10px 0 4px;
+  position:    relative;
+}
+
+.rev-spark-col {
+  flex:        1;
+  display:     flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  height:      100%;
+  position:    relative;
+}
+
+// Ghost target bar (behind)
+.rev-spark-target {
+  position:      absolute;
+  bottom:        14px;   // leave room for label
+  left:          0;
+  right:         0;
+  background:    rgba(156, 163, 175, 0.18);
+  border-radius: 2px 2px 0 0;
+  min-height:    2px;
+  transition:    height .4s ease;
+}
+
+// Actual bar
+.rev-spark-bar {
+  position:      relative;
+  width:         100%;
+  border-radius: 2px 2px 0 0;
+  min-height:    3px;
+  transition:    height .5s ease, background .3s;
+  z-index:       1;
+  bottom:        14px;  // align with target ghost
+
+  &--empty {
+    background: #E5E7EB !important;
+    opacity:    0.5;
+  }
+}
+
+.rev-spark-label {
+  position:   absolute;
+  bottom:     0;
+  font-size:  8px;
+  color:      var(--text-muted, #9CA3AF);
+  white-space: nowrap;
+}
+
+// ── Forecast EOD row ───────────────────────────────────
+.rev-forecast {
+  display:     flex;
+  align-items: center;
+  gap:         4px;
+  margin-top:  6px;
+  padding:     6px 8px;
+  background:  var(--surface-2, #F9FAFB);
+  border-radius: 6px;
+  font-size:   11px;
+
+  svg { flex-shrink: 0; color: var(--text-muted, #9CA3AF); }
+
+  &__label {
+    color:  var(--text-muted, #9CA3AF);
+    flex:   1;
+  }
+
+  &__val {
+    font-weight: 600;
+    color:       var(--text-primary, #1A1A2E);
+  }
+
+  &__gap {
+    font-size:   10px;
+    font-weight: 600;
+    transition:  color .3s;
+  }
+}

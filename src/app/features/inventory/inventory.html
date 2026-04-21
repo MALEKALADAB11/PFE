@@ -112,142 +112,91 @@
   <div class="inv-main-layout">
 
     <!-- ══════════════════════════════
-         GAUCHE : Histogramme + Grid
+         GAUCHE : Cloud Quadrant + Grid
     ══════════════════════════════ -->
     <div class="inv-main-left">
 
-      <!-- ── HISTOGRAM ── -->
-      <div class="card inv-histo-card">
+      <!-- ── QUADRANT CLOUD STOCK ── -->
+      <div class="card inv-quadrant-card">
         <div class="card-header">
           <div>
-            <h2 class="card-title">Inventory vs Sales — by product</h2>
-            <p class="card-sub">
-              Stock · 24h demand · min threshold · LIVE
-            </p>
+            <h2 class="card-title">Cloud Quarter Stock — by product</h2>
+            <p class="card-sub">Stock vs Demand 24h · Bubble size = Risk score · LIVE</p>
           </div>
-          <div class="inv-histo-legend">
-            <span class="inv-hleg">
-              <span class="inv-hleg__bar"
-                    style="background:#888;opacity:0.25"></span>
-              Max
+          <div class="inv-quadrant-legend">
+            <span class="inv-qleg inv-qleg--critical">
+              <span class="inv-qleg__dot" style="background:#E74C3C"></span>Critical
             </span>
-            <span class="inv-hleg">
-              <span class="inv-hleg__bar" style="background:#5B84B8"></span>
-              Stock
+            <span class="inv-qleg inv-qleg--high">
+              <span class="inv-qleg__dot" style="background:#F9A825"></span>High
             </span>
-            <span class="inv-hleg">
-              <span class="inv-hleg__bar"
-                    style="background:#2D9CDB;opacity:0.55"></span>
-              Demand 24h
+            <span class="inv-qleg inv-qleg--medium">
+              <span class="inv-qleg__dot" style="background:#2D9CDB"></span>Medium
             </span>
-            <span class="inv-hleg">
-              <span class="inv-hleg__bar inv-hleg__bar--dashed"></span>
-              Min threshold
+            <span class="inv-qleg inv-qleg--ok">
+              <span class="inv-qleg__dot" style="background:#00B894"></span>OK
             </span>
           </div>
         </div>
 
-        <div class="inv-histo-wrap">
+        <!-- Quadrant SVG chart -->
+        <div class="inv-quadrant-wrap">
 
-          <!-- Y axis -->
-          <div class="inv-histo-yaxis">
-            <span>{{ invChartMax() | number:'1.0-0' }}</span>
-            <span>{{ (invChartMax() * 0.75) | number:'1.0-0' }}</span>
-            <span>{{ (invChartMax() * 0.5)  | number:'1.0-0' }}</span>
-            <span>{{ (invChartMax() * 0.25) | number:'1.0-0' }}</span>
-            <span>0</span>
-          </div>
-
-          <!-- Bars area -->
-          <div class="inv-histo-area">
-
-            <!-- Grid lines -->
-            <div class="inv-histo-grid">
-              @for (line of [0,1,2,3,4]; track line) {
-                <div class="inv-histo-gridline"></div>
-              }
+          <!-- Quadrant labels (background) -->
+          <div class="inv-quadrant-bg">
+            <div class="inv-q-zone inv-q-zone--tl">
+              <span class="inv-q-zone__label">Surplus<br><small>Overstock risk</small></span>
             </div>
-
-            <!-- Product groups -->
-            @for (p of items(); track p.id) {
-              <div class="inv-histo-group">
-                <div class="inv-histo-bars">
-
-                  <!-- Bar 1: Stock max ghost -->
-                  <div class="inv-histo-bar-wrap"
-                       [title]="'Max: ' + p.stockMax">
-                    <div class="inv-histo-bar inv-histo-bar--ghost"
-                         [style.height.%]="p.stockMax >= 999 ? 100 : invBarH(p.stockMax)">
-                    </div>
-                    <span class="inv-histo-bar-val"
-                          style="color:var(--text-tertiary)">
-                      @if (p.stockMax >= 999) { ∞ } @else { {{ p.stockMax }} }
-                    </span>
-                  </div>
-
-                  <!-- Bar 2: Current stock -->
-                  <div class="inv-histo-bar-wrap"
-                       [title]="'Stock: ' + p.stock + ' units'">
-                    <div class="inv-histo-bar"
-                         [style.height.%]="p.stock >= 999 ? 98 : invBarH(p.stock)"
-                         [style.background]="riskColor(p.riskLevel)"
-                         [class.inv-histo-bar--pulse]="p.riskLevel === 'critical'">
-                    </div>
-                    <span class="inv-histo-bar-val"
-                          [style.color]="riskColor(p.riskLevel)">
-                      @if (p.stock >= 999) { ∞ } @else { {{ p.stock }} }
-                    </span>
-                  </div>
-
-                  <!-- Bar 3: Demand 24h -->
-                  <div class="inv-histo-bar-wrap"
-                       [title]="'24h demand: ' + p.demandForecast24h + ' units'">
-                    <div class="inv-histo-bar inv-histo-bar--demand"
-                         [style.height.%]="invBarH(p.demandForecast24h)">
-                    </div>
-                    <span class="inv-histo-bar-val" style="color:#2D9CDB">
-                      {{ p.demandForecast24h }}
-                    </span>
-                  </div>
-
-                  <!-- Bar 4: Min threshold dashed -->
-                  <div class="inv-histo-bar-wrap"
-                       [title]="'Min threshold: ' + p.stockMin">
-                    <div class="inv-histo-bar inv-histo-bar--target"
-                         [style.height.%]="invBarH(p.stockMin)">
-                    </div>
-                    <span class="inv-histo-bar-val"
-                          style="color:var(--text-tertiary)">
-                      {{ p.stockMin }}
-                    </span>
-                  </div>
-
-                </div>
-
-                <!-- Product label -->
-                <div class="inv-histo-label">
-                  <span class="inv-histo-product-name">
-                    {{ p.name.split(' ').slice(0,2).join(' ') }}
-                  </span>
-                  <span class="inv-histo-risk-badge"
-                        [style.background]="riskBg(p.riskLevel)"
-                        [style.color]="riskColor(p.riskLevel)">
-                    {{ riskLabel(p.riskLevel) }}
-                  </span>
-                  <span class="inv-histo-coverage"
-                        [style.color]="coverageColor(p.coverageRatio)">
-                    {{ p.coverageRatio }}x
-                  </span>
-                </div>
-
-              </div>
-            }
-
+            <div class="inv-q-zone inv-q-zone--tr">
+              <span class="inv-q-zone__label">Optimal<br><small>Balanced stock</small></span>
+            </div>
+            <div class="inv-q-zone inv-q-zone--bl">
+              <span class="inv-q-zone__label">Urgent<br><small>Stockout imminent</small></span>
+            </div>
+            <div class="inv-q-zone inv-q-zone--br">
+              <span class="inv-q-zone__label">Watch<br><small>High demand pressure</small></span>
+            </div>
           </div>
+
+          <!-- Axis labels -->
+          <div class="inv-q-axis-x">
+            <span>Low demand →</span>
+            <span>High demand</span>
+          </div>
+          <div class="inv-q-axis-y">
+            <span>High stock</span>
+            <span>← Low stock</span>
+          </div>
+
+          <!-- Axis lines (center cross) -->
+          <div class="inv-q-hline"></div>
+          <div class="inv-q-vline"></div>
+
+          <!-- Product bubbles -->
+          @for (item of items(); track item.id) {
+            <div class="inv-q-bubble"
+                 [style.left.%]="getQuadrantX(item)"
+                 [style.bottom.%]="getQuadrantY(item)"
+                 [style.width.px]="getBubbleSize(item)"
+                 [style.height.px]="getBubbleSize(item)"
+                 [style.background]="riskColor(item.riskLevel)"
+                 [style.opacity]="0.85"
+                 [title]="item.name + ' — Stock: ' + item.stock + ' | Demand 24h: ' + item.demandForecast24h + ' | Coverage: ' + item.coverageRatio + 'x'"
+                 (click)="toggleFlip(item.id)">
+              <span class="inv-q-bubble__label">
+                {{ item.name.split(' ')[0] }}
+              </span>
+              <span class="inv-q-bubble__coverage"
+                    [style.color]="riskColor(item.riskLevel)">
+                {{ item.coverageRatio }}x
+              </span>
+            </div>
+          }
+
         </div>
 
-        <!-- Footer summary -->
-        <div class="inv-histo-footer">
+        <!-- Footer mini-summary -->
+        <div class="inv-quadrant-footer">
           @for (p of items(); track p.id) {
             <div class="inv-histo-foot-item">
               <span class="inv-histo-foot-name">

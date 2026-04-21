@@ -1775,3 +1775,33 @@
   0%, 100% { opacity: 1;   }
   50%       { opacity: 0.6; }
 }
+.ws-badge {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 20px;
+  background: var(--color-surface-2);
+  color: var(--text-tertiary);
+  border: 1px solid var(--color-border);
+
+  &--on {
+    background: #E1F5EE;
+    color: #0F6E56;
+    border-color: #9FE1CB;
+  }
+}
+
+.ws-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+
+  .ws-badge--on & {
+    background: #00B894;
+    animation: pulse-dot 2s ease-in-out infinite;
+  }
+}

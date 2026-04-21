@@ -47,20 +47,34 @@ export class InventoryComponent {
     Object.values(this.decisions()).filter(d => d === 'rejected').length
   );
 
-  // ── Histogram ──
-  invChartMax = computed(() => {
-    const vals = this.items().flatMap(p => [
-      p.stock >= 999    ? 0 : p.stock,
-      p.demandForecast24h,
-      p.stockMin,
-      p.stockMax >= 999 ? 0 : p.stockMax
-    ]);
-    return Math.max(...vals, 1) * 1.15;
-  });
+  // ── Quadrant cloud: axis ranges ──
+  maxDemand = computed(() => Math.max(...this.items().map(i => i.demandForecast24h), 1));
+  maxStock  = computed(() => Math.max(...this.items().filter(i => i.stock < 999).map(i => i.stock), 1));
 
-  invBarH(val: number): number {
-    if (val >= 999) return 100;
-    return Math.round((val / this.invChartMax()) * 100);
+  /**
+   * X position (%) = demand / maxDemand * 85 + 5
+   * Maps low demand → left (5%), high demand → right (90%)
+   */
+  getQuadrantX(item: InventoryItem): number {
+    const normalized = item.demandForecast24h / this.maxDemand();
+    return Math.round(normalized * 82 + 5);
+  }
+
+  /**
+   * Y position (%) from bottom = stock / maxStock * 82 + 5
+   * Maps low stock → bottom (5%), high stock → top (87%)
+   */
+  getQuadrantY(item: InventoryItem): number {
+    const stock = item.stock >= 999 ? this.maxStock() : item.stock;
+    const normalized = stock / this.maxStock();
+    return Math.round(normalized * 80 + 5);
+  }
+
+  /**
+   * Bubble diameter in px based on riskScore (20–52px)
+   */
+  getBubbleSize(item: InventoryItem): number {
+    return Math.round(20 + item.riskScore * 32);
   }
 
   // ── Filtered + sorted items ──

@@ -1,8 +1,13 @@
-import { Component, computed, signal, ElementRef, ViewChild, AfterViewChecked } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { Advisor } from '../../core/models/advisor';
-import { MockDataService } from '../../core/services/mock-data';
-
+import {
+  Component, computed, signal,
+  ElementRef, ViewChild,
+  AfterViewChecked, OnInit, OnDestroy
+} from '@angular/core';
+import { CommonModule }      from '@angular/common';
+import { Advisor }           from '../../core/models/advisor';
+import { MockDataService }   from '../../core/services/mock-data';
+import { WebSocketService }  from '../../core/services/websocket.service';
+import { ApiService } from '../../core/services/api';
 
 interface Product {
   id:          string;
@@ -41,21 +46,31 @@ interface Alert {
   templateUrl: './conseiller.html',
   styleUrl:    './conseiller.scss'
 })
-export class ConseillerComponent implements AfterViewChecked {
+export class ConseillerComponent
+  implements AfterViewChecked, OnInit, OnDestroy {
 
   @ViewChild('chatBottom') chatBottom!: ElementRef;
 
-  advisors       = signal<Advisor[]>([]);
-  selectedId     = signal<string>('kb');
-  chatOpen       = signal<boolean>(true);
-  chatTab        = signal<'coach' | 'alertes'>('coach');
+  storeId    = 'store-lac2';
+  advisors   = signal<Advisor[]>([]);
+  selectedId = signal<string>('kb');
+  chatOpen   = signal<boolean>(true);
+  chatTab    = signal<'coach' | 'alertes'>('coach');
   flippedProduct = signal<string | null>(null);
-  chatInput      = signal<string>('');
-  shouldScroll   = false;
+  chatInput  = signal<string>('');
+  shouldScroll = false;
 
-  selected = computed(() =>
-    this.advisors().find(a => a.id === this.selectedId())!
-  );
+  // ── Live data ────────────────────────────────────────
+  liveAdvisors = signal<Advisor[]>([]);
+  wsConnected  = signal(false);
+
+  // ── Computed selected advisor ─────────────────────────
+  selected = computed(() => {
+    const live = this.liveAdvisors();
+    const mock = this.advisors();
+    const list = live.length ? live : mock;
+    return list.find(a => a.id === this.selectedId())!;
+  });
 
   perfColor = computed(() => {
     const p = this.selected()?.performance ?? 0;
@@ -65,10 +80,50 @@ export class ConseillerComponent implements AfterViewChecked {
   caPercent = computed(() => {
     const s = this.selected();
     if (!s) return 0;
+
+    // Utiliser données live WS si disponibles
+    const liveData = this.ws.liveAdvisors();
+    const liveAdv  = liveData.find((l: any) => l.advisor_id === s.id);
+    if (liveAdv) {
+      const ca     = liveAdv.ca_today ?? s.caRealized;
+      const target = s.caObjectif ?? 2000;
+      return Math.round((ca / target) * 100);
+    }
     return Math.round((s.caRealized / s.caObjectif) * 100);
   });
 
-  // ── Alerts ──
+  // CA en temps réel pour le selected advisor
+  selectedCaLive = computed(() => {
+    const s       = this.selected();
+    const liveData = this.ws.liveAdvisors();
+    const liveAdv  = liveData.find((l: any) => l.advisor_id === s?.id);
+    return liveAdv ? Math.round(liveAdv.ca_today) : (s?.caRealized ?? 0);
+  });
+
+  // ── Team ranking avec données live ───────────────────
+  advisorsList = computed(() => {
+    const live = this.ws.liveAdvisors();
+    const list = this.liveAdvisors().length
+               ? this.liveAdvisors()
+               : this.advisors();
+
+    if (!live.length) return list;
+
+    return list.map(adv => {
+      const wsData = live.find((l: any) => l.advisor_id === adv.id);
+      if (!wsData) return adv;
+      const ca   = Math.round(wsData.ca_today);
+      const perf = Math.round((ca / adv.caObjectif) * 100);
+      return {
+        ...adv,
+        caRealized:  ca,
+        performance: perf,
+        status: perf >= 80 ? 'top' : perf >= 50 ? 'ok' : 'urgent'
+      };
+    }).sort((a, b) => b.performance - a.performance);
+  });
+
+  // ── Alerts ───────────────────────────────────────────
   alerts = signal<Alert[]>([
     {
       id: 'a1',
@@ -82,7 +137,7 @@ export class ConseillerComponent implements AfterViewChecked {
       label:  'Peak traffic expected 5–7 PM',
       detail: 'Concert tonight 2km away · +60% visitors expected',
       color:  '#F9A825', bg: '#FFF8E1',
-      chatMessage: 'Strategy for the 5 PM traffic peak? Concert tonight — how should I prepare my team?'
+      chatMessage: 'Strategy for the 5 PM traffic peak? Concert tonight — how should I prepare?'
     },
     {
       id: 'a3',
@@ -93,7 +148,6 @@ export class ConseillerComponent implements AfterViewChecked {
     },
   ]);
 
-  // ── Quick prompts ──
   quickPrompts = [
     'Insurance bundle script?',
     '5G argument vs competitors?',
@@ -103,7 +157,6 @@ export class ConseillerComponent implements AfterViewChecked {
     'How to reach 2,000 DT target?',
   ];
 
-  // ── Chat messages ──
   messages = signal<ChatMessage[]>([
     {
       id:   'm0',
@@ -113,7 +166,6 @@ export class ConseillerComponent implements AfterViewChecked {
     }
   ]);
 
-  // ── Products ──
   products: Product[] = [
     {
       id: 'p1', name: 'iPhone 16 Pro', category: 'SMARTPHONE',
@@ -125,8 +177,8 @@ export class ConseillerComponent implements AfterViewChecked {
         'Open with the need: "What do you mainly use your phone for?"',
         'Highlight the A18 Pro chip — show the real difference in photos and video.',
         'Bundle: iPhone 16 Pro + case + AppleCare+ = +340 DT average basket.',
-        'Price objection: "Over 24 months it\'s 54 DT/month — less than a streaming subscription."',
-        'Create urgency: "We only have 3 units left — I can\'t guarantee stock tomorrow."',
+        'Price objection: "Over 24 months it\'s 54 DT/month."',
+        'Create urgency: "We only have 3 units left."',
       ]
     },
     {
@@ -137,10 +189,10 @@ export class ConseillerComponent implements AfterViewChecked {
       script: 'Fiber Pro Sales Script',
       scriptLines: [
         'Qualify: "How many people at home use the internet simultaneously?"',
-        'Differentiation: 2Gb symmetric = fast upload, ideal for remote work and gaming.',
+        '2Gb symmetric = fast upload, ideal for remote work and gaming.',
         'Bundle fiber + 4K TV decoder = +15 DT but 60% better retention.',
-        'Current provider objection: ask when their contract ends.',
-        'If contract ends < 3 months: offer pre-subscription with deferred activation.',
+        'Ask when their contract ends.',
+        'If < 3 months: offer pre-subscription with deferred activation.',
       ]
     },
     {
@@ -151,9 +203,9 @@ export class ConseillerComponent implements AfterViewChecked {
       script: 'Premium Insurance Script',
       scriptLines: [
         'Best timing: offer AFTER the device purchase is confirmed.',
-        '"With Premium Insurance, if you break the screen tomorrow, replacement in 48h."',
-        'Reframe: "It\'s 9 DT/month — the price of a coffee per week."',
-        'Psychological lever: show screen repair cost = 280 DT without insurance.',
+        '"With Premium Insurance, screen replacement in 48h."',
+        'Reframe: "It\'s 9 DT/month — a coffee per week."',
+        'Show screen repair cost = 280 DT without insurance.',
         'Target conversion rate: 70% of device sales.',
       ]
     },
@@ -165,10 +217,10 @@ export class ConseillerComponent implements AfterViewChecked {
       script: 'Apple Watch S10 Script',
       scriptLines: [
         'Target iPhone buyers: "You have an iPhone? The Watch pairs perfectly."',
-        'Demo in store: show notifications, live health tracking in real time.',
-        'Rain opportunity: "The Watch is waterproof to 50m — perfect in this weather."',
+        'Demo in store: show notifications, live health tracking.',
+        'Rain opportunity: "The Watch is waterproof to 50m."',
         'Bundle: Watch + extra sport band + AppleCare = +80 DT margin.',
-        'Financing: offer 3x installments if hesitation on price.',
+        'Offer 3x installments if hesitation on price.',
       ]
     },
     {
@@ -178,10 +230,10 @@ export class ConseillerComponent implements AfterViewChecked {
       hot: true, accentColor: '#2D9CDB',
       script: 'AirPods Pro 3 Script',
       scriptLines: [
-        'Hook: "Do you use earbuds right now? Let me show you the difference."',
-        'Let them listen to the active noise cancellation — experience sells better than words.',
+        '"Do you use earbuds right now? Let me show you the difference."',
+        'Let them listen to the active noise cancellation.',
         'Rain context: "Perfect for commuting, water resistant."',
-        'Price objection: compare to Samsung — superior ANC quality at similar price.',
+        'Compare to Samsung — superior ANC quality at similar price.',
         'Add protective case = +25 DT, high margin item.',
       ]
     },
@@ -192,17 +244,47 @@ export class ConseillerComponent implements AfterViewChecked {
       hot: false, accentColor: '#6C5CE7',
       script: 'Pro Business Pack Script',
       scriptLines: [
-        'Target: self-employed professionals, craftsmen, business owners.',
-        '"The Pro Pack includes 5G Pro mobile line + 1Gb fiber + 1TB cloud backup."',
+        'Target: self-employed professionals, business owners.',
+        '"5G Pro mobile line + 1Gb fiber + 1TB cloud backup."',
         'Tax advantage: fully deductible as a business expense.',
-        '24-month commitment = stability for the client + recurring revenue for us.',
-        'Offer free setup visit = key differentiator vs competitors.',
+        '24-month commitment = stability + recurring revenue.',
+        'Offer free setup visit = key differentiator.',
       ]
     },
   ];
 
-  constructor(private data: MockDataService) {
+  constructor(
+    private data: MockDataService,
+    private api:  ApiService,
+    private ws:   WebSocketService
+  ) {
     this.advisors.set(this.data.getAdvisors());
+  }
+
+  ngOnInit() {
+    // 1 — Charger advisors depuis API
+    this.api.getAdvisors(this.storeId).subscribe({
+      next: d => this.liveAdvisors.set(d.advisors ?? []),
+      error: () => {}
+    });
+
+    // 2 — Connecter WebSocket store pour CA live
+    this.ws.connectStore(this.storeId);
+
+    // 3 — Connecter WebSocket advisor pour coach updates
+    this.ws.connectAdvisor(this.selectedId());
+
+    // 4 — Refresh HTTP toutes les 30s
+    setInterval(() => {
+      this.api.getAdvisors(this.storeId).subscribe({
+        next: d => this.liveAdvisors.set(d.advisors ?? []),
+        error: () => {}
+      });
+    }, 30000);
+  }
+
+  ngOnDestroy() {
+    this.ws.disconnect();
   }
 
   ngAfterViewChecked() {
@@ -212,25 +294,22 @@ export class ConseillerComponent implements AfterViewChecked {
     }
   }
 
-  // ── Advisor selection ──
-  selectAdvisor(id: string) { this.selectedId.set(id); }
+  selectAdvisor(id: string) {
+    this.selectedId.set(id);
+    this.ws.connectAdvisor(id);
+  }
 
   statusClass(s: string): string {
     const m: Record<string, string> = {
-      top:     'status--top',
-      ok:      'status--ok',
-      urgent:  'status--urgent',
-      attente: 'status--attente'
+      top:    'status--top',    ok:     'status--ok',
+      urgent: 'status--urgent', attente:'status--attente'
     };
     return m[s] ?? '';
   }
 
   statusText(s: string): string {
     const m: Record<string, string> = {
-      top:     'Top',
-      ok:      'OK',
-      urgent:  'Urgent',
-      attente: 'Waiting'
+      top: 'Top', ok: 'OK', urgent: 'Urgent', attente: 'Waiting'
     };
     return m[s] ?? s;
   }
@@ -239,14 +318,12 @@ export class ConseillerComponent implements AfterViewChecked {
     return p >= 80 ? '#00B894' : p >= 50 ? '#F9A825' : '#E74C3C';
   }
 
-  // ── Product flip ──
   toggleFlip(id: string) {
     this.flippedProduct.update(cur => cur === id ? null : id);
   }
 
   isFlipped(id: string) { return this.flippedProduct() === id; }
 
-  // ── Chat ──
   openChat() {
     this.chatOpen.set(true);
     this.chatTab.set('coach');
@@ -312,27 +389,30 @@ export class ConseillerComponent implements AfterViewChecked {
     const m = msg.toLowerCase();
 
     if (m.includes('insurance'))
-      return 'Insurance bundle script:\n\n1. Timing: offer AFTER device purchase is confirmed.\n2. Key phrase: "It\'s 9 DT/month — a coffee per week. If the screen breaks, replacement in 48h."\n3. Visual lever: show screen repair = 280 DT without insurance.\n4. Target: 70% conversion on device sales.';
+      return 'Insurance bundle script:\n\n1. Timing: offer AFTER device purchase.\n2. "It\'s 9 DT/month — a coffee per week. Screen replacement in 48h."\n3. Show repair cost = 280 DT without insurance.\n4. Target: 70% conversion on device sales.';
 
     if (m.includes('5g') || m.includes('competitor'))
-      return 'Against competitors on 5G:\n\n1. Our network covers 94% vs 87% for the competition.\n2. Key argument: guaranteed speed vs shared bandwidth.\n3. Ask the customer to test their current network in store — the result speaks for itself.\n4. Highlight our exclusive 5G Pro bundle pricing.';
+      return 'Against competitors on 5G:\n\n1. Our network covers 94% vs 87% competitors.\n2. Guaranteed speed vs shared bandwidth.\n3. Let the customer test their current network in store.\n4. Highlight exclusive 5G Pro bundle pricing.';
 
     if (m.includes('price') || m.includes('objection'))
-      return 'Price reframing technique:\n\n1. Never repeat the full price. Break it down: "1,299 DT = 54 DT/month over 24 months."\n2. Concrete comparison: "Less than your Netflix + Spotify subscription."\n3. Value vs cost: pro camera, 5-year durability, trade-in value.\n4. If blocked: offer 3x installments with no fees.';
+      return 'Price reframing:\n\n1. Break it down: "1,299 DT = 54 DT/month over 24 months."\n2. "Less than your Netflix + Spotify subscription."\n3. Pro camera, 5-year durability, trade-in value.\n4. Offer 3x installments with no fees.';
 
     if (m.includes('peak') || m.includes('traffic') || m.includes('5 pm'))
-      return 'Team plan for the 5–7 PM peak:\n\n1. Karim → premium handsets (93%, he can close).\n2. Sara → fiber and Pro offers (waiting clients = qualify time).\n3. Amine → accessories (easy traffic, fast to sell).\n4. Leila → welcome and orientation (reduce wait < 3 min).\n5. Prepare 3 iPhones in the display window by 4:45 PM.';
+      return 'Team plan for the 5–7 PM peak:\n\n1. Karim → premium handsets.\n2. Sara → fiber and Pro offers.\n3. Amine → accessories (easy traffic).\n4. Leila → welcome and orientation.\n5. Prepare 3 iPhones in window by 4:45 PM.';
 
-    if (m.includes('rain') || m.includes('accessory') || m.includes('accessories'))
-      return 'Accessories strategy — rain context:\n\n1. Active signal: +40% demand until 6 PM.\n2. Priority products: AirPods Pro 3 (water resistant), Apple Watch S10 (waterproof 50m), protective cases.\n3. Universal hook: "Perfect in this weather, certified water resistant."\n4. Move Amine to the accessories zone immediately.\n5. Target: 5 accessory sales before 5 PM.';
+    if (m.includes('rain') || m.includes('accessor'))
+      return 'Accessories strategy — rain context:\n\n1. Active signal: +40% demand until 6 PM.\n2. Priority: AirPods Pro 3 (water resistant), Apple Watch (waterproof 50m).\n3. Hook: "Perfect in this weather, certified water resistant."\n4. Move Amine to accessories zone immediately.';
 
     if (m.includes('stock') || m.includes('iphone'))
-      return 'iPhone 16 Pro stock critical (3 units):\n\nStrategy: create urgency — "We only have 3 left in stock."\n\nFor hesitant customers: offer a reservation with a 10% deposit.\n\nRedirect others to Samsung A55 (24 units available, strong alternative pitch).';
+      return 'iPhone 16 Pro stock critical (3 units):\n\nStrategy: create urgency.\nFor hesitant customers: reservation with 10% deposit.\nRedirect others to Samsung A55 (24 units available).';
 
-    if (m.includes('target') || m.includes('2,000') || m.includes('2000'))
-      return 'Reaching the 2,000 DT target:\n\nCurrent gap: ~150 DT. With 3h28 left and the 5 PM peak incoming:\n\n1. One iPhone 16 Pro sale closes the gap immediately.\n2. Two accessory bundles = ~300 DT.\n3. Focus: Premium Insurance on every device sale today.';
+    if (m.includes('target') || m.includes('2,000') || m.includes('2000')) {
+      const ca   = this.selectedCaLive();
+      const gap  = 2000 - ca;
+      return `Reaching 2,000 DT target:\n\nCurrent: ${ca.toLocaleString()} DT · Gap: ${Math.round(gap).toLocaleString()} DT\n\n1. One iPhone 16 Pro closes the gap immediately.\n2. Two accessory bundles = ~300 DT.\n3. Premium Insurance on every device sale.`;
+    }
 
-    return `Analyzing your request: "${msg.slice(0, 60)}..."\n\nI'm cross-referencing live POS data, weather signals, stock levels, and TimesFM forecasts. Want me to drill down on a specific advisor or product?`;
+    return `Analyzing: "${msg.slice(0, 60)}..."\n\nCross-referencing live POS data, weather signals, stock levels, and TimesFM forecasts. Want me to drill down on a specific product or advisor?`;
   }
 
   private scrollChat() {

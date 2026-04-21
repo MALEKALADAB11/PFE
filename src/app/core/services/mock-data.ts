@@ -105,7 +105,8 @@ export class MockDataService {
   getInventoryItems(): InventoryItem[] {
     return [
       {
-        id: 'i1', sku: 'IPH16PRO', name: 'iPhone 16 Pro',
+        // SKU matches backend PHN-IPH-15 → agent will overlay risk/stock/APICS fields
+        id: 'i1', sku: 'PHN-IPH-15', name: 'iPhone 15',
         category: 'Smartphone', stock: 3, stockMin: 8, stockMax: 40,
         demandForecast24h: 11, coverageRatio: 0.27,
         riskLevel: 'critical', riskScore: 0.91,
@@ -114,7 +115,8 @@ export class MockDataService {
         confidence: 0.91, lastUpdated: '2:32 PM', trend: 'down'
       },
       {
-        id: 'i2', sku: 'SAMA55', name: 'Samsung A55',
+        // SKU matches backend PHN-SAM-S2... → use PHN-SAM-S21 (adjust if your exact SKU differs)
+        id: 'i2', sku: 'PHN-SAM-S21', name: 'Samsung S21',
         category: 'Smartphone', stock: 24, stockMin: 6, stockMax: 35,
         demandForecast24h: 8, coverageRatio: 3.0,
         riskLevel: 'ok', riskScore: 0.10,
@@ -123,7 +125,8 @@ export class MockDataService {
         confidence: 0.95, lastUpdated: '2:32 PM', trend: 'stable'
       },
       {
-        id: 'i3', sku: 'AIRPDP3', name: 'AirPods Pro 3',
+        // SKU matches backend ACC-BUD-001
+        id: 'i3', sku: 'ACC-BUD-001', name: 'Wireless Earbuds',
         category: 'Accessory', stock: 7, stockMin: 5, stockMax: 25,
         demandForecast24h: 9, coverageRatio: 0.78,
         riskLevel: 'high', riskScore: 0.73,
@@ -132,7 +135,8 @@ export class MockDataService {
         confidence: 0.79, lastUpdated: '2:32 PM', trend: 'down'
       },
       {
-        id: 'i4', sku: 'FIB2GPRO', name: 'Fiber Box 2G Pro',
+        // SKU matches backend FBR-BOX-001
+        id: 'i4', sku: 'FBR-BOX-001', name: 'Fiber Box Pro',
         category: 'Internet', stock: 18, stockMin: 4, stockMax: 30,
         demandForecast24h: 5, coverageRatio: 3.6,
         riskLevel: 'ok', riskScore: 0.08,
@@ -141,7 +145,8 @@ export class MockDataService {
         confidence: 0.97, lastUpdated: '2:32 PM', trend: 'stable'
       },
       {
-        id: 'i5', sku: 'APLWTCH', name: 'Apple Watch S10',
+        // SKU matches backend ACC-WAT-001
+        id: 'i5', sku: 'ACC-WAT-001', name: 'Smartwatch',
         category: 'Accessory', stock: 2, stockMin: 5, stockMax: 20,
         demandForecast24h: 6, coverageRatio: 0.33,
         riskLevel: 'critical', riskScore: 0.88,
@@ -150,12 +155,13 @@ export class MockDataService {
         confidence: 0.84, lastUpdated: '2:32 PM', trend: 'down'
       },
       {
-        id: 'i6', sku: 'ASRPREM', name: 'Premium Insurance',
-        category: 'Service', stock: 999, stockMin: 0, stockMax: 999,
+        // SKU matches backend ACC-CHG-001
+        id: 'i6', sku: 'ACC-CHG-001', name: 'Premium Charger',
+        category: 'Accessory', stock: 999, stockMin: 0, stockMax: 999,
         demandForecast24h: 12, coverageRatio: 5.0,
         riskLevel: 'ok', riskScore: 0.02,
         recommendation: 'Actively promote',
-        recommendationDetail: 'Digital product — no stock constraint. High margin. Rain context is favorable.',
+        recommendationDetail: 'High margin accessory. Rain context is favorable for upsell.',
         confidence: 0.99, lastUpdated: '2:32 PM', trend: 'up'
       },
     ];
@@ -164,20 +170,20 @@ export class MockDataService {
   getInventoryAlerts(): InventoryAlert[] {
     return [
       {
-        id: 'a1', type: 'rupture', sku: 'IPH16PRO', urgency: 'critical',
-        message: 'iPhone 16 Pro — 3 units remaining',
+        id: 'a1', type: 'rupture', sku: 'PHN-IPH-15', urgency: 'critical',
+        message: 'iPhone 15 — 3 units remaining',
         action: 'Order 15 units immediately',
         time: '2:32 PM'
       },
       {
-        id: 'a2', type: 'redistribution', sku: 'APLWTCH', urgency: 'high',
-        message: 'Apple Watch S10 — critical stock level',
+        id: 'a2', type: 'redistribution', sku: 'ACC-WAT-001', urgency: 'high',
+        message: 'Smartwatch — critical stock level',
         action: 'Redistribute from BTQ-08',
         time: '2:15 PM'
       },
       {
-        id: 'a3', type: 'rupture', sku: 'AIRPDP3', urgency: 'high',
-        message: 'AirPods Pro 3 — demand peak expected at 3 PM',
+        id: 'a3', type: 'rupture', sku: 'ACC-BUD-001', urgency: 'high',
+        message: 'Wireless Earbuds — demand peak expected at 3 PM',
         action: 'Order 10 units',
         time: '2:10 PM'
       },
@@ -185,47 +191,47 @@ export class MockDataService {
   }
 
   getProductMix(): ProductMix[] {
-  return [
-    {
-      id: 'pm1', name: 'Mobile Plans', color: '#6C5CE7',
-      salesActual: 56, salesForecast: 65,
-      revenue: 2380, revenueForecast: 2760,
-      unitsSold: 14, unitsForecast: 18,
-      trend: 'down', trendVal: '-14%', alert: false,
-      stockUnits: 999, stockMin: 0, stockRisk: 'ok'
-    },
-    {
-      id: 'pm2', name: 'Fiber / Box', color: '#00B894',
-      salesActual: 30, salesForecast: 28,
-      revenue: 1470, revenueForecast: 1372,
-      unitsSold: 9, unitsForecast: 8,
-      trend: 'up', trendVal: '+7%', alert: false,
-      stockUnits: 18, stockMin: 4, stockRisk: 'ok'
-    },
-    {
-      id: 'pm3', name: 'Handsets', color: '#2D9CDB',
-      salesActual: 48, salesForecast: 60,
-      revenue: 3890, revenueForecast: 4860,
-      unitsSold: 6, unitsForecast: 8,
-      trend: 'down', trendVal: '-25%', alert: true,
-      stockUnits: 3, stockMin: 8, stockRisk: 'critical'
-    },
-    {
-      id: 'pm4', name: 'SIM / Top-up', color: '#F9A825',
-      salesActual: 72, salesForecast: 55,
-      revenue: 864, revenueForecast: 660,
-      unitsSold: 24, unitsForecast: 18,
-      trend: 'up', trendVal: '+31%', alert: false,
-      stockUnits: 87, stockMin: 10, stockRisk: 'ok'
-    },
-    {
-      id: 'pm5', name: 'Accessories', color: '#E74C3C',
-      salesActual: 18, salesForecast: 40,
-      revenue: 420, revenueForecast: 960,
-      unitsSold: 4, unitsForecast: 9,
-      trend: 'down', trendVal: '-56%', alert: true,
-      stockUnits: 7, stockMin: 5, stockRisk: 'low'
-    },
-  ];
-}
+    return [
+      {
+        id: 'pm1', name: 'Mobile Plans', color: '#6C5CE7',
+        salesActual: 56, salesForecast: 65,
+        revenue: 2380, revenueForecast: 2760,
+        unitsSold: 14, unitsForecast: 18,
+        trend: 'down', trendVal: '-14%', alert: false,
+        stockUnits: 999, stockMin: 0, stockRisk: 'ok'
+      },
+      {
+        id: 'pm2', name: 'Fiber / Box', color: '#00B894',
+        salesActual: 30, salesForecast: 28,
+        revenue: 1470, revenueForecast: 1372,
+        unitsSold: 9, unitsForecast: 8,
+        trend: 'up', trendVal: '+7%', alert: false,
+        stockUnits: 18, stockMin: 4, stockRisk: 'ok'
+      },
+      {
+        id: 'pm3', name: 'Handsets', color: '#2D9CDB',
+        salesActual: 48, salesForecast: 60,
+        revenue: 3890, revenueForecast: 4860,
+        unitsSold: 6, unitsForecast: 8,
+        trend: 'down', trendVal: '-25%', alert: true,
+        stockUnits: 3, stockMin: 8, stockRisk: 'critical'
+      },
+      {
+        id: 'pm4', name: 'SIM / Top-up', color: '#F9A825',
+        salesActual: 72, salesForecast: 55,
+        revenue: 864, revenueForecast: 660,
+        unitsSold: 24, unitsForecast: 18,
+        trend: 'up', trendVal: '+31%', alert: false,
+        stockUnits: 87, stockMin: 10, stockRisk: 'ok'
+      },
+      {
+        id: 'pm5', name: 'Accessories', color: '#E74C3C',
+        salesActual: 18, salesForecast: 40,
+        revenue: 420, revenueForecast: 960,
+        unitsSold: 4, unitsForecast: 9,
+        trend: 'down', trendVal: '-56%', alert: true,
+        stockUnits: 7, stockMin: 5, stockRisk: 'low'
+      },
+    ];
+  }
 }

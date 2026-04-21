@@ -1,12 +1,14 @@
-import { Component, computed, signal } from '@angular/core';
+import { Component, computed, signal, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
+import { HttpClientModule } from '@angular/common/http';
 
 import { Advisor, CoachingCard } from '../../core/models/advisor';
 import { ProductMix, StoreMetrics } from '../../core/models/store';
 import { MockDataService } from '../../core/services/mock-data';
 import { FlipKpiCardComponent, FlipCardData } from '../../shared/components/flip-kpi-card/flip-kpi-card';
 import { MetricCardComponent } from '../../shared/components/metric-card/metric-card';
+import { InventoryApiService, InventoryApiItem, InventorySummary } from '../../core/services/inventory-api.service';
 
 interface HourlyPoint {
   hour:     string;
@@ -32,25 +34,72 @@ interface RiskHour {
 @Component({
   selector:    'app-dashboard',
   standalone:  true,
-  imports:     [CommonModule, RouterLink, MetricCardComponent, FlipKpiCardComponent],
+  imports:     [CommonModule, RouterLink, MetricCardComponent, FlipKpiCardComponent, HttpClientModule],
   templateUrl: './dashboard.html',
   styleUrl:    './dashboard.scss'
 })
-export class DashboardComponent {
+export class DashboardComponent implements OnInit {
 
   store!:     StoreMetrics;
   advisors:   Advisor[]      = [];
   cards:      CoachingCard[] = [];
   productMix = signal<ProductMix[]>([]);
 
-  constructor(private data: MockDataService) {
+  constructor(
+    private data:   MockDataService,
+    private invApi: InventoryApiService,
+  ) {
     this.store      = this.data.getStoreMetrics();
     this.advisors   = this.data.getAdvisors();
     this.cards      = this.data.getCoachingCards();
     this.productMix.set(this.data.getProductMix());
   }
 
-  // ── Flip KPI cards ──
+  ngOnInit(): void {
+    this.invApi.getStore('STORE-001').subscribe({
+      next:  payload => this._applyAgentData(payload.items, payload.summary),
+      error: err     => console.warn('Stock agent unavailable, using mock data:', err),
+    });
+  }
+
+  private _applyAgentData(items: InventoryApiItem[], summary: InventorySummary): void {
+    // ── 1. Stock health flip card (index 3 only) ──────────────────────────
+    this.flipCards = this.flipCards.map((card, i) => {
+      if (i !== 3) return card;
+      return {
+        ...card,
+        value:    String(summary.criticalCount),
+        suffix:   'critical',
+        trend:    `${summary.okCount} / ${summary.totalSkus} SKUs optimal`,
+        trendDir: (summary.criticalCount === 0 ? 'up' : 'down') as 'up' | 'down',
+        backTitle: 'Inventory status',
+        backLines: summary.backLines,
+      };
+    });
+
+    // ── 2. stockKpi block ─────────────────────────────────────────────────
+    this.stockKpi = {
+      critical:    summary.criticalCount,
+      total:       summary.totalSkus,
+      okCount:     summary.okCount,
+      allOk:       summary.allOk,
+      avgCoverage: summary.avgCoverageRatio,
+    };
+
+    // ── 3. inventoryVsSales — stock, demand24h, risk only ─────────────────
+    this.inventoryVsSales = this.inventoryVsSales.map(entry => {
+      const a = items.find(i => i.sku === entry.sku);
+      if (!a) return entry;
+      return {
+        ...entry,
+        stock:     a.stock,
+        demand24h: a.demandForecast24h,
+        risk:      a.riskLevel as 'critical' | 'high' | 'ok',
+      };
+    });
+  }
+
+  // ── Flip KPI cards ────────────────────────────────────────────────────────
   flipCards: FlipCardData[] = [
     {
       label: 'Visitors / h', value: '42',
@@ -94,7 +143,7 @@ export class DashboardComponent {
     },
   ];
 
-  // ── Hourly sales chart ──
+  // ── Hourly sales chart ────────────────────────────────────────────────────
   hourlyData: HourlyPoint[] = [
     { hour: '9 AM',  actual: 1,    forecast: 1.2, target: 2 },
     { hour: '10 AM', actual: 2,    forecast: 2.1, target: 2 },
@@ -120,7 +169,7 @@ export class DashboardComponent {
     return Math.round((val / this.maxChart()) * 100);
   }
 
-  // ── Hourly performance chart ──
+  // ── Hourly performance chart ──────────────────────────────────────────────
   hourlyPerf: HourlyPerf[] = [
     { hour: '9AM',  actual: 38,  target: 60,  forecast: 65,  risk: false },
     { hour: '10AM', actual: 82,  target: 95,  forecast: 90,  risk: false },
@@ -180,7 +229,7 @@ export class DashboardComponent {
     return gap < -25 ? '#E74C3C' : gap < -15 ? '#F9A825' : '#00B894';
   }
 
-  // ── Heatmap ──
+  // ── Heatmap ───────────────────────────────────────────────────────────────
   heatHours = ['11AM','12PM','1PM','2PM','3PM','4PM','5PM','6PM'];
 
   heatRows: { key: string; label: string }[] = [
@@ -208,7 +257,7 @@ export class DashboardComponent {
     return ['','Low','Med','High','Crit','Crit'][val] ?? '';
   }
 
-  // ── Lead time tracker ──
+  // ── Lead time tracker ─────────────────────────────────────────────────────
   leadTimeData = [
     { label: 'Top-up',      days: 4, status: 'ok'   },
     { label: 'Smartphones', days: 7, status: 'late'  },
@@ -241,7 +290,7 @@ export class DashboardComponent {
     return Math.round((this.leadTimeTarget / this.leadTimeMax) * 100);
   }
 
-  // ── Stock KPI ──
+  // ── Stock KPI — starts on mock, agent overwrites in ngOnInit ─────────────
   stockKpi = {
     critical:    2,
     total:       6,
@@ -250,7 +299,7 @@ export class DashboardComponent {
     avgCoverage: 1.8,
   };
 
-  // ── Stock risk helpers ──
+  // ── Stock risk helpers ────────────────────────────────────────────────────
   stockRiskColor(r: string): string {
     if (r === 'critical') return '#E74C3C';
     if (r === 'low')      return '#F9A825';
@@ -275,7 +324,7 @@ export class DashboardComponent {
     return Math.min(Math.round((units / max) * 100), 100);
   }
 
-  // ── Coaching cards ──
+  // ── Coaching cards ────────────────────────────────────────────────────────
   priorityColor(p: string): string {
     return p === 'HIGH' ? '#E74C3C' : p === 'MED' ? '#F9A825' : '#00B894';
   }
@@ -300,7 +349,7 @@ export class DashboardComponent {
     );
   }
 
-  // ── Team ranking ──
+  // ── Team ranking ──────────────────────────────────────────────────────────
   perfColor(p: number): string {
     return p >= 80 ? '#00B894' : p >= 50 ? '#F9A825' : '#E74C3C';
   }
@@ -320,7 +369,7 @@ export class DashboardComponent {
     return m[s] ?? s;
   }
 
-  // ── Product Mix ──
+  // ── Product Mix ───────────────────────────────────────────────────────────
   attainmentColor(actual: number, forecast: number): string {
     const ratio = actual / forecast;
     if (ratio >= 1)    return '#00B894';
@@ -343,88 +392,84 @@ export class DashboardComponent {
   }
 
   trackById(_: number, item: { id: string }) { return item.id; }
-  // ── Inventory vs Sales — histogram ──
-inventoryVsSales = [
-  {
-    id: 'p1', name: 'iPhone 16 Pro',     shortName: 'iPhone 16',
-    color: '#6C5CE7', risk: 'critical' as const,
-    stock: 3,   stockMax: 40,  demand24h: 11, sold: 14, target: 18,
-    revenue: 2380
-  },
-  {
-    id: 'p2', name: 'Samsung A55',        shortName: 'Samsung A55',
-    color: '#2D9CDB', risk: 'ok' as const,
-    stock: 24,  stockMax: 35,  demand24h: 8,  sold: 9,  target: 8,
-    revenue: 1470
-  },
-  {
-    id: 'p3', name: 'AirPods Pro 3',      shortName: 'AirPods',
-    color: '#F9A825', risk: 'high' as const,
-    stock: 7,   stockMax: 25,  demand24h: 9,  sold: 4,  target: 9,
-    revenue: 420
-  },
-  {
-    id: 'p4', name: 'Apple Watch S10',    shortName: 'Watch S10',
-    color: '#E74C3C', risk: 'critical' as const,
-    stock: 2,   stockMax: 20,  demand24h: 6,  sold: 3,  target: 6,
-    revenue: 1347
-  },
-  {
-    id: 'p5', name: 'Fiber Box 2G Pro',   shortName: 'Fiber 2G',
-    color: '#00B894', risk: 'ok' as const,
-    stock: 18,  stockMax: 30,  demand24h: 5,  sold: 9,  target: 8,
-    revenue: 1470
-  },
-  {
-    id: 'p6', name: 'Premium Insurance',  shortName: 'Insurance',
-    color: '#A29BFE', risk: 'ok' as const,
-    stock: 999, stockMax: 999, demand24h: 12, sold: 7,  target: 10,
-    revenue: 630
-  },
-];
 
-invChartMax = computed(() => {
-  const vals = this.inventoryVsSales.flatMap(p => [
-    p.stock >= 999 ? 0 : p.stock,
-    p.demand24h,
-    p.sold,
-    p.target,
-    p.stockMax >= 999 ? 0 : p.stockMax
-  ]);
-  return Math.max(...vals) * 1.15;
-});
+  // ── Inventory vs Sales histogram ──────────────────────────────────────────
+  // sku added for agent matching. sold/target/revenue/color stay mock permanently.
+  inventoryVsSales = [
+    {
+      id: 'p1', sku: 'IPH16PRO', name: 'iPhone 16 Pro', shortName: 'iPhone 16',
+      color: '#6C5CE7', risk: 'critical' as const,
+      stock: 3,   stockMax: 40,  demand24h: 11, sold: 14, target: 18, revenue: 2380
+    },
+    {
+      id: 'p2', sku: 'SAMA55', name: 'Samsung A55', shortName: 'Samsung A55',
+      color: '#2D9CDB', risk: 'ok' as const,
+      stock: 24,  stockMax: 35,  demand24h: 8,  sold: 9,  target: 8,  revenue: 1470
+    },
+    {
+      id: 'p3', sku: 'AIRPDP3', name: 'AirPods Pro 3', shortName: 'AirPods',
+      color: '#F9A825', risk: 'high' as const,
+      stock: 7,   stockMax: 25,  demand24h: 9,  sold: 4,  target: 9,  revenue: 420
+    },
+    {
+      id: 'p4', sku: 'APLWTCH', name: 'Apple Watch S10', shortName: 'Watch S10',
+      color: '#E74C3C', risk: 'critical' as const,
+      stock: 2,   stockMax: 20,  demand24h: 6,  sold: 3,  target: 6,  revenue: 1347
+    },
+    {
+      id: 'p5', sku: 'FIB2GPRO', name: 'Fiber Box 2G Pro', shortName: 'Fiber 2G',
+      color: '#00B894', risk: 'ok' as const,
+      stock: 18,  stockMax: 30,  demand24h: 5,  sold: 9,  target: 8,  revenue: 1470
+    },
+    {
+      id: 'p6', sku: 'ASRPREM', name: 'Premium Insurance', shortName: 'Insurance',
+      color: '#A29BFE', risk: 'ok' as const,
+      stock: 999, stockMax: 999, demand24h: 12, sold: 7,  target: 10, revenue: 630
+    },
+  ];
 
-invBarH(val: number): number {
-  if (val >= 999) return 100;
-  return Math.round((val / this.invChartMax()) * 100);
-}
+  invChartMax = computed(() => {
+    const vals = this.inventoryVsSales.flatMap(p => [
+      p.stock >= 999 ? 0 : p.stock,
+      p.demand24h,
+      p.sold,
+      p.target,
+      p.stockMax >= 999 ? 0 : p.stockMax
+    ]);
+    return Math.max(...vals) * 1.15;
+  });
 
-invRiskColor(r: string): string {
-  if (r === 'critical') return '#E74C3C';
-  if (r === 'high')     return '#F9A825';
-  return '#00B894';
-}
+  invBarH(val: number): number {
+    if (val >= 999) return 100;
+    return Math.round((val / this.invChartMax()) * 100);
+  }
 
-invRiskBg(r: string): string {
-  if (r === 'critical') return '#FDEDEC';
-  if (r === 'high')     return '#FFF8E1';
-  return '#E0FAF4';
-}
+  invRiskColor(r: string): string {
+    if (r === 'critical') return '#E74C3C';
+    if (r === 'high')     return '#F9A825';
+    return '#00B894';
+  }
 
-invRiskLabel(r: string): string {
-  if (r === 'critical') return 'Critical';
-  if (r === 'high')     return 'High';
-  return 'OK';
-}
+  invRiskBg(r: string): string {
+    if (r === 'critical') return '#FDEDEC';
+    if (r === 'high')     return '#FFF8E1';
+    return '#E0FAF4';
+  }
 
-invCoverage(stock: number, demand: number): string {
-  if (stock >= 999) return '∞';
-  return (stock / demand).toFixed(1) + 'x';
-}
+  invRiskLabel(r: string): string {
+    if (r === 'critical') return 'Critical';
+    if (r === 'high')     return 'High';
+    return 'OK';
+  }
 
-invCoverageColor(stock: number, demand: number): string {
-  if (stock >= 999) return '#00B894';
-  const r = stock / demand;
-  return r < 0.5 ? '#E74C3C' : r < 1.0 ? '#F9A825' : '#00B894';
-}
+  invCoverage(stock: number, demand: number): string {
+    if (stock >= 999) return '∞';
+    return (stock / demand).toFixed(1) + 'x';
+  }
+
+  invCoverageColor(stock: number, demand: number): string {
+    if (stock >= 999) return '#00B894';
+    const r = stock / demand;
+    return r < 0.5 ? '#E74C3C' : r < 1.0 ? '#F9A825' : '#00B894';
+  }
 }

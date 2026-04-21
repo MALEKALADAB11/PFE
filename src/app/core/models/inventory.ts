@@ -10,8 +10,8 @@ export interface InventoryItem {
   coverageRatio: number;
   riskLevel: 'critical' | 'high' | 'ok';
   riskScore: number;
-  recommendation: string;
-  recommendationDetail: string;
+  recommendation: string | null;
+  recommendationDetail: string | null;
   confidence: number;
   lastUpdated: string;
   trend: 'down' | 'up' | 'stable';

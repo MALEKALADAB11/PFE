@@ -1,0 +1,62 @@
+<header class="navbar">
+
+  <!-- Brand -->
+  <div class="navbar__brand">
+    <div class="brand-logo">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+           stroke="white" stroke-width="2.5" stroke-linecap="round">
+        <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+        <path d="M2 17l10 5 10-5"/>
+        <path d="M2 12l10 5 10-5"/>
+      </svg>
+    </div>
+    <div class="brand-text">
+      <span class="brand-name">AI Sales Coach</span>
+      <span class="brand-sub">Coaching Engine</span>
+    </div>
+  </div>
+
+  <!-- Navigation -->
+  <nav class="navbar__nav">
+    @for (item of navItems; track item.route) {
+      <a
+        [routerLink]="item.route"
+        routerLinkActive="is-active"
+        class="nav-link"
+        [class.nav-link--new]="item.isNew">
+        <span class="nav-link__icon" [innerHTML]="getIcon(item.icon)"></span>
+        <span class="nav-link__label">{{ item.label }}</span>
+      </a>
+    }
+  </nav>
+
+  <!-- Right zone -->
+  <div class="navbar__right">
+
+    <div class="agents-pill">
+      <span class="agents-pill__dot"></span>
+      <span>{{ agentsActive() }} active agents</span>
+    </div>
+
+    <div class="store-selector">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2">
+        <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+      </svg>
+      <span>{{ storeName() }}</span>
+    </div>
+
+    <div class="navbar__time">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"/>
+        <polyline points="12,6 12,12 16,14"/>
+      </svg>
+      <span class="mono">{{ currentTime() }}</span>
+    </div>
+
+    <div class="navbar__avatar">MG</div>
+
+  </div>
+
+</header>

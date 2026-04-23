@@ -1,0 +1,159 @@
+// ═══════════════════════════════════════
+// DESIGN TOKENS — AI Sales Coach
+// ═══════════════════════════════════════
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  // Colors
+  --color-bg:           #F8F9FC;
+  --color-surface:      #FFFFFF;
+  --color-surface-2:    #F2F4F8;
+  --color-border:       rgba(0, 0, 0, 0.08);
+  --color-border-md:    rgba(0, 0, 0, 0.14);
+
+  // Brand
+  --color-purple:       #6C5CE7;
+  --color-purple-light: #EEE9FF;
+  --color-purple-dark:  #4834D4;
+  --color-teal:         #00B894;
+  --color-teal-light:   #E0FAF4;
+  --color-teal-dark:    #007A63;
+  --color-amber:        #F9A825;
+  --color-amber-light:  #FFF8E1;
+  --color-red:          #E74C3C;
+  --color-red-light:    #FDEDEC;
+  --color-blue:         #2D9CDB;
+  --color-blue-light:   #E8F4FD;
+
+  // Text
+  --text-primary:       #1A1D2E;
+  --text-secondary:     #6B7280;
+  --text-tertiary:      #9CA3AF;
+
+  // Spacing
+  --radius-sm:  6px;
+  --radius-md:  10px;
+  --radius-lg:  16px;
+  --radius-xl:  24px;
+
+  // Shadows
+  --shadow-sm:  0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md:  0 4px 16px rgba(0,0,0,0.08), 0 2px 6px rgba(0,0,0,0.04);
+  --shadow-lg:  0 12px 40px rgba(0,0,0,0.10), 0 4px 12px rgba(0,0,0,0.06);
+
+  // Transitions
+  --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+// ═══ RESET ═══
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  color: var(--text-primary);
+  background: var(--color-bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+// ═══ UTILITIES ═══
+.mono { font-family: 'JetBrains Mono', monospace; }
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+
+  &.badge-purple { background: var(--color-purple-light); color: var(--color-purple-dark); }
+  &.badge-teal   { background: var(--color-teal-light);   color: var(--color-teal-dark);   }
+  &.badge-amber  { background: var(--color-amber-light);  color: #B45309;                   }
+  &.badge-red    { background: var(--color-red-light);    color: #C0392B;                   }
+  &.badge-blue   { background: var(--color-blue-light);   color: #1A6FA8;                   }
+  &.badge-gray   { background: var(--color-surface-2);    color: var(--text-secondary);      }
+}
+
+// ═══ CARD BASE ═══
+.card {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-sm);
+  transition: var(--transition);
+
+  &:hover { box-shadow: var(--shadow-md); }
+}
+
+// ═══ FLIP CARD ═══
+.flip-card {
+  perspective: 1000px;
+  cursor: pointer;
+
+  .flip-card-inner {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    transition: transform 0.55s cubic-bezier(0.4, 0, 0.2, 1);
+    transform-style: preserve-3d;
+  }
+
+  &:hover .flip-card-inner,
+  &.flipped .flip-card-inner {
+    transform: rotateY(180deg);
+  }
+
+  .flip-front,
+  .flip-back {
+    position: absolute;
+    inset: 0;
+    backface-visibility: hidden;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-sm);
+    padding: 20px;
+  }
+
+  .flip-back {
+    transform: rotateY(180deg);
+    background: linear-gradient(135deg, var(--color-purple) 0%, var(--color-purple-dark) 100%);
+    color: white;
+    border-color: transparent;
+  }
+}
+
+// ═══ PROGRESS BAR ═══
+.progress-track {
+  height: 6px;
+  background: var(--color-surface-2);
+  border-radius: 3px;
+  overflow: hidden;
+
+  .progress-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    background: var(--color-purple);
+
+    &.teal  { background: var(--color-teal); }
+    &.amber { background: var(--color-amber); }
+    &.red   { background: var(--color-red); }
+  }
+}
+
+// ═══ SCROLLBAR ═══
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-md);
+  border-radius: 3px;
+  &:hover { background: var(--text-tertiary); }
+}

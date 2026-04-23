@@ -169,7 +169,6 @@
   width: 10px;
   height: 10px;
   border-radius: 2px;
-
   &--dashed {
     background: transparent;
     border: 2px dashed;
@@ -189,7 +188,6 @@
   flex-direction: column;
   justify-content: space-between;
   padding-bottom: 24px;
-
   span {
     font-size: 10px;
     color: var(--text-tertiary);
@@ -409,7 +407,6 @@
   justify-content: space-between;
   padding-bottom: 28px;
   flex-shrink: 0;
-
   span {
     font-size: 10px;
     color: var(--text-tertiary);

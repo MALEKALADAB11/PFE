@@ -16,18 +16,18 @@ export class ApiService {
     return this.http.get(`${this.base}/stores/${storeId}/advisors`);
   }
 
+
   getContext(storeId: string): Observable<any> {
     return this.http.get(`${this.base}/stores/${storeId}/context`);
   }
-
   getLiveAnalysis(storeId: string): Observable<any> {
     return this.http.get(`${this.base}/stores/${storeId}/live-analysis`);
   }
 
+
   getForecastEOD(storeId: string): Observable<any> {
     return this.http.get(`${this.base}/forecast/eod/${storeId}`);
   }
-
   getForecastHourly(storeId: string): Observable<any> {
     return this.http.get(`${this.base}/forecast/hourly/${storeId}`);
   }

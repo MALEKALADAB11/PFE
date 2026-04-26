@@ -116,104 +116,116 @@
     ══════════════════════════════ -->
     <div class="inv-main-left">
 
-      <!-- ── QUADRANT CLOUD STOCK ── -->
+      <!-- ── QUADRANT CHART ── -->
       <div class="card inv-quadrant-card">
         <div class="card-header">
           <div>
-            <h2 class="card-title">Cloud Quarter Stock — by product</h2>
-            <p class="card-sub">Stock vs Demand 24h · Bubble size = Risk score · LIVE</p>
+            <h2 class="card-title">Stock × Sales Quadrant</h2>
+            <p class="card-sub">
+              X axis: stock level · Y axis: 24h demand · bubble size: risk score · LIVE
+            </p>
           </div>
           <div class="inv-quadrant-legend">
-            <span class="inv-qleg inv-qleg--critical">
-              <span class="inv-qleg__dot" style="background:#E74C3C"></span>Critical
+            <span class="inv-qleg inv-qleg--star">
+              <span class="inv-qleg__dot"></span>
+              Best combination
             </span>
-            <span class="inv-qleg inv-qleg--high">
-              <span class="inv-qleg__dot" style="background:#F9A825"></span>High
-            </span>
-            <span class="inv-qleg inv-qleg--medium">
-              <span class="inv-qleg__dot" style="background:#2D9CDB"></span>Medium
+            <span class="inv-qleg inv-qleg--rupture">
+              <span class="inv-qleg__dot"></span>
+              Stockout risk
             </span>
             <span class="inv-qleg inv-qleg--ok">
-              <span class="inv-qleg__dot" style="background:#00B894"></span>OK
+              <span class="inv-qleg__dot"></span>
+              Low sales / low stock
+            </span>
+            <span class="inv-qleg inv-qleg--overstock">
+              <span class="inv-qleg__dot"></span>
+              Overstock risk
             </span>
           </div>
         </div>
 
-        <!-- Quadrant SVG chart -->
         <div class="inv-quadrant-wrap">
 
-          <!-- Quadrant labels (background) -->
-          <div class="inv-quadrant-bg">
-            <div class="inv-q-zone inv-q-zone--tl">
-              <span class="inv-q-zone__label">Surplus<br><small>Overstock risk</small></span>
-            </div>
-            <div class="inv-q-zone inv-q-zone--tr">
-              <span class="inv-q-zone__label">Optimal<br><small>Balanced stock</small></span>
-            </div>
-            <div class="inv-q-zone inv-q-zone--bl">
-              <span class="inv-q-zone__label">Urgent<br><small>Stockout imminent</small></span>
-            </div>
-            <div class="inv-q-zone inv-q-zone--br">
-              <span class="inv-q-zone__label">Watch<br><small>High demand pressure</small></span>
-            </div>
+          <!-- Y axis label -->
+          <div class="inv-quadrant-yaxis">
+            <span class="inv-quadrant-yaxis__top">High demand</span>
+            <span class="inv-quadrant-yaxis__label">24h Demand →</span>
+            <span class="inv-quadrant-yaxis__bottom">Low demand</span>
           </div>
 
-          <!-- Axis labels -->
-          <div class="inv-q-axis-x">
-            <span>Low demand →</span>
-            <span>High demand</span>
+          <!-- Plot area -->
+          <div class="inv-quadrant-plot">
+
+            <!-- Quadrant backgrounds -->
+            <div class="inv-q-bg inv-q-bg--tl"
+                 title="High demand, low stock → Stockout risk">
+              <span class="inv-q-bg__label">⚠ Stockout risk</span>
+            </div>
+            <div class="inv-q-bg inv-q-bg--tr"
+                 title="High demand, high stock → Best combination">
+              <span class="inv-q-bg__label">★ Best combo</span>
+            </div>
+            <div class="inv-q-bg inv-q-bg--bl"
+                 title="Low demand, low stock → OK / slow">
+              <span class="inv-q-bg__label">✓ OK / slow</span>
+            </div>
+            <div class="inv-q-bg inv-q-bg--br"
+                 title="Low demand, high stock → Overstock risk">
+              <span class="inv-q-bg__label">↑ Overstock risk</span>
+            </div>
+
+            <!-- Axis dividers -->
+            <div class="inv-q-divider inv-q-divider--v"></div>
+            <div class="inv-q-divider inv-q-divider--h"></div>
+
+            <!-- Dots -->
+            @for (p of items(); track p.id) {
+              <div class="inv-q-dot"
+                   [class.inv-q-dot--flipped]="isFlipped(p.id)"
+                   [style.left.%]="quadrantX(p)"
+                   [style.bottom.%]="quadrantY(p)"
+                   [style.width.px]="quadrantSize(p)"
+                   [style.height.px]="quadrantSize(p)"
+                   [style.background]="riskColor(p.riskLevel)"
+                   [style.border-color]="riskColor(p.riskLevel)"
+                   [title]="p.name + ' — Stock: ' + p.stock + ' · Demand: ' + p.demandForecast24h"
+                   (click)="toggleFlip(p.id)">
+                <span class="inv-q-dot__label">
+                  {{ p.name.split(' ')[0] }}
+                </span>
+              </div>
+            }
+
           </div>
-          <div class="inv-q-axis-y">
+
+          <!-- X axis label -->
+          <div class="inv-quadrant-xaxis">
+            <span>Low stock</span>
+            <span class="inv-quadrant-xaxis__label">Stock level →</span>
             <span>High stock</span>
-            <span>← Low stock</span>
           </div>
-
-          <!-- Axis lines (center cross) -->
-          <div class="inv-q-hline"></div>
-          <div class="inv-q-vline"></div>
-
-          <!-- Product bubbles -->
-          @for (item of items(); track item.id) {
-            <div class="inv-q-bubble"
-                 [style.left.%]="getQuadrantX(item)"
-                 [style.bottom.%]="getQuadrantY(item)"
-                 [style.width.px]="getBubbleSize(item)"
-                 [style.height.px]="getBubbleSize(item)"
-                 [style.background]="riskColor(item.riskLevel)"
-                 [style.opacity]="0.85"
-                 [title]="item.name + ' — Stock: ' + item.stock + ' | Demand 24h: ' + item.demandForecast24h + ' | Coverage: ' + item.coverageRatio + 'x'"
-                 (click)="toggleFlip(item.id)">
-              <span class="inv-q-bubble__label">
-                {{ item.name.split(' ')[0] }}
-              </span>
-              <span class="inv-q-bubble__coverage"
-                    [style.color]="riskColor(item.riskLevel)">
-                {{ item.coverageRatio }}x
-              </span>
-            </div>
-          }
 
         </div>
 
-        <!-- Footer mini-summary -->
+        <!-- Footer: per-quadrant counts -->
         <div class="inv-quadrant-footer">
-          @for (p of items(); track p.id) {
-            <div class="inv-histo-foot-item">
-              <span class="inv-histo-foot-name">
-                {{ p.name.split(' ')[0] }}
-              </span>
-              <span class="inv-histo-foot-stock"
-                    [style.color]="riskColor(p.riskLevel)">
-                {{ p.stock >= 999 ? '∞' : p.stock }} / {{ p.stockMax >= 999 ? '∞' : p.stockMax }}
-              </span>
-              <div class="inv-histo-foot-track">
-                <div class="inv-histo-foot-fill"
-                     [style.width.%]="p.stockMax >= 999 ? 100 : (p.stock / p.stockMax * 100)"
-                     [style.background]="riskColor(p.riskLevel)">
-                </div>
-              </div>
-            </div>
-          }
+          <div class="inv-q-foot-zone inv-q-foot-zone--rupture">
+            <span class="inv-q-foot-zone__count">{{ quadrantCounts().stockout }}</span>
+            <span class="inv-q-foot-zone__label">⚠ Stockout risk</span>
+          </div>
+          <div class="inv-q-foot-zone inv-q-foot-zone--star">
+            <span class="inv-q-foot-zone__count">{{ quadrantCounts().star }}</span>
+            <span class="inv-q-foot-zone__label">★ Best combination</span>
+          </div>
+          <div class="inv-q-foot-zone inv-q-foot-zone--ok">
+            <span class="inv-q-foot-zone__count">{{ quadrantCounts().ok }}</span>
+            <span class="inv-q-foot-zone__label">✓ OK / slow movers</span>
+          </div>
+          <div class="inv-q-foot-zone inv-q-foot-zone--overstock">
+            <span class="inv-q-foot-zone__count">{{ quadrantCounts().overstock }}</span>
+            <span class="inv-q-foot-zone__label">↑ Overstock risk</span>
+          </div>
         </div>
 
       </div>

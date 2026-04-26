@@ -4,6 +4,7 @@ import {
 } from '@angular/core';
 import { CommonModule }  from '@angular/common';
 import { RouterLink }    from '@angular/router';
+import { HttpClientModule } from '@angular/common/http';
 
 import { Advisor, CoachingCard }    from '../../core/models/advisor';
 import { ProductMix, StoreMetrics } from '../../core/models/store';
@@ -15,6 +16,7 @@ import {
   FlipCardData
 } from '../../shared/components/flip-kpi-card/flip-kpi-card';
 import { MetricCardComponent } from '../../shared/components/metric-card/metric-card';
+import { InventoryApiService, InventoryApiItem, InventorySummary } from '../../core/services/inventory-api.service';
 
 interface HourlyPoint {
   hour:     string;
@@ -40,7 +42,7 @@ interface RiskHour {
 @Component({
   selector:    'app-dashboard',
   standalone:  true,
-  imports:     [CommonModule, RouterLink, MetricCardComponent, FlipKpiCardComponent],
+  imports:     [CommonModule, RouterLink, MetricCardComponent, FlipKpiCardComponent, HttpClientModule],
   templateUrl: './dashboard.html',
   styleUrl:    './dashboard.scss'
 })
@@ -171,7 +173,6 @@ export class Dashboard implements OnInit, OnDestroy {
     const cycleId = this.lastCycleId();
 
     return [
-      // ── Card 1 : Visitors ──────────────────────────
       {
         label:      'Visitors / h',
         value:      '42',
@@ -185,8 +186,6 @@ export class Dashboard implements OnInit, OnDestroy {
           'Rain reduces spontaneous walk-ins'
         ]
       },
-
-      // ── Card 2 : Revenue — données live ───────────
       {
         label:      'Revenue today',
         value:      Math.round(ca).toLocaleString(),
@@ -201,13 +200,10 @@ export class Dashboard implements OnInit, OnDestroy {
           `Gap: ${Math.round(target - ca).toLocaleString()} DT remaining`
         ]
       },
-
-      // ── Card 3 : Daily target — APP02 urgence ─────
       {
         label:      'Daily target',
         value:      att.toString(),
         suffix:     '%',
-        // Urgence vient directement de APP02
         trend:      `${gap.toFixed(0)}% gap — ${urgence} risk`,
         trendDir:   'down',
         accentColor: urgence === 'HIGH'   ? 'red'
@@ -219,21 +215,16 @@ export class Dashboard implements OnInit, OnDestroy {
           `MAPE: ${mape}% · ${cycleId ?? 'No cycle yet'}`
         ]
       },
-
-      // ── Card 4 : Stock ────────────────────────────
+      // ── Card 4 : Stock — driven by stockKpi + stockBackLines ─────────────
       {
-        label:      'Stock health',
-        value:      '2',
-        suffix:     'critical',
-        trend:      '3 / 6 SKUs optimal',
-        trendDir:   'down',
-        accentColor: 'red',
-        backTitle:  'Inventory status',
-        backLines: [
-          'iPhone 16 Pro: 3 units — risk 91%',
-          'Apple Watch S10: 2 units — risk 88%',
-          'Avg. coverage ratio: 1.8x',
-        ]
+        label:       'Stock health',
+        value:       String(this.stockKpi.critical),
+        suffix:      'critical',
+        trend:       `${this.stockKpi.okCount} / ${this.stockKpi.total} SKUs optimal`,
+        trendDir:    (this.stockKpi.critical === 0 ? 'up' : 'down') as 'up' | 'down',
+        accentColor: this.stockKpi.critical > 0 ? 'red' : 'teal',
+        backTitle:   'Inventory status',
+        backLines:   this.stockBackLines(),
       },
     ];
   }
@@ -398,12 +389,20 @@ export class Dashboard implements OnInit, OnDestroy {
     return Math.round((this.leadTimeTarget / this.leadTimeMax) * 100);
   }
 
-  // ── Stock KPI ─────────────────────────────────────────
+  // ── Stock KPI — starts on mock, agent overwrites in ngOnInit ─────────────
   stockKpi = {
     critical: 2, total: 6, okCount: 3,
     allOk: false, avgCoverage: 1.8,
   };
 
+  // Back-lines for the stock flip card — updated by _applyAgentData
+  stockBackLines = signal<string[]>([
+    'iPhone 16 Pro: 3 units — risk 91%',
+    'Apple Watch S10: 2 units — risk 88%',
+    'Avg. coverage ratio: 1.8x',
+  ]);
+
+  // ── Stock risk helpers ────────────────────────────────────────────────────
   stockRiskColor(r: string): string {
     if (r === 'critical') return '#E74C3C';
     if (r === 'low')      return '#F9A825';
@@ -496,40 +495,40 @@ export class Dashboard implements OnInit, OnDestroy {
     return Math.round((val / max) * 100);
   }
 
-  // ── Inventory histogram ───────────────────────────────
+  // ── Inventory histogram — sku added for agent matching ────────────────────
   inventoryVsSales = [
     {
-      id: 'p1', name: 'iPhone 16 Pro',    shortName: 'iPhone 16',
+      id: 'p1', sku: 'IPH16PRO',  name: 'iPhone 16 Pro',    shortName: 'iPhone 16',
       color: '#6C5CE7', risk: 'critical' as const,
       stock: 3,   stockMax: 40,  demand24h: 11,
       sold: 14,   target: 18,    revenue: 2380
     },
     {
-      id: 'p2', name: 'Samsung A55',       shortName: 'Samsung A55',
+      id: 'p2', sku: 'SAMA55',    name: 'Samsung A55',       shortName: 'Samsung A55',
       color: '#2D9CDB', risk: 'ok' as const,
       stock: 24,  stockMax: 35,  demand24h: 8,
       sold: 9,    target: 8,     revenue: 1470
     },
     {
-      id: 'p3', name: 'AirPods Pro 3',     shortName: 'AirPods',
+      id: 'p3', sku: 'AIRPDP3',   name: 'AirPods Pro 3',     shortName: 'AirPods',
       color: '#F9A825', risk: 'high' as const,
       stock: 7,   stockMax: 25,  demand24h: 9,
       sold: 4,    target: 9,     revenue: 420
     },
     {
-      id: 'p4', name: 'Apple Watch S10',   shortName: 'Watch S10',
+      id: 'p4', sku: 'APLWTCH',   name: 'Apple Watch S10',   shortName: 'Watch S10',
       color: '#E74C3C', risk: 'critical' as const,
       stock: 2,   stockMax: 20,  demand24h: 6,
       sold: 3,    target: 6,     revenue: 1347
     },
     {
-      id: 'p5', name: 'Fiber Box 2G Pro',  shortName: 'Fiber 2G',
+      id: 'p5', sku: 'FIB2GPRO',  name: 'Fiber Box 2G Pro',  shortName: 'Fiber 2G',
       color: '#00B894', risk: 'ok' as const,
       stock: 18,  stockMax: 30,  demand24h: 5,
       sold: 9,    target: 8,     revenue: 1470
     },
     {
-      id: 'p6', name: 'Premium Insurance', shortName: 'Insurance',
+      id: 'p6', sku: 'ASRPREM',   name: 'Premium Insurance', shortName: 'Insurance',
       color: '#A29BFE', risk: 'ok' as const,
       stock: 999, stockMax: 999, demand24h: 12,
       sold: 7,    target: 10,    revenue: 630
@@ -608,12 +607,13 @@ export class Dashboard implements OnInit, OnDestroy {
 
   // ── Constructor + Lifecycle ───────────────────────────
   constructor(
-    private data: MockDataService,
-    private api:  ApiService,
-    public  ws:   WebSocketService
+    private data:   MockDataService,
+    private api:    ApiService,
+    public  ws:     WebSocketService,
+    private invApi: InventoryApiService,
   ) {
-    this.store    = this.data.getStoreMetrics();
-    this.cards    = this.data.getCoachingCards();
+    this.store         = this.data.getStoreMetrics();
+    this.cards         = this.data.getCoachingCards();
     this.productMix.set(this.data.getProductMix());
     this._mockAdvisors = this.data.getAdvisors();
   }
@@ -630,14 +630,49 @@ export class Dashboard implements OnInit, OnDestroy {
 
     // 4 — Refresh HTTP toutes les 60s (fallback)
     setInterval(() => this.loadData(), 60000);
+
+    // 5 — Inventory agent overlay (APP08)
+    this.invApi.getStore('STORE-001').subscribe({
+      next:  payload => this._applyAgentData(payload.items, payload.summary),
+      error: err     => console.warn('Stock agent unavailable, using mock data:', err),
+    });
   }
 
   ngOnDestroy() {
     this.ws.disconnect();
   }
 
+  // ── Inventory agent overlay ───────────────────────────
+  private _applyAgentData(items: InventoryApiItem[], summary: InventorySummary): void {
+    // 1. stockKpi block
+    this.stockKpi = {
+      critical:    summary.criticalCount,
+      total:       summary.totalSkus,
+      okCount:     summary.okCount,
+      allOk:       summary.allOk,
+      avgCoverage: summary.avgCoverageRatio,
+    };
+
+    // 2. Flip card back-lines — built from live critical items
+    this.stockBackLines.set([
+      ...summary.backLines,
+      `Avg. coverage ratio: ${summary.avgCoverageRatio.toFixed(1)}x`,
+    ]);
+
+    // 3. inventoryVsSales — patch stock, demand24h, risk only
+    this.inventoryVsSales = this.inventoryVsSales.map(entry => {
+      const a = items.find(i => i.sku === entry.sku);
+      if (!a) return entry;
+      return {
+        ...entry,
+        stock:     a.stock,
+        demand24h: a.demandForecast24h,
+        risk:      a.riskLevel as 'critical' | 'high' | 'ok',
+      };
+    });
+  }
+
   private _watchAgentData() {
-    // Effect — surveille liveMetrics du WS pour extraire données APP02
     const interval = setInterval(() => {
       const live = this.ws.liveMetrics();
       if (live?.niveau_urgence) {
@@ -653,7 +688,6 @@ export class Dashboard implements OnInit, OnDestroy {
       }
     }, 5000);
 
-    // Nettoyer à la destruction
     const orig = this.ngOnDestroy.bind(this);
     this.ngOnDestroy = () => {
       clearInterval(interval);
@@ -662,7 +696,6 @@ export class Dashboard implements OnInit, OnDestroy {
   }
 
   private loadData() {
-    // Métriques boutique
     this.api.getStoreMetrics(this.storeId).subscribe({
       next: (d: any) => {
         this.liveMetrics.set(d);
@@ -671,19 +704,16 @@ export class Dashboard implements OnInit, OnDestroy {
       error: () => this.isLoading.set(false)
     });
 
-    // Advisors
     this.api.getAdvisors(this.storeId).subscribe({
       next: (d: any) => this.liveAdvisors.set(d.advisors ?? []),
       error: () => {}
     });
 
-    // Forecast EOD depuis APP02 via API
     this.api.getForecastEOD(this.storeId).subscribe({
       next: (d: any) => this.forecastEOD.set(d),
       error: () => {}
     });
 
-    // Forecast horaire — met à jour le chart
     this.api.getForecastHourly(this.storeId).subscribe({
       next: (d: any) => {
         if (d.hours?.length) {

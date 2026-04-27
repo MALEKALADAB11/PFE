@@ -4,6 +4,8 @@ import {
   AfterViewChecked, OnInit, OnDestroy
 } from '@angular/core';
 import { CommonModule }      from '@angular/common';
+import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 import { Advisor }           from '../../core/models/advisor';
 import { MockDataService }   from '../../core/services/mock-data';
 import { WebSocketService }  from '../../core/services/websocket.service';
@@ -253,6 +255,9 @@ export class ConseillerComponent
     },
   ];
 
+  private destroy$ = new Subject<void>();
+  private refreshTimer: any = null;
+
   constructor(
     private data: MockDataService,
     private api:  ApiService,
@@ -263,10 +268,12 @@ export class ConseillerComponent
 
   ngOnInit() {
     // 1 — Charger advisors depuis API
-    this.api.getAdvisors(this.storeId).subscribe({
-      next: d => this.liveAdvisors.set(d.advisors ?? []),
-      error: () => {}
-    });
+    this.api.getAdvisors(this.storeId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: d => this.liveAdvisors.set(d.advisors ?? []),
+        error: () => {}
+      });
 
     // 2 — Connecter WebSocket store pour CA live
     this.ws.connectStore(this.storeId);
@@ -275,15 +282,20 @@ export class ConseillerComponent
     this.ws.connectAdvisor(this.selectedId());
 
     // 4 — Refresh HTTP toutes les 30s
-    setInterval(() => {
-      this.api.getAdvisors(this.storeId).subscribe({
-        next: d => this.liveAdvisors.set(d.advisors ?? []),
-        error: () => {}
-      });
+    this.refreshTimer = setInterval(() => {
+      this.api.getAdvisors(this.storeId)
+        .pipe(takeUntil(this.destroy$))
+        .subscribe({
+          next: d => this.liveAdvisors.set(d.advisors ?? []),
+          error: () => {}
+        });
     }, 30000);
   }
 
   ngOnDestroy() {
+    if (this.refreshTimer) clearInterval(this.refreshTimer);
+    this.destroy$.next();
+    this.destroy$.complete();
     this.ws.disconnect();
   }
 

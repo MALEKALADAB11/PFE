@@ -19,12 +19,13 @@
   <!-- Navigation -->
   <nav class="navbar__nav">
     @for (item of navItems; track item.route) {
-      <a
-        [routerLink]="item.route"
-        routerLinkActive="is-active"
-        class="nav-link"
-        [class.nav-link--new]="item.isNew">
-        <span class="nav-link__icon" [innerHTML]="getIcon(item.icon)"></span>
+      <a [routerLink]="item.route"
+         routerLinkActive="is-active"
+         class="nav-link"
+         [class.nav-link--new]="item.isNew">
+        <span class="nav-link__icon"
+              [innerHTML]="getIcon(item.icon)">
+        </span>
         <span class="nav-link__label">{{ item.label }}</span>
       </a>
     }
@@ -33,11 +34,34 @@
   <!-- Right zone -->
   <div class="navbar__right">
 
+    <!-- Urgence pill -->
+    @if (isConnected()) {
+      <div class="urgency-pill" [ngClass]="urgencyClass()">
+        <span class="urgency-pill__label">{{ urgencyLabel() }}</span>
+        <span class="urgency-pill__gap">Gap {{ gapPct() }}%</span>
+      </div>
+    }
+
+    <!-- Alert analyst si HIGH -->
+    @if (ws.analystSummary() && urgencyLevel() === 'HIGH') {
+      <div class="analyst-alert">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2">
+          <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+          <line x1="12" y1="9"  x2="12"    y2="13"/>
+          <line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+        <span class="analyst-alert__text">{{ ws.analystSummary() }}</span>
+      </div>
+    }
+
+    <!-- Agents actifs -->
     <div class="agents-pill">
       <span class="agents-pill__dot"></span>
-      <span>{{ agentsActive() }} active agents</span>
+      <span>{{ agentsLive() }} active agents</span>
     </div>
 
+    <!-- Store -->
     <div class="store-selector">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
            stroke="currentColor" stroke-width="2">
@@ -46,6 +70,14 @@
       <span>{{ storeName() }}</span>
     </div>
 
+    <!-- Dernière analyse -->
+    @if (lastUpdated()) {
+      <div class="navbar__updated">
+        <span class="mono">Analysé {{ lastUpdated() }}</span>
+      </div>
+    }
+
+    <!-- Heure -->
     <div class="navbar__time">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
            stroke="currentColor" stroke-width="2">
@@ -56,7 +88,6 @@
     </div>
 
     <div class="navbar__avatar">MG</div>
-
   </div>
 
 </header>

@@ -3,7 +3,8 @@ import {
   OnInit, OnDestroy
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterLink } from '@angular/router';
+import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 
 import { Advisor } from '../../core/models/advisor';
 import { StoreMetrics } from '../../core/models/store';
@@ -14,210 +15,235 @@ import {
   FlipKpiCardComponent,
   FlipCardData
 } from '../../shared/components/flip-kpi-card/flip-kpi-card';
-import { MetricCardComponent } from '../../shared/components/metric-card/metric-card';
 
 interface HourlyPerf {
-  hour: string;
-  actual: number;
-  target: number;
+  hour:     string;
+  actual:   number;
+  target:   number;
   forecast: number;
-  risk: boolean;
+  risk:     boolean;
 }
 
 interface RiskHour {
-  hour: string;
+  hour:      string;
   actualPct: number;
-  gap: number;
+  gap:       number;
 }
 
 @Component({
-  selector: 'app-dashboard',
-  standalone: true,
-  imports: [CommonModule, RouterLink, MetricCardComponent, FlipKpiCardComponent],
+  selector:    'app-dashboard',
+  standalone:  true,
+  imports:     [CommonModule, FlipKpiCardComponent],
   templateUrl: './dashboard.html',
-  styleUrl: './dashboard.scss'
+  styleUrl:    './dashboard.scss'
 })
 export class Dashboard implements OnInit, OnDestroy {
-  store!: StoreMetrics;
+
+  store!:   StoreMetrics;
   storeId = 'store-lac2';
 
-  liveMetrics = signal<any>(null);
-  liveAdvisors = signal<Advisor[]>([]);
-  forecastEOD = signal<any>(null);
-  isLoading = signal(true);
+  liveMetrics  = signal<any>(null);
+  liveAdvisors = signal<any[]>([]);
+  forecastEOD  = signal<any>(null);
+  isLoading    = signal(true);
 
-  cards = signal<any[]>([]);
+  cards      = signal<any[]>([]);
   productMix = signal<any[]>([]);
-  riskHours = signal<RiskHour[]>([]);
+  riskHours  = signal<RiskHour[]>([]);
 
   private _mockAdvisors: Advisor[] = [];
   private refreshTimer: any = null;
-  private agentTimer: any = null;
+  private agentTimer:   any = null;
+  private destroy$ = new Subject<void>();
 
   constructor(
     private data: MockDataService,
-    private api: ApiService,
-    public ws: WebSocketService
+    private api:  ApiService,
+    public  ws:   WebSocketService
   ) {
-    this.store = this.data.getStoreMetrics();
+    this.store         = this.data.getStoreMetrics();
     this._mockAdvisors = this.data.getAdvisors();
   }
 
-  get advisors(): Advisor[] {
-    const live = this.ws.liveAdvisors();
+  // ── Advisors ──────────────────────────────────────────
+  get advisors(): any[] {
+    const wsAdvisors = this.ws.liveMetrics()?.advisors;
+    if (wsAdvisors?.length) {
+      return wsAdvisors.map((a: any, i: number) => ({
+        id:          a.id ?? a.name,
+        name:        a.name,
+        initials:    this.getInitials(a.name ?? ''),
+        avatarColor: this.avatarColor(i),
+        role:        `${a.nb_ventes ?? 0} ventes aujourd'hui`,
+        caRealized:  a.revenue    ?? 0,
+        caObjectif:  a.target     ?? 0,
+        performance: a.attainment ?? 0,
+        nbVentes:    a.nb_ventes  ?? 0,
+        rank:        a.rank ?? i + 1,
+        status:      (a.attainment ?? 0) >= 80 ? 'top'
+                   : (a.attainment ?? 0) >= 50 ? 'ok'
+                   : 'urgent',
+        trend:       a.trend ?? 'stable',
+      }));
+    }
     const apiList = this.liveAdvisors();
-    const baseList = apiList.length ? apiList : this._mockAdvisors;
-
-    if (!live.length) return baseList;
-
-    return baseList.map(adv => {
-      const wsData = live.find((l: any) => l.advisor_id === adv.id);
-      if (!wsData) return adv;
-
-      const ca = Math.round(wsData.ca_today);
-      const perf = Math.round((ca / (adv.caObjectif ?? 2000)) * 100);
-      const status: 'top' | 'ok' | 'urgent' | 'attente' =
-        perf >= 80 ? 'top' : perf >= 50 ? 'ok' : 'urgent';
-
-      return { ...adv, caRealized: ca, performance: perf, status };
-    }).sort((a, b) => b.performance - a.performance);
+    if (apiList.length) {
+      return apiList.map((a: any, i: number) => ({
+        ...a,
+        initials:    this.getInitials(a.name ?? ''),
+        avatarColor: this.avatarColor(i),
+        role:        `${a.nb_ventes ?? 0} ventes aujourd'hui`,
+        caRealized:  a.revenue    ?? a.caRealized  ?? 0,
+        performance: a.attainment ?? a.performance ?? 0,
+        status:      (a.attainment ?? 0) >= 80 ? 'top'
+                   : (a.attainment ?? 0) >= 50 ? 'ok'
+                   : 'urgent',
+      }));
+    }
+    return this._mockAdvisors;
   }
 
+  // ── Computed signals ──────────────────────────────────
   caToday = computed(() =>
     this.ws.liveMetrics()?.ca_today
     ?? this.liveMetrics()?.ca_today
-    ?? this.store?.caJournalier
-    ?? 0
+    ?? this.store?.caJournalier ?? 0
   );
 
   caTarget = computed(() =>
     this.ws.liveMetrics()?.ca_target
     ?? this.liveMetrics()?.ca_target
-    ?? this.store?.caObjectif
-    ?? 8000
+    ?? this.store?.caObjectif ?? 18000
   );
 
   attainment = computed(() =>
     this.ws.liveMetrics()?.attainment
-    ?? this.ws.liveMetrics()?.attainment_pct
-    ?? this.liveMetrics()?.attainment_pct
+    ?? this.liveMetrics()?.attainment
     ?? Math.round((this.caToday() / this.caTarget()) * 100)
   );
 
-  niveauUrgence = computed(() =>
-    this.ws.liveMetrics()?.niveau_urgence ?? 'LOW'
-  );
+  niveauUrgence = computed(() => this.ws.urgencyLevel() ?? 'LOW');
 
   forecastEodAgent = computed(() =>
-    this.ws.liveMetrics()?.forecast_eod
-    ?? this.forecastEOD()?.eod
-    ?? 0
+    this.ws.forecastEod()
+    ?? this.ws.liveMetrics()?.forecast_eod
+    ?? this.forecastEOD()?.eod ?? 0
   );
 
   ecartObjectif = computed(() =>
-    this.ws.liveMetrics()?.ecart_objectif
-    ?? this.forecastEOD()?.gap_pct
-    ?? 0
+    this.ws.gapPct()
+    ?? this.ws.liveMetrics()?.ecart_objectif
+    ?? this.forecastEOD()?.gap_pct ?? 0
   );
 
-  recommendedFocus = computed(() =>
-    this.ws.liveMetrics()?.recommended_focus ?? 'No recommendation yet'
-  );
+  // ── Analyst summary — extrait proprement du JSON ──────
+  analystSummary = computed(() => {
+    const raw = this.ws.analystSummary()
+             ?? this.ws.liveMetrics()?.analyst_summary
+             ?? '';
+    return this._extractSummary(raw);
+  });
 
-  coachOpeningMessage = computed(() =>
-    this.ws.liveMetrics()?.coach_opening_message ?? ''
-  );
+  visitorsH  = computed(() => this.ws.liveMetrics()?.visitors_h  ?? 0);
+  agentsLive = computed(() => this.ws.liveMetrics()?.agents_live ?? 0);
+  isLive     = computed(() => this.ws.connected());
 
-  contextSignals = computed(() =>
-    this.ws.liveMetrics()?.context_signals ?? []
-  );
+  // ── Flip Cards — computed signal (réactif) ────────────
+  flipCards = computed((): FlipCardData[] => {
+    const att      = this.attainment();
+    const ca       = this.caToday();
+    const target   = this.caTarget();
+    const eod      = this.forecastEodAgent();
+    const gap      = this.ecartObjectif();
+    const urgence  = this.niveauUrgence();
+    const summary  = this.analystSummary();
+    const live     = this.isLive();
+    const visitors = this.visitorsH();
 
-  advisorPriorities = computed(() =>
-    this.ws.liveMetrics()?.advisor_priorities ?? []
-  );
-
-  productOpportunities = computed(() =>
-    this.ws.liveMetrics()?.product_opportunities ?? []
-  );
-
-  get flipCards(): FlipCardData[] {
-    const att = this.attainment();
-    const ca = this.caToday();
-    const target = this.caTarget();
-    const eod = this.forecastEodAgent();
-    const gap = this.ecartObjectif();
-    const urgence = this.niveauUrgence();
-    const focus = this.recommendedFocus();
+    const summaryShort = summary.length > 80
+      ? summary.slice(0, 77) + '...'
+      : summary || 'Analyse en cours...';
 
     return [
       {
-        label: 'Visitors / h',
-        value: String(this.ws.liveMetrics()?.visitors_h ?? 0),
-        trend: `${this.ws.connected() ? 'LIVE' : 'Polling'} traffic`,
-        trendDir: 'up',
+        label:       'Visitors / h',
+        value:       String(visitors),
+        trend:       live ? '▲ LIVE traffic' : '○ Polling traffic',
+        trendDir:    'up',
         accentColor: 'blue',
-        backTitle: 'Traffic analysis',
-        backLines: [
-          this.contextSignals()[0]?.label ?? 'No signal',
-          this.contextSignals()[1]?.label ?? 'No signal',
-          focus
+        backTitle:   'Traffic analysis',
+        backLines:   [
+          `Visiteurs/h   : ${visitors}`,
+          `Agents actifs : ${this.agentsLive()}`,
+          live ? '● Connecté en temps réel' : '○ Mode polling',
         ]
       },
       {
-        label: 'Revenue today',
-        value: Math.round(ca).toLocaleString(),
-        suffix: 'DT',
-        trend: `▼ ${gap.toFixed(1)}% vs target`,
-        trendDir: 'down',
+        label:       'Revenue today',
+        value:       Math.round(ca).toLocaleString(),
+        suffix:      'DT',
+        trend:       `▼ ${gap.toFixed(1)}% vs target`,
+        trendDir:    'down',
         accentColor: gap > 25 ? 'red' : gap > 10 ? 'amber' : 'teal',
-        backTitle: 'Revenue breakdown',
-        backLines: [
-          `CA today: ${Math.round(ca).toLocaleString()} DT`,
-          `Target: ${Math.round(target).toLocaleString()} DT`,
-          `Forecast EOD: ${Math.round(eod).toLocaleString()} DT`
+        backTitle:   'Revenue breakdown',
+        backLines:   [
+          `CA today     : ${Math.round(ca).toLocaleString()} DT`,
+          `Target       : ${Math.round(target).toLocaleString()} DT`,
+          `Forecast EOD : ${Math.round(eod).toLocaleString()} DT`,
         ]
       },
       {
-        label: 'Daily target',
-        value: att.toString(),
-        suffix: '%',
-        trend: `${gap.toFixed(0)}% gap — ${urgence} risk`,
-        trendDir: 'down',
-        accentColor: urgence === 'HIGH' ? 'red' : urgence === 'MEDIUM' ? 'amber' : 'teal',
-        backTitle: 'APP02 Agent insight',
-        backLines: [focus, this.coachOpeningMessage(), `Urgency: ${urgence}`]
+        label:       'Daily target',
+        value:       att.toString(),
+        suffix:      '%',
+        trend:       `${gap.toFixed(0)}% gap — ${urgence} risk`,
+        trendDir:    'down',
+        accentColor: urgence === 'HIGH'   ? 'red'
+                   : urgence === 'MEDIUM' ? 'amber' : 'teal',
+        backTitle:   'Agent Analyste',
+        backLines:   [
+          summaryShort,
+          `Urgency  : ${urgence}`,
+          `Forecast : ${Math.round(eod).toLocaleString()} DT`,
+        ]
       },
       {
-        label: 'Agent focus',
-        value: urgence,
-        trend: focus,
-        trendDir: 'up',
-        accentColor: urgence === 'HIGH' ? 'red' : 'teal',
-        backTitle: 'Coach opening',
-        backLines: [this.coachOpeningMessage()]
+        label:       'Agent focus',
+        value:       urgence,
+        trend:       summaryShort,
+        trendDir:    urgence === 'LOW' ? 'up' : 'down',
+        accentColor: urgence === 'HIGH'   ? 'red'
+                   : urgence === 'MEDIUM' ? 'amber' : 'teal',
+        backTitle:   'Résumé analyste',
+        backLines:   [
+          summary || 'En attente de l\'analyse LLM...',
+        ]
       }
     ];
-  }
+  });
 
+  // ── Hourly performance ────────────────────────────────
   hourlyPerf = signal<HourlyPerf[]>([
-    { hour: '9AM', actual: 38, target: 60, forecast: 65, risk: false },
-    { hour: '10AM', actual: 82, target: 95, forecast: 90, risk: false },
-    { hour: '11AM', actual: 95, target: 110, forecast: 118, risk: false },
-    { hour: '12PM', actual: 88, target: 120, forecast: 125, risk: true },
-    { hour: '1PM', actual: 72, target: 92, forecast: 88, risk: true },
-    { hour: '2PM', actual: 128, target: 115, forecast: 110, risk: false },
-    { hour: '3PM', actual: 112, target: 118, forecast: 120, risk: false },
-    { hour: '4PM', actual: 138, target: 135, forecast: 130, risk: false },
-    { hour: '5PM', actual: 155, target: 148, forecast: 145, risk: false },
-    { hour: '6PM', actual: 130, target: 125, forecast: 128, risk: false },
-    { hour: '7PM', actual: 98, target: 110, forecast: 105, risk: false },
-    { hour: '8PM', actual: 42, target: 50, forecast: 48, risk: false },
+    { hour: '9AM',  actual: 38,  target: 60,  forecast: 65,  risk: false },
+    { hour: '10AM', actual: 82,  target: 95,  forecast: 90,  risk: false },
+    { hour: '11AM', actual: 95,  target: 110, forecast: 118, risk: false },
+    { hour: '12PM', actual: 88,  target: 120, forecast: 125, risk: true  },
+    { hour: '1PM',  actual: 72,  target: 92,  forecast: 88,  risk: true  },
+    { hour: '2PM',  actual: 128, target: 115, forecast: 110, risk: false },
+    { hour: '3PM',  actual: 112, target: 118, forecast: 120, risk: false },
+    { hour: '4PM',  actual: 138, target: 135, forecast: 130, risk: false },
+    { hour: '5PM',  actual: 155, target: 148, forecast: 145, risk: false },
+    { hour: '6PM',  actual: 130, target: 125, forecast: 128, risk: false },
+    { hour: '7PM',  actual: 98,  target: 110, forecast: 105, risk: false },
+    { hour: '8PM',  actual: 42,  target: 50,  forecast: 48,  risk: false },
   ]);
 
   hourlyPerfFilter = signal<'all' | 'risk'>('all');
 
   perfMax = computed(() =>
-    Math.max(...this.hourlyPerf().map(h => Math.max(h.actual, h.target, h.forecast))) * 1.1
+    Math.max(
+      ...this.hourlyPerf().map(h => Math.max(h.actual, h.target, h.forecast)), 1
+    ) * 1.1
   );
 
   perfBarHeight(val: number): number {
@@ -245,25 +271,27 @@ export class Dashboard implements OnInit, OnDestroy {
   }
 
   riskBarWidth(pct: number): number { return pct; }
+
   gapColor(gap: number): string {
     return gap < -25 ? '#E74C3C' : gap < -15 ? '#F9A825' : '#00B894';
   }
 
+  // ── Heatmap ───────────────────────────────────────────
   heatHours = ['11AM','12PM','1PM','2PM','3PM','4PM','5PM','6PM'];
-  heatRows = [
+  heatRows  = [
     { key: 'traffic', label: 'Traffic' },
     { key: 'weather', label: 'Weather' },
-    { key: 'stock', label: 'Stock' },
-    { key: 'event', label: 'Event' },
-    { key: 'risk', label: 'Risk' },
+    { key: 'stock',   label: 'Stock'   },
+    { key: 'event',   label: 'Event'   },
+    { key: 'risk',    label: 'Risk'    },
   ];
 
   heatData: Record<string, number[]> = {
-    traffic: [4,4,3,3,4,5,5,4],
+    traffic: [2,2,2,2,2,2,2,2],
     weather: [1,1,1,1,1,1,1,1],
     stock:   [1,1,1,1,1,1,1,1],
     event:   [1,1,1,1,1,1,1,1],
-    risk:    [2,2,2,2,2,2,2,2],
+    risk:    [1,1,1,1,1,1,1,1],
   };
 
   heatColor(val: number): string {
@@ -275,53 +303,62 @@ export class Dashboard implements OnInit, OnDestroy {
     return ['','Low','Med','High','Crit','Crit'][val] ?? '';
   }
 
+  // ── Lifecycle ─────────────────────────────────────────
   ngOnInit() {
     this.loadData();
     this.ws.connectStore(this.storeId);
-
-    this.agentTimer = setInterval(() => {
-      this.syncFromWs();
-    }, 2000);
-
-    this.refreshTimer = setInterval(() => this.loadData(), 60000);
+    this.agentTimer   = setInterval(() => this.syncFromWs(), 3000);
+    this.refreshTimer = setInterval(() => this.loadData(), 120000);
   }
 
   ngOnDestroy() {
     if (this.refreshTimer) clearInterval(this.refreshTimer);
-    if (this.agentTimer) clearInterval(this.agentTimer);
-    this.ws.disconnect();
+    if (this.agentTimer)   clearInterval(this.agentTimer);
+    this.destroy$.next();
+    this.destroy$.complete();
+    // ── NE PAS déconnecter le WS ─────────────────────────
+    // La sidebar l'utilise aussi → pas de ws.disconnect() ici
   }
 
+  // ── Chargement API ────────────────────────────────────
   private loadData() {
-    this.api.getStoreMetrics(this.storeId).subscribe({
-      next: (d: any) => {
-        this.liveMetrics.set(d);
-        this.isLoading.set(false);
-      },
-      error: () => this.isLoading.set(false)
-    });
+    this.api.getStoreMetrics(this.storeId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next:  (d: any) => { this.liveMetrics.set(d); this.isLoading.set(false); },
+        error: ()       => this.isLoading.set(false)
+      });
 
-    this.api.getAdvisors(this.storeId).subscribe({
-      next: (d: any) => this.liveAdvisors.set(d.advisors ?? []),
-      error: () => {}
-    });
+    this.api.getAdvisors(this.storeId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next:  (d: any) => this.liveAdvisors.set(d.advisors ?? []),
+        error: ()       => {}
+      });
 
-    this.api.getForecastEOD(this.storeId).subscribe({
-      next: (d: any) => this.forecastEOD.set(d),
-      error: () => {}
-    });
+    this.api.getForecastEOD(this.storeId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next:  (d: any) => this.forecastEOD.set(d),
+        error: ()       => {}
+      });
 
-    this.api.getLiveAnalysis(this.storeId).subscribe({
-      next: (d: any) => {
-        this.cards.set(this.mapCardsFromLiveAnalysis(d));
-        this.productMix.set(this.mapProductMixFromLiveAnalysis(d));
-        this.riskHours.set(this.mapRiskHoursFromLiveAnalysis(d));
-        this.applyHeatmapFromLiveAnalysis(d);
-      },
-      error: () => {}
-    });
+    this.api.getLiveAnalysis(this.storeId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (d: any) => {
+          this.cards.set(this.mapCardsFromWs(d));
+          this.productMix.set(this.mapProductMixFromWs(d));
+          this.riskHours.set(this.mapRiskHoursFromWs(d));
+          this.applyHeatmapFromWs(d);
+          const hourly = this.mapHourlyPerfFromWs(d);
+          if (hourly.length) this.hourlyPerf.set(hourly);
+        },
+        error: () => {}
+      });
   }
 
+  // ── Sync WS toutes les 3s ─────────────────────────────
   private syncFromWs() {
     const live = this.ws.liveMetrics();
     if (!live) return;
@@ -331,110 +368,94 @@ export class Dashboard implements OnInit, OnDestroy {
     this.riskHours.set(this.mapRiskHoursFromWs(live));
     this.applyHeatmapFromWs(live);
 
-    const hourly = this.mapHourlyPerfFromWs(live);
-    if (hourly.length) {
-      this.hourlyPerf.set(hourly);
+    if (live.advisors?.length) {
+      this.liveAdvisors.set(live.advisors);
     }
+
+    const hourly = this.mapHourlyPerfFromWs(live);
+    if (hourly.length) this.hourlyPerf.set(hourly);
   }
 
-  private mapRiskHoursFromLiveAnalysis(data: any): RiskHour[] {
-    return (data?.risk_hours ?? []).map((r: any) => ({
-      hour: r.hour,
-      actualPct: Math.round(r.target_attainment ?? 0),
-      gap: Math.round(r.gap_units ?? 0)
-    }));
-  }
-
+  // ── Mappers ───────────────────────────────────────────
   private mapRiskHoursFromWs(data: any): RiskHour[] {
     return (data?.risk_hours ?? []).map((r: any) => ({
-      hour: r.hour,
-      actualPct: Math.round(r.target_attainment ?? 0),
-      gap: Math.round(r.gap_units ?? 0)
-    }));
-  }
-
-  private mapCardsFromLiveAnalysis(data: any): any[] {
-    return (data?.advisor_priorities ?? []).map((a: any, i: number) => ({
-      id: a.advisor_id,
-      advisorName: a.name,
-      advisorInitials: this.getInitials(a.name),
-      avatarColor: this.avatarColor(i),
-      target: Math.round(a.performance ?? 0),
-      priority: a.priority === 'TOP_CLOSE' ? 'OK' : a.priority === 'STABLE' ? 'MED' : 'HIGH',
-      time: 'LIVE',
-      gap: Math.max(0, 100 - Math.round(a.performance ?? 0)),
-      context: a.reason,
-      advice: a.action,
-      status: 'pending'
+      hour:      r.hour,
+      actualPct: Math.round(r.target_pct ?? r.target_attainment ?? 0),
+      gap:       Math.round(r.units_behind ?? r.gap_units ?? 0)
     }));
   }
 
   private mapCardsFromWs(data: any): any[] {
-    return (data?.advisor_priorities ?? []).map((a: any, i: number) => ({
-      id: a.advisor_id,
-      advisorName: a.name,
-      advisorInitials: this.getInitials(a.name),
-      avatarColor: this.avatarColor(i),
-      target: Math.round(a.performance ?? 0),
-      priority: a.priority === 'TOP_CLOSE' ? 'OK' : a.priority === 'STABLE' ? 'MED' : 'HIGH',
-      time: 'LIVE',
-      gap: Math.max(0, 100 - Math.round(a.performance ?? 0)),
-      context: a.reason,
-      advice: a.action,
-      status: 'pending'
-    }));
-  }
-
-  private mapProductMixFromLiveAnalysis(data: any): any[] {
-    return (data?.product_opportunities ?? []).map((p: any, i: number) => ({
-      id: p.sku,
-      name: p.label,
-      color: this.mixColor(i),
-      unitsSold: 0,
-      unitsForecast: 0,
-      salesActual: p.priority === 'HIGH' ? 85 : p.priority === 'MEDIUM' ? 65 : 50,
-      salesForecast: 100,
-      stockUnits: p.stock ?? 0,
-      stockMin: 3,
-      stockRisk: p.risk_level === 'high' ? 'high' : p.risk_level === 'critical' ? 'critical' : 'low',
-      revenue: 0,
-      trend: 'up',
-      trendVal: p.reason,
-      alert: p.risk_level === 'critical' || p.risk_level === 'high'
+    const advisors = data?.advisors ?? [];
+    return advisors.slice(0, 4).map((a: any, i: number) => ({
+      id:              a.id ?? a.name,
+      advisorName:     a.name,
+      advisorInitials: this.getInitials(a.name ?? ''),
+      avatarColor:     this.avatarColor(i),
+      target:          a.attainment ?? 0,
+      priority:        (a.attainment ?? 0) >= 80 ? 'OK'
+                     : (a.attainment ?? 0) >= 50 ? 'MED' : 'HIGH',
+      time:            'LIVE',
+      gap:             Math.max(0, 100 - (a.attainment ?? 0)),
+      context:         `${a.nb_ventes ?? 0} ventes · ${(a.revenue ?? 0).toLocaleString()} DT`,
+      advice:          (a.attainment ?? 0) < 50
+                         ? `Urgent — gap ${100 - (a.attainment ?? 0)}% à combler`
+                         : `En bonne voie — ${a.attainment ?? 0}% atteint`,
+      status:          'pending'
     }));
   }
 
   private mapProductMixFromWs(data: any): any[] {
-    return (data?.product_opportunities ?? []).map((p: any, i: number) => ({
-      id: p.sku,
-      name: p.label,
-      color: this.mixColor(i),
-      unitsSold: 0,
+    return (data?.product_mix ?? []).map((p: any, i: number) => ({
+      id:            p.product ?? `prod_${i}`,
+      name:          p.product ?? 'Produit',
+      color:         this.mixColor(i),
+      unitsSold:     0,
       unitsForecast: 0,
-      salesActual: p.priority === 'HIGH' ? 85 : p.priority === 'MEDIUM' ? 65 : 50,
+      salesActual:   Math.min(100, p.attainment ?? 0),
       salesForecast: 100,
-      stockUnits: p.stock ?? 0,
-      stockMin: 3,
-      stockRisk: p.risk_level === 'high' ? 'high' : p.risk_level === 'critical' ? 'critical' : 'low',
-      revenue: 0,
-      trend: 'up',
-      trendVal: p.reason,
-      alert: p.risk_level === 'critical' || p.risk_level === 'high'
+      stockUnits:    p.stock_level === 'Low' ? 3 : 10,
+      stockMin:      3,
+      stockRisk:     p.stock_level === 'Low' ? 'high' : 'low',
+      revenue:       p.revenue ?? 0,
+      trend:         'up',
+      trendVal:      `${(p.revenue ?? 0).toLocaleString()} TND`,
+      alert:         p.stock_level === 'Low'
     }));
   }
 
-  private applyHeatmapFromLiveAnalysis(data: any) {
-    this.applySignalsToHeatmap(
-      data?.context_signals ?? [],
-      data?.risk_hours ?? []
-    );
+  private mapHourlyPerfFromWs(data: any): HourlyPerf[] {
+    return (data?.hourly_performance ?? []).map((h: any) => ({
+      hour:     this.normalizeHourLabel(h.hour),
+      actual:   Number(h.revenue  ?? h.actual   ?? 0),
+      target:   Number(h.target   ?? 0),
+      forecast: Number(h.forecast ?? 0),
+      risk:     !!h.risk
+    }));
   }
 
   private applyHeatmapFromWs(data: any) {
-    this.applySignalsToHeatmap(
-      data?.context_signals ?? [],
-      data?.risk_hours ?? []
-    );
+    const heatmap = data?.context_heatmap;
+    if (heatmap && heatmap.traffic?.length) {
+      this.applyHeatmapDirect(heatmap);
+    } else {
+      this.applySignalsToHeatmap(
+        data?.context_signals ?? [],
+        data?.risk_hours      ?? []
+      );
+    }
+  }
+
+  private applyHeatmapDirect(heatmap: any) {
+    const lv: Record<string, number> = { low: 1, med: 2, high: 3, crit: 4 };
+    const c = (arr: string[]): number[] => (arr ?? []).map(v => lv[v] ?? 1);
+    this.heatData = {
+      traffic: c(heatmap.traffic),
+      weather: c(heatmap.weather),
+      stock:   c(heatmap.stock),
+      event:   c(heatmap.event),
+      risk:    c(heatmap.risk),
+    };
   }
 
   private applySignalsToHeatmap(signals: any[], riskHours: any[] = []) {
@@ -445,122 +466,128 @@ export class Dashboard implements OnInit, OnDestroy {
       event:   [1,1,1,1,1,1,1,1],
       risk:    [1,1,1,1,1,1,1,1],
     };
-
     signals.forEach((s: any) => {
       if (s.type === 'weather') this.heatData['weather'] = [1,1,2,3,3,2,2,2];
-      if (s.type === 'stock') this.heatData['stock'] = [1,1,2,3,3,4,4,3];
-      if (s.type === 'event') this.heatData['event'] = [1,1,1,2,3,4,5,4];
+      if (s.type === 'stock')   this.heatData['stock']   = [1,1,2,3,3,4,4,3];
+      if (s.type === 'event')   this.heatData['event']   = [1,1,1,2,3,4,5,4];
     });
-
     const riskMap: Record<string, number> = {};
-    (riskHours ?? []).forEach((r: any) => {
-      const key = this.normalizeHourLabel(r.hour);
-      riskMap[key] = r.risk === 'HIGH' ? 5 : r.risk === 'MEDIUM' ? 4 : 2;
+    riskHours.forEach((r: any) => {
+      riskMap[this.normalizeHourLabel(r.hour)] =
+        r.risk === 'HIGH' ? 4 : r.risk === 'MEDIUM' ? 3 : 2;
     });
-
     this.heatHours.forEach((h, i) => {
-      this.heatData['risk'][i] = riskMap[h] ?? 2;
-      this.heatData['traffic'][i] = Math.max(this.heatData['traffic'][i], (riskMap[h] ?? 2) - 1);
+      this.heatData['risk'][i]    = riskMap[h] ?? 2;
+      this.heatData['traffic'][i] = Math.max(
+        this.heatData['traffic'][i], (riskMap[h] ?? 2) - 1
+      );
     });
-  }
-
-  private mapHourlyPerfFromWs(data: any): HourlyPerf[] {
-    return (data?.hourly_performance ?? []).map((h: any) => ({
-      hour: this.normalizeHourLabel(h.hour),
-      actual: Number(h.actual ?? 0),
-      target: Number(h.target ?? 0),
-      forecast: Number(h.forecast ?? 0),
-      risk: !!h.risk
-    }));
   }
 
   private normalizeHourLabel(hour: string): string {
     if (!hour) return '';
     const m = hour.match(/^(\d{1,2})h$/);
     if (!m) return hour;
-    const num = Number(m[1]);
-    if (num === 12) return '12PM';
-    if (num < 12) return `${num}AM`;
-    return `${num - 12}PM`;
+    const n = Number(m[1]);
+    if (n === 12) return '12PM';
+    if (n < 12)   return `${n}AM`;
+    return `${n - 12}PM`;
   }
 
+  // ── Extraction summary depuis JSON brut ───────────────
+  private _extractSummary(raw: string): string {
+    if (!raw) return '';
+    const trimmed = raw.trim();
+
+    if (trimmed.startsWith('{')) {
+      // Tenter parse JSON complet
+      try {
+        const parsed = JSON.parse(trimmed);
+        const s = parsed.analyst_summary ?? parsed.summary ?? '';
+        if (s) return s.trim();
+      } catch {
+        // JSON tronqué → regex
+        const match = trimmed.match(/"analyst_summary"\s*:\s*"([^"]+)"/);
+        if (match) return match[1].trim();
+      }
+      // Si on ne peut pas extraire → fallback vide
+      return '';
+    }
+
+    // Texte libre → retourner directement (max 400 chars)
+    return trimmed.slice(0, 400);
+  }
+
+  // ── Helpers UI ────────────────────────────────────────
   getInitials(name: string): string {
     return name.split(' ').map(x => x[0]).join('').slice(0, 2).toUpperCase();
   }
 
   avatarColor(i: number): string {
-    const colors = ['#2D9CDB', '#9B51E0', '#27AE60', '#F2994A'];
-    return colors[i % colors.length];
+    return ['#2D9CDB','#9B51E0','#27AE60','#F2994A'][i % 4];
   }
 
   mixColor(i: number): string {
-    const colors = ['#2D9CDB', '#27AE60', '#9B51E0', '#F2994A', '#E74C3C'];
-    return colors[i % colors.length];
+    return ['#2D9CDB','#27AE60','#9B51E0','#F2994A','#E74C3C'][i % 5];
   }
 
   simulatePOS() {
-    this.api.simulatePOS(this.storeId).subscribe({
-      next: () => setTimeout(() => this.loadData(), 1000),
-      error: () => {}
-    });
+    this.api.simulatePOS(this.storeId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next:  () => setTimeout(() => this.loadData(), 1000),
+        error: () => {}
+      });
   }
 
   triggerAgent() {
-    this.api.triggerCycle(this.storeId).subscribe({
-      next: () => setTimeout(() => this.loadData(), 1000),
-      error: (e: any) => console.error('Cycle trigger error', e)
-    });
+    this.api.triggerCycle(this.storeId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next:  () => setTimeout(() => this.loadData(), 1000),
+        error: (e: any) => console.error('Cycle trigger error', e)
+      });
   }
 
-  trackById(_: number, item: { id: string }) { return item.id; }
+  trackById(_: number, item: any) { return item?.id ?? item?.name ?? _; }
 
-  priorityColor(priority: string): string {
-    return priority === 'HIGH' ? '#E74C3C' : priority === 'MED' ? '#F9A825' : '#00B894';
+  priorityColor(p: string): string {
+    return p === 'HIGH' ? '#E74C3C' : p === 'MED' ? '#F9A825' : '#00B894';
   }
 
-  priorityBg(priority: string): string {
-    return priority === 'HIGH' ? '#FDEDEC' : priority === 'MED' ? '#FFF8E1' : '#E0FAF4';
+  priorityBg(p: string): string {
+    return p === 'HIGH' ? '#FDEDEC' : p === 'MED' ? '#FFF8E1' : '#E0FAF4';
   }
 
-  statusLabel(status: string): string {
-    return status === 'approved' ? 'Approved' : status === 'pending' ? 'Pending' : 'Done';
+  statusLabel(s: string): string {
+    return s === 'approved' ? 'Approved' : s === 'pending' ? 'Pending' : 'Done';
   }
 
-  perfColor(perf: number): string {
-    return perf >= 80 ? '#00B894' : perf >= 50 ? '#F9A825' : '#E74C3C';
+  perfColor(p: number): string {
+    return p >= 80 ? '#00B894' : p >= 50 ? '#F9A825' : '#E74C3C';
   }
 
-  statusBadge(status: string): string {
-    return status === 'top'
-      ? 'badge--success'
-      : status === 'ok'
-      ? 'badge--warning'
-      : 'badge--danger';
+  statusBadge(s: string): string {
+    return s === 'top' ? 'badge--success' : s === 'ok' ? 'badge--warning' : 'badge--danger';
   }
 
-  statusText(status: string): string {
-    return status === 'top' ? 'Top' : status === 'ok' ? 'On track' : 'Urgent';
+  statusText(s: string): string {
+    return s === 'top' ? 'Top' : s === 'ok' ? 'On track' : 'Urgent';
   }
 
-  stockRiskColor(risk: string): string {
-    if (risk === 'critical') return '#E74C3C';
-    if (risk === 'high') return '#F2994A';
-    if (risk === 'medium') return '#F9A825';
-    return '#00B894';
+  stockRiskColor(r: string): string {
+    return r === 'critical' ? '#E74C3C' : r === 'high'   ? '#F2994A'
+         : r === 'medium'   ? '#F9A825' : '#00B894';
   }
 
-  stockRiskBg(risk: string): string {
-    if (risk === 'critical') return '#FDEDEC';
-    if (risk === 'high') return '#FEF3E7';
-    if (risk === 'medium') return '#FFF8E1';
-    return '#E0FAF4';
+  stockRiskBg(r: string): string {
+    return r === 'critical' ? '#FDEDEC' : r === 'high'   ? '#FEF3E7'
+         : r === 'medium'   ? '#FFF8E1' : '#E0FAF4';
   }
 
-  stockRiskLabel(risk: string): string {
-    if (risk === 'critical') return 'Critical';
-    if (risk === 'high') return 'High';
-    if (risk === 'medium') return 'Medium';
-    return 'Good';
+  stockRiskLabel(r: string): string {
+    return r === 'critical' ? 'Critical' : r === 'high'   ? 'High'
+         : r === 'medium'   ? 'Medium'   : 'Good';
   }
 
   stockBarWidth(stock: number, min: number): number {
@@ -568,7 +595,7 @@ export class Dashboard implements OnInit, OnDestroy {
   }
 
   forecastBarWidth(v: number): number { return Math.min(100, v); }
-  actualBarWidth(v: number): number { return Math.min(100, v); }
+  actualBarWidth(v: number):   number { return Math.min(100, v); }
 
   attainmentColor(actual: number, forecast: number): string {
     const pct = forecast > 0 ? (actual / forecast) * 100 : 0;
@@ -580,34 +607,28 @@ export class Dashboard implements OnInit, OnDestroy {
   }
 
   leadTimeData = [
-    { label: 'Top-up', days: 4, status: 'ok' },
-    { label: 'Smartphones', days: 7, status: 'late' },
-    { label: 'SIM', days: 5, status: 'ok' },
-    { label: 'Accessories', days: 9, status: 'crit' },
-    { label: 'Routers', days: 6, status: 'late' },
-    { label: 'Tablets', days: 3, status: 'ok' },
+    { label: 'Top-up',      days: 4, status: 'ok'   },
+    { label: 'Smartphones', days: 7, status: 'late'  },
+    { label: 'SIM',         days: 5, status: 'ok'    },
+    { label: 'Accessories', days: 9, status: 'crit'  },
+    { label: 'Routers',     days: 6, status: 'late'  },
+    { label: 'Tablets',     days: 3, status: 'ok'    },
   ];
 
   leadTimeBarHeight(days: number): number {
     return Math.min(100, (days / 12) * 100);
   }
 
-  leadTimeColor(status: string): string {
-    if (status === 'crit') return '#E74C3C';
-    if (status === 'late') return '#F9A825';
-    return '#2D9CDB';
+  leadTimeColor(s: string): string {
+    return s === 'crit' ? '#E74C3C' : s === 'late' ? '#F9A825' : '#2D9CDB';
   }
 
-  leadTimeBg(status: string): string {
-    if (status === 'crit') return '#FDEDEC';
-    if (status === 'late') return '#FFF8E1';
-    return '#EAF4FE';
+  leadTimeBg(s: string): string {
+    return s === 'crit' ? '#FDEDEC' : s === 'late' ? '#FFF8E1' : '#EAF4FE';
   }
 
-  targetLineBottom(): number {
-    return (5 / 12) * 100;
-  }
+  targetLineBottom(): number { return (5 / 12) * 100; }
 
   escalate(_: string) {}
-  approve(_: string) {}
+  approve(_: string)  {}
 }

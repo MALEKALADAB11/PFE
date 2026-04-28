@@ -119,7 +119,7 @@ export class Dashboard implements OnInit, OnDestroy {
   attainment = computed(() =>
     this.ws.liveMetrics()?.attainment
     ?? this.liveMetrics()?.attainment
-    ?? Math.round((this.caToday() / this.caTarget()) * 100)
+    ?? Math.round((this.caToday() / Math.max(this.caTarget(), 1)) * 100)
   );
 
   niveauUrgence = computed(() => this.ws.urgencyLevel() ?? 'LOW');
@@ -136,7 +136,6 @@ export class Dashboard implements OnInit, OnDestroy {
     ?? this.forecastEOD()?.gap_pct ?? 0
   );
 
-  // ── Analyst summary — extrait proprement du JSON ──────
   analystSummary = computed(() => {
     const raw = this.ws.analystSummary()
              ?? this.ws.liveMetrics()?.analyst_summary
@@ -148,7 +147,43 @@ export class Dashboard implements OnInit, OnDestroy {
   agentsLive = computed(() => this.ws.liveMetrics()?.agents_live ?? 0);
   isLive     = computed(() => this.ws.connected());
 
-  // ── Flip Cards — computed signal (réactif) ────────────
+  // ── Agent Stratège ────────────────────────────────────
+  strategie = computed(() =>
+    this.ws.strategie()
+    || this.ws.liveMetrics()?.strategie
+    || ''
+  );
+
+  strateActions = computed(() =>
+    this.ws.strateActions()?.length
+      ? this.ws.strateActions()
+      : this.ws.liveMetrics()?.strategie_actions ?? []
+  );
+
+  causeRacine = computed(() =>
+    this.ws.causeRacine()
+    || this.ws.liveMetrics()?.cause_racine
+    || ''
+  );
+
+  focusProduits = computed(() =>
+    this.ws.focusProduits()?.length
+      ? this.ws.focusProduits()
+      : this.ws.liveMetrics()?.focus_produits ?? []
+  );
+
+  messageManager = computed(() =>
+    this.ws.messageManager()
+    || this.ws.liveMetrics()?.message_manager
+    || ''
+  );
+
+  weatherLabel = computed(() => this.ws.weatherLabel() ?? '');
+  weatherIcon  = computed(() => this.ws.weatherIcon()  ?? '');
+  isHoliday    = computed(() => this.ws.isHolidayToday());
+  nextHoliday  = computed(() => this.ws.nextHoliday()  ?? '');
+
+  // ── Flip Cards ────────────────────────────────────────
   flipCards = computed((): FlipCardData[] => {
     const att      = this.attainment();
     const ca       = this.caToday();
@@ -159,10 +194,16 @@ export class Dashboard implements OnInit, OnDestroy {
     const summary  = this.analystSummary();
     const live     = this.isLive();
     const visitors = this.visitorsH();
+    const cause    = this.causeRacine();
+    const strateg  = this.strategie();
 
     const summaryShort = summary.length > 80
       ? summary.slice(0, 77) + '...'
       : summary || 'Analyse en cours...';
+
+    const strateShort = strateg.length > 80
+      ? strateg.slice(0, 77) + '...'
+      : strateg || cause || summaryShort;
 
     return [
       {
@@ -182,7 +223,7 @@ export class Dashboard implements OnInit, OnDestroy {
         label:       'Revenue today',
         value:       Math.round(ca).toLocaleString(),
         suffix:      'DT',
-        trend:       `▼ ${gap.toFixed(1)}% vs target`,
+        trend:       `▼ ${Number(gap).toFixed(1)}% vs target`,
         trendDir:    'down',
         accentColor: gap > 25 ? 'red' : gap > 10 ? 'amber' : 'teal',
         backTitle:   'Revenue breakdown',
@@ -196,7 +237,7 @@ export class Dashboard implements OnInit, OnDestroy {
         label:       'Daily target',
         value:       att.toString(),
         suffix:      '%',
-        trend:       `${gap.toFixed(0)}% gap — ${urgence} risk`,
+        trend:       `${Number(gap).toFixed(0)}% gap — ${urgence} risk`,
         trendDir:    'down',
         accentColor: urgence === 'HIGH'   ? 'red'
                    : urgence === 'MEDIUM' ? 'amber' : 'teal',
@@ -210,13 +251,16 @@ export class Dashboard implements OnInit, OnDestroy {
       {
         label:       'Agent focus',
         value:       urgence,
-        trend:       summaryShort,
+        trend:       strateShort,
         trendDir:    urgence === 'LOW' ? 'up' : 'down',
         accentColor: urgence === 'HIGH'   ? 'red'
                    : urgence === 'MEDIUM' ? 'amber' : 'teal',
-        backTitle:   'Résumé analyste',
+        backTitle:   'Agent Stratège',
         backLines:   [
-          summary || 'En attente de l\'analyse LLM...',
+          cause || summaryShort,
+          ...(this.strateActions().slice(0, 2).map(
+            (a: any) => `${a.priorite}) ${(a.action ?? '').slice(0, 50)}`
+          )),
         ]
       }
     ];
@@ -224,53 +268,80 @@ export class Dashboard implements OnInit, OnDestroy {
 
   // ── Hourly performance ────────────────────────────────
   hourlyPerf = signal<HourlyPerf[]>([
-    { hour: '9AM',  actual: 38,  target: 60,  forecast: 65,  risk: false },
-    { hour: '10AM', actual: 82,  target: 95,  forecast: 90,  risk: false },
-    { hour: '11AM', actual: 95,  target: 110, forecast: 118, risk: false },
-    { hour: '12PM', actual: 88,  target: 120, forecast: 125, risk: true  },
-    { hour: '1PM',  actual: 72,  target: 92,  forecast: 88,  risk: true  },
-    { hour: '2PM',  actual: 128, target: 115, forecast: 110, risk: false },
-    { hour: '3PM',  actual: 112, target: 118, forecast: 120, risk: false },
-    { hour: '4PM',  actual: 138, target: 135, forecast: 130, risk: false },
-    { hour: '5PM',  actual: 155, target: 148, forecast: 145, risk: false },
-    { hour: '6PM',  actual: 130, target: 125, forecast: 128, risk: false },
-    { hour: '7PM',  actual: 98,  target: 110, forecast: 105, risk: false },
-    { hour: '8PM',  actual: 42,  target: 50,  forecast: 48,  risk: false },
+    { hour: '9AM',  actual: 1875, target: 1636, forecast: 1700, risk: false },
+    { hour: '10AM', actual: 2709, target: 1636, forecast: 1800, risk: false },
+    { hour: '11AM', actual: 830,  target: 1636, forecast: 1600, risk: true  },
+    { hour: '12PM', actual: 351,  target: 1636, forecast: 1900, risk: true  },
+    { hour: '1PM',  actual: 3054, target: 1636, forecast: 1700, risk: false },
+    { hour: '2PM',  actual: 132,  target: 1636, forecast: 1600, risk: true  },
+    { hour: '3PM',  actual: 2500, target: 1636, forecast: 1800, risk: false },
+    { hour: '4PM',  actual: 0,    target: 1636, forecast: 2000, risk: false },
+    { hour: '5PM',  actual: 0,    target: 1636, forecast: 2200, risk: false },
+    { hour: '6PM',  actual: 0,    target: 1636, forecast: 1800, risk: false },
+    { hour: '7PM',  actual: 0,    target: 1636, forecast: 1400, risk: false },
+    { hour: '8PM',  actual: 0,    target: 1636, forecast: 900,  risk: false },
   ]);
 
   hourlyPerfFilter = signal<'all' | 'risk'>('all');
 
-  perfMax = computed(() =>
-    Math.max(
-      ...this.hourlyPerf().map(h => Math.max(h.actual, h.target, h.forecast)), 1
-    ) * 1.1
-  );
+  // ── perfMax sécurisé ──────────────────────────────────
+  perfMax = computed(() => {
+    const arr = this.hourlyPerf();
+    if (!arr.length) return 3000;
+    const vals = arr.flatMap(h => [
+      isFinite(h.actual)   && h.actual   > 0 ? h.actual   : 0,
+      isFinite(h.target)   && h.target   > 0 ? h.target   : 0,
+      isFinite(h.forecast) && h.forecast > 0 ? h.forecast : 0,
+    ]).filter(v => v > 0);
+    return vals.length ? Math.max(...vals) * 1.15 : 3000;
+  });
 
+  // ── Méthodes graphe sécurisées ────────────────────────
   perfBarHeight(val: number): number {
-    return Math.round((val / this.perfMax()) * 100);
+    const max = this.perfMax();
+    if (!max || !val || !isFinite(val) || val <= 0) return 0;
+    return Math.min(100, Math.round((val / max) * 100));
   }
 
   perfLineY(val: number, chartHeight = 200): number {
-    return chartHeight - Math.round((val / this.perfMax()) * chartHeight);
+    const max = this.perfMax();
+    if (!max || !val || !isFinite(val) || val <= 0) return chartHeight;
+    return Math.max(0, chartHeight - Math.round((val / max) * chartHeight));
   }
 
   targetPoints(): string {
     const arr = this.hourlyPerf();
+    if (arr.length < 2) return '';
     return arr.map((h, i) => {
-      const x = (i / (arr.length - 1)) * 1200;
-      return `${x},${this.perfLineY(h.target)}`;
+      const x = Math.round((i / (arr.length - 1)) * 1200);
+      const y = this.perfLineY(h.target || 0);
+      return `${x},${y}`;
     }).join(' ');
   }
 
   forecastPoints(): string {
     const arr = this.hourlyPerf();
+    if (arr.length < 2) return '';
     return arr.map((h, i) => {
-      const x = (i / (arr.length - 1)) * 1200;
-      return `${x},${this.perfLineY(h.forecast)}`;
+      const x = Math.round((i / (arr.length - 1)) * 1200);
+      const y = this.perfLineY(h.forecast || 0);
+      return `${x},${y}`;
     }).join(' ');
   }
 
-  riskBarWidth(pct: number): number { return pct; }
+  circleX(i: number): number {
+    const arr = this.hourlyPerf();
+    if (arr.length < 2) return 0;
+    return Math.round((i / (arr.length - 1)) * 1200);
+  }
+
+  circleY(h: HourlyPerf): number {
+    return this.perfLineY(h.forecast || 0);
+  }
+
+  riskBarWidth(pct: number): number {
+    return Math.min(100, Math.max(0, pct || 0));
+  }
 
   gapColor(gap: number): string {
     return gap < -25 ? '#E74C3C' : gap < -15 ? '#F9A825' : '#00B894';
@@ -296,7 +367,8 @@ export class Dashboard implements OnInit, OnDestroy {
 
   heatColor(val: number): string {
     const colors = ['#EAF3DE','#C0DD97','#EF9F27','#E74C3C','#A32D2D'];
-    return colors[Math.min(val - 1, 4)];
+    const idx = Math.min(Math.max((val || 1) - 1, 0), 4);
+    return colors[idx];
   }
 
   heatLabel(val: number): string {
@@ -316,8 +388,6 @@ export class Dashboard implements OnInit, OnDestroy {
     if (this.agentTimer)   clearInterval(this.agentTimer);
     this.destroy$.next();
     this.destroy$.complete();
-    // ── NE PAS déconnecter le WS ─────────────────────────
-    // La sidebar l'utilise aussi → pas de ws.disconnect() ici
   }
 
   // ── Chargement API ────────────────────────────────────
@@ -374,19 +444,25 @@ export class Dashboard implements OnInit, OnDestroy {
 
     const hourly = this.mapHourlyPerfFromWs(live);
     if (hourly.length) this.hourlyPerf.set(hourly);
+
+    const wsHeatmap = this.ws.contextHeatmap();
+    if (wsHeatmap?.traffic?.length) {
+      this.applyHeatmapDirect(wsHeatmap);
+    }
   }
 
   // ── Mappers ───────────────────────────────────────────
   private mapRiskHoursFromWs(data: any): RiskHour[] {
     return (data?.risk_hours ?? []).map((r: any) => ({
-      hour:      r.hour,
-      actualPct: Math.round(r.target_pct ?? r.target_attainment ?? 0),
+      hour:      r.hour || '',
+      actualPct: Math.max(0, Math.min(100, Math.round(r.target_pct ?? r.target_attainment ?? 0))),
       gap:       Math.round(r.units_behind ?? r.gap_units ?? 0)
     }));
   }
 
   private mapCardsFromWs(data: any): any[] {
-    const advisors = data?.advisors ?? [];
+    const advisors      = data?.advisors ?? [];
+    const strateActions = data?.strategie_actions ?? [];
     return advisors.slice(0, 4).map((a: any, i: number) => ({
       id:              a.id ?? a.name,
       advisorName:     a.name,
@@ -401,7 +477,8 @@ export class Dashboard implements OnInit, OnDestroy {
       advice:          (a.attainment ?? 0) < 50
                          ? `Urgent — gap ${100 - (a.attainment ?? 0)}% à combler`
                          : `En bonne voie — ${a.attainment ?? 0}% atteint`,
-      status:          'pending'
+      status:          'pending',
+      strateAction:    strateActions[i] ?? null,
     }));
   }
 
@@ -412,7 +489,7 @@ export class Dashboard implements OnInit, OnDestroy {
       color:         this.mixColor(i),
       unitsSold:     0,
       unitsForecast: 0,
-      salesActual:   Math.min(100, p.attainment ?? 0),
+      salesActual:   Math.min(100, Math.max(0, p.attainment ?? 0)),
       salesForecast: 100,
       stockUnits:    p.stock_level === 'Low' ? 3 : 10,
       stockMin:      3,
@@ -425,16 +502,29 @@ export class Dashboard implements OnInit, OnDestroy {
   }
 
   private mapHourlyPerfFromWs(data: any): HourlyPerf[] {
-    return (data?.hourly_performance ?? []).map((h: any) => ({
-      hour:     this.normalizeHourLabel(h.hour),
-      actual:   Number(h.revenue  ?? h.actual   ?? 0),
-      target:   Number(h.target   ?? 0),
-      forecast: Number(h.forecast ?? 0),
-      risk:     !!h.risk
-    }));
+    const raw = data?.hourly_performance ?? [];
+    if (!raw.length) return [];
+    return raw
+      .map((h: any) => ({
+        hour:     this.normalizeHourLabel(h.hour || ''),
+        actual:   Math.max(0, Number(h.revenue  ?? h.actual   ?? 0) || 0),
+        target:   Math.max(0, Number(h.target   ?? 0) || 0),
+        forecast: Math.max(0, Number(h.forecast ?? 0) || 0),
+        risk:     !!h.risk
+      }))
+      .filter((h: HourlyPerf) =>
+        h.hour && (h.target > 0 || h.forecast > 0 || h.actual > 0)
+      );
   }
 
   private applyHeatmapFromWs(data: any) {
+    // Priorité 1 : heatmap réelle du Stratège via WS signal
+    const wsHeatmap = this.ws.contextHeatmap();
+    if (wsHeatmap && wsHeatmap.traffic?.length) {
+      this.applyHeatmapDirect(wsHeatmap);
+      return;
+    }
+    // Priorité 2 : heatmap dans le payload
     const heatmap = data?.context_heatmap;
     if (heatmap && heatmap.traffic?.length) {
       this.applyHeatmapDirect(heatmap);
@@ -448,7 +538,8 @@ export class Dashboard implements OnInit, OnDestroy {
 
   private applyHeatmapDirect(heatmap: any) {
     const lv: Record<string, number> = { low: 1, med: 2, high: 3, crit: 4 };
-    const c = (arr: string[]): number[] => (arr ?? []).map(v => lv[v] ?? 1);
+    const c = (arr: any[]): number[] =>
+      (arr ?? []).map(v => lv[String(v)] ?? 1);
     this.heatData = {
       traffic: c(heatmap.traffic),
       weather: c(heatmap.weather),
@@ -494,32 +585,26 @@ export class Dashboard implements OnInit, OnDestroy {
     return `${n - 12}PM`;
   }
 
-  // ── Extraction summary depuis JSON brut ───────────────
   private _extractSummary(raw: string): string {
     if (!raw) return '';
     const trimmed = raw.trim();
-
     if (trimmed.startsWith('{')) {
-      // Tenter parse JSON complet
       try {
         const parsed = JSON.parse(trimmed);
         const s = parsed.analyst_summary ?? parsed.summary ?? '';
         if (s) return s.trim();
       } catch {
-        // JSON tronqué → regex
         const match = trimmed.match(/"analyst_summary"\s*:\s*"([^"]+)"/);
         if (match) return match[1].trim();
       }
-      // Si on ne peut pas extraire → fallback vide
       return '';
     }
-
-    // Texte libre → retourner directement (max 400 chars)
     return trimmed.slice(0, 400);
   }
 
   // ── Helpers UI ────────────────────────────────────────
   getInitials(name: string): string {
+    if (!name) return '??';
     return name.split(' ').map(x => x[0]).join('').slice(0, 2).toUpperCase();
   }
 
@@ -568,7 +653,9 @@ export class Dashboard implements OnInit, OnDestroy {
   }
 
   statusBadge(s: string): string {
-    return s === 'top' ? 'badge--success' : s === 'ok' ? 'badge--warning' : 'badge--danger';
+    return s === 'top' ? 'badge--success'
+         : s === 'ok'  ? 'badge--warning'
+         : 'badge--danger';
   }
 
   statusText(s: string): string {
@@ -594,8 +681,8 @@ export class Dashboard implements OnInit, OnDestroy {
     return Math.min(100, Math.round((stock / Math.max(min * 3, 1)) * 100));
   }
 
-  forecastBarWidth(v: number): number { return Math.min(100, v); }
-  actualBarWidth(v: number):   number { return Math.min(100, v); }
+  forecastBarWidth(v: number): number { return Math.min(100, Math.max(0, v || 0)); }
+  actualBarWidth(v: number):   number { return Math.min(100, Math.max(0, v || 0)); }
 
   attainmentColor(actual: number, forecast: number): string {
     const pct = forecast > 0 ? (actual / forecast) * 100 : 0;
@@ -616,7 +703,7 @@ export class Dashboard implements OnInit, OnDestroy {
   ];
 
   leadTimeBarHeight(days: number): number {
-    return Math.min(100, (days / 12) * 100);
+    return Math.min(100, ((days || 0) / 12) * 100);
   }
 
   leadTimeColor(s: string): string {

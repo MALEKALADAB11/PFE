@@ -3,13 +3,12 @@ import {
   ElementRef, ViewChild,
   AfterViewChecked, OnInit, OnDestroy
 } from '@angular/core';
-import { CommonModule }      from '@angular/common';
-import { Subject } from 'rxjs';
-import { takeUntil } from 'rxjs/operators';
-import { Advisor }           from '../../core/models/advisor';
-import { MockDataService }   from '../../core/services/mock-data';
-import { WebSocketService }  from '../../core/services/websocket.service';
-import { ApiService } from '../../core/services/api';
+import { CommonModule }     from '@angular/common';
+import { Subject }          from 'rxjs';
+import { takeUntil }        from 'rxjs/operators';
+import { MockDataService }  from '../../core/services/mock-data';
+import { WebSocketService } from '../../core/services/websocket.service';
+import { ApiService }       from '../../core/services/api';
 
 interface Product {
   id:          string;
@@ -53,25 +52,75 @@ export class ConseillerComponent
 
   @ViewChild('chatBottom') chatBottom!: ElementRef;
 
-  storeId    = 'store-lac2';
-  advisors   = signal<Advisor[]>([]);
-  selectedId = signal<string>('kb');
-  chatOpen   = signal<boolean>(true);
-  chatTab    = signal<'coach' | 'alertes'>('coach');
+  storeId      = 'store-lac2';
+  selectedId   = signal<string>('');
+  chatOpen     = signal<boolean>(true);
+  chatTab      = signal<'coach' | 'alertes'>('coach');
   flippedProduct = signal<string | null>(null);
-  chatInput  = signal<string>('');
+  chatInput    = signal<string>('');
   shouldScroll = false;
 
-  // ── Live data ────────────────────────────────────────
-  liveAdvisors = signal<Advisor[]>([]);
-  wsConnected  = signal(false);
+  liveAdvisors   = signal<any[]>([]);
+  private destroy$      = new Subject<void>();
+  private refreshTimer: any = null;
+  private _agentTimer:  any = null;
+  private _msgInitDone  = false;
 
-  // ── Computed selected advisor ─────────────────────────
+  // ─────────────────────────────────────────────────────
+  // Advisors dynamiques depuis WS
+  // ─────────────────────────────────────────────────────
+  advisors = computed((): any[] => {
+    const wsAdvisors = this.ws.liveMetrics()?.advisors;
+    if (wsAdvisors?.length) {
+      return [...wsAdvisors]
+        .sort((a: any, b: any) => (b.revenue ?? 0) - (a.revenue ?? 0))
+        .map((a: any, i: number) => ({
+          id:           a.id ?? a.name?.replace(/ /g, '_').toLowerCase() ?? `adv_${i}`,
+          name:         a.name ?? '',
+          initials:     this._initials(a.name ?? ''),
+          avatarColor:  this._avatarColor(i),
+          role:         this._roleFromName(a.name ?? ''),
+          caRealized:   Math.round(a.revenue    ?? 0),
+          caObjectif:   Math.round(a.target     ?? 4500),
+          performance:  Math.round(a.attainment ?? 0),
+          previsionEod: Math.round((a.revenue   ?? 0) * 1.25),
+          coachScore:   this._coachScore(a.attainment ?? 0),
+          nbVentes:     a.nb_ventes ?? 0,
+          status:       (a.attainment ?? 0) >= 80 ? 'top'
+                      : (a.attainment ?? 0) >= 50 ? 'ok'
+                      : 'urgent',
+        }));
+    }
+    const apiList = this.liveAdvisors();
+    if (apiList.length) {
+      return [...apiList]
+        .sort((a: any, b: any) =>
+          (b.revenue ?? b.caRealized ?? 0) - (a.revenue ?? a.caRealized ?? 0)
+        )
+        .map((a: any, i: number) => ({
+          id:           a.id ?? a.name?.replace(/ /g, '_').toLowerCase() ?? `adv_${i}`,
+          name:         a.name ?? '',
+          initials:     this._initials(a.name ?? ''),
+          avatarColor:  this._avatarColor(i),
+          role:         this._roleFromName(a.name ?? ''),
+          caRealized:   Math.round(a.revenue    ?? a.caRealized ?? 0),
+          caObjectif:   Math.round(a.target     ?? 4500),
+          performance:  Math.round(a.attainment ?? a.performance ?? 0),
+          previsionEod: Math.round((a.revenue   ?? 0) * 1.25),
+          coachScore:   this._coachScore(a.attainment ?? 0),
+          nbVentes:     a.nb_ventes ?? 0,
+          status:       (a.attainment ?? 0) >= 80 ? 'top'
+                      : (a.attainment ?? 0) >= 50 ? 'ok'
+                      : 'urgent',
+        }));
+    }
+    return [];
+  });
+
   selected = computed(() => {
-    const live = this.liveAdvisors();
-    const mock = this.advisors();
-    const list = live.length ? live : mock;
-    return list.find(a => a.id === this.selectedId())!;
+    const list = this.advisors();
+    if (!list.length) return null;
+    return list.find(a => a.id === this.selectedId()) ?? list[0];
   });
 
   perfColor = computed(() => {
@@ -81,260 +130,422 @@ export class ConseillerComponent
 
   caPercent = computed(() => {
     const s = this.selected();
-    if (!s) return 0;
+    if (!s?.caObjectif) return 0;
+    return Math.min(100, Math.round((s.caRealized / s.caObjectif) * 100));
+  });
 
-    // Utiliser données live WS si disponibles
-    const liveData = this.ws.liveAdvisors();
-    const liveAdv  = liveData.find((l: any) => l.advisor_id === s.id);
-    if (liveAdv) {
-      const ca     = liveAdv.ca_today ?? s.caRealized;
-      const target = s.caObjectif ?? 2000;
-      return Math.round((ca / target) * 100);
+  selectedCaLive = computed(() => this.selected()?.caRealized ?? 0);
+
+  // ── Contexte Stratège ─────────────────────────────────
+  weatherContext = computed(() =>
+    this.ws.liveMetrics()?.store_context?.weather ?? ''
+  );
+  weatherIcon = computed(() => {
+    const w = this.weatherContext();
+    return w ? w.split(' ')[0] : '';
+  });
+  weatherLabel = computed(() => {
+    const w = this.weatherContext();
+    return w ? w.split(' ').slice(1).join(' ') : '';
+  });
+
+  nextHolidayLabel = computed(() => {
+    const signals = this.ws.contextSignals() ?? [];
+    const h = signals.find((s: any) => s.type === 'holiday');
+    return h?.label ?? '';
+  });
+
+  promoLabel = computed(() =>
+    this.ws.liveMetrics()?.store_context?.promo ?? ''
+  );
+
+  strateActions = computed(() => {
+    const ws = this.ws.strateActions();
+    if (ws?.length) return ws;
+    return this.ws.liveMetrics()?.strategie_actions ?? [];
+  });
+
+  causeRacine = computed(() =>
+    this.ws.causeRacine()
+    || this.ws.liveMetrics()?.cause_racine
+    || ''
+  );
+
+  urgencyLevel   = computed(() => this.ws.urgencyLevel()  ?? 'LOW');
+  gapPct         = computed(() => this.ws.gapPct()        ?? 0);
+  forecastEod    = computed(() => this.ws.forecastEod()   ?? 0);
+  hoursRemaining = computed(() => Math.max(0, 20 - new Date().getHours()));
+
+  contextTag = computed(() => {
+    const signals = this.ws.contextSignals() ?? [];
+    const weather = signals.find((s: any) => s.type === 'weather');
+    if (weather?.level === 'high' || weather?.level === 'med') return weather.label ?? '';
+    const promo = this.promoLabel();
+    if (promo) return promo;
+    return `Gap ${this.gapPct().toFixed(0)}% — ${this.urgencyLevel()}`;
+  });
+
+  // ── Produits dynamiques ───────────────────────────────
+  products = computed((): Product[] => {
+    const signals    = this.ws.contextSignals() ?? [];
+    const actions    = this.strateActions();
+    const focus      = this.ws.focusProduits() ?? [];
+    const weatherSig = signals.find((s: any) => s.type === 'weather');
+    const isRain     = (weatherSig?.label ?? '').toLowerCase().includes('pluie')
+                    || (weatherSig?.label ?? '').toLowerCase().includes('nuage');
+    const isHoliday  = signals.some((s: any) => s.type === 'holiday');
+
+    const base: Product[] = [
+      {
+        id: 'p1', name: 'iPhone 16 Pro', category: 'SMARTPHONE',
+        price: '1,299', unit: 'DT',
+        margin: 'High', marginColor: '#00B894',
+        hot: true, accentColor: '#6C5CE7',
+        script: 'Script Vente iPhone 16 Pro',
+        scriptLines: [
+          '"Pour quoi utilisez-vous principalement votre téléphone ?"',
+          'Montrez la différence avec la puce A18 Pro — photos et vidéo.',
+          'Bundle : iPhone + coque + assurance = +340 DT de panier.',
+          'Objection prix : "Sur 24 mois c\'est 54 DT/mois."',
+          'Urgence : "Il ne nous reste que 3 unités."',
+        ]
+      },
+      {
+        id: 'p2', name: 'Forfait 5G Max', category: 'FORFAIT',
+        price: '49', unit: 'DT/mois',
+        margin: 'Medium', marginColor: '#F9A825',
+        hot: true, accentColor: '#00B894',
+        script: 'Script Forfait 5G Max',
+        scriptLines: [
+          '"Vous êtes satisfait de votre forfait actuel ?"',
+          '5G = débit 10x supérieur + appels HD illimités.',
+          'Bundle téléphone + forfait = économie garantie.',
+          'Demandez quand expire leur contrat actuel.',
+          'Si < 3 mois : pré-souscription avec activation différée.',
+        ]
+      },
+      {
+        id: 'p3', name: 'Assurance Premium', category: 'SERVICE',
+        price: '9', unit: 'DT/mois',
+        margin: 'High', marginColor: '#00B894',
+        hot: false, accentColor: '#E74C3C',
+        script: 'Script Assurance Premium',
+        scriptLines: [
+          'Proposer APRÈS confirmation d\'achat du terminal.',
+          '"Remplacement écran en 48h avec l\'Assurance Premium."',
+          'Recadrer : "9 DT/mois — un café par semaine."',
+          'Montrer coût réparation = 280 DT sans assurance.',
+          'Taux de conversion cible : 70% des ventes terminaux.',
+        ]
+      },
+      {
+        id: 'p4', name: 'Apple Watch S10', category: 'ACCESSOIRE',
+        price: '449', unit: 'DT',
+        margin: 'High', marginColor: '#00B894',
+        hot: isRain, accentColor: '#F9A825',
+        script: 'Script Apple Watch S10',
+        scriptLines: [
+          'Ciblez les acheteurs iPhone : "La Watch se couple parfaitement."',
+          'Démo en boutique : notifications, suivi santé en direct.',
+          isRain ? 'Contexte météo : "La Watch est étanche à 50m."'
+                 : 'Sport : "Idéale pour suivre votre activité."',
+          'Bundle : Watch + bracelet sport + AppleCare = +80 DT.',
+          'Proposez 3x sans frais si hésitation sur le prix.',
+        ]
+      },
+      {
+        id: 'p5', name: 'AirPods Pro 3', category: 'ACCESSOIRE',
+        price: '279', unit: 'DT',
+        margin: 'High', marginColor: '#00B894',
+        hot: isRain, accentColor: '#2D9CDB',
+        script: 'Script AirPods Pro 3',
+        scriptLines: [
+          '"Vous utilisez des écouteurs ? Laissez-moi vous montrer."',
+          'Faites écouter la réduction de bruit active.',
+          isRain ? 'Contexte météo : "Résistant à l\'eau — parfait par ce temps."'
+                 : 'Pour le sport et le travail — qualité audio incomparable.',
+          'Comparez à Samsung — meilleure ANC à prix similaire.',
+          'Housse de protection = +25 DT, article haute marge.',
+        ]
+      },
+      {
+        id: 'p6', name: 'Pack Pro Business', category: 'BUNDLE',
+        price: '89', unit: 'DT/mois',
+        margin: 'Top', marginColor: '#6C5CE7',
+        hot: isHoliday, accentColor: '#6C5CE7',
+        script: 'Script Pack Pro Business',
+        scriptLines: [
+          'Cible : indépendants, dirigeants de PME.',
+          '"Ligne 5G Pro + Fibre 1Gb + Backup Cloud 1To."',
+          'Avantage fiscal : déductible comme charge professionnelle.',
+          'Engagement 24 mois = stabilité + revenus récurrents.',
+          'Offrir installation gratuite = différenciateur clé.',
+        ]
+      },
+    ];
+
+    // Réordonner selon focus Stratège
+    const focusKeywords = [
+      ...focus.map((f: string) => f.toLowerCase()),
+      ...actions.map((a: any) => (a.produit_cible ?? '').toLowerCase()),
+    ];
+
+    if (focusKeywords.length) {
+      return [...base].sort((a, b) => {
+        const aMatch = focusKeywords.some(k =>
+          a.name.toLowerCase().includes(k) || a.category.toLowerCase().includes(k)
+        );
+        const bMatch = focusKeywords.some(k =>
+          b.name.toLowerCase().includes(k) || b.category.toLowerCase().includes(k)
+        );
+        if (aMatch && !bMatch) return -1;
+        if (!aMatch && bMatch) return 1;
+        return 0;
+      });
     }
-    return Math.round((s.caRealized / s.caObjectif) * 100);
+
+    if (isRain) {
+      return [...base].sort((a, b) => {
+        if (a.category === 'ACCESSOIRE' && b.category !== 'ACCESSOIRE') return -1;
+        if (a.category !== 'ACCESSOIRE' && b.category === 'ACCESSOIRE') return 1;
+        return 0;
+      });
+    }
+
+    return base;
   });
 
-  // CA en temps réel pour le selected advisor
-  selectedCaLive = computed(() => {
-    const s       = this.selected();
-    const liveData = this.ws.liveAdvisors();
-    const liveAdv  = liveData.find((l: any) => l.advisor_id === s?.id);
-    return liveAdv ? Math.round(liveAdv.ca_today) : (s?.caRealized ?? 0);
-  });
-
-  // ── Team ranking avec données live ───────────────────
-  advisorsList = computed(() => {
-    const live = this.ws.liveAdvisors();
-    const list = this.liveAdvisors().length
-               ? this.liveAdvisors()
-               : this.advisors();
-
-    if (!live.length) return list;
-
-    return list.map(adv => {
-      const wsData = live.find((l: any) => l.advisor_id === adv.id);
-      if (!wsData) return adv;
-      const ca   = Math.round(wsData.ca_today);
-      const perf = Math.round((ca / adv.caObjectif) * 100);
-      return {
-        ...adv,
-        caRealized:  ca,
-        performance: perf,
-        status: perf >= 80 ? 'top' : perf >= 50 ? 'ok' : 'urgent'
-      };
-    }).sort((a, b) => b.performance - a.performance);
-  });
-
-  // ── Alerts ───────────────────────────────────────────
+  // ── Alertes ───────────────────────────────────────────
   alerts = signal<Alert[]>([
     {
       id: 'a1',
-      label:  'Critical stock — iPhone 16 Pro',
-      detail: '3 units remaining · 91% stockout risk',
+      label:  'Stock critique — iPhone 16 Pro',
+      detail: '3 unités restantes · Risque rupture 91%',
       color:  '#E74C3C', bg: '#FDEDEC',
-      chatMessage: 'iPhone 16 Pro stock is critical (3 units left). How should I handle interested customers?'
+      chatMessage: 'Le stock iPhone 16 Pro est critique (3 unités). Comment gérer les clients intéressés ?'
     },
     {
       id: 'a2',
-      label:  'Peak traffic expected 5–7 PM',
-      detail: 'Concert tonight 2km away · +60% visitors expected',
+      label:  'Pic de trafic prévu 17h-19h',
+      detail: 'Concert ce soir à 2km · +60% visiteurs attendus',
       color:  '#F9A825', bg: '#FFF8E1',
-      chatMessage: 'Strategy for the 5 PM traffic peak? Concert tonight — how should I prepare?'
+      chatMessage: 'Stratégie pour le pic de trafic à 17h ? Concert ce soir — comment se préparer ?'
     },
     {
       id: 'a3',
-      label:  'Rain drives +40% accessory demand',
-      detail: 'Weather signal active until 6:00 PM',
+      label:  'Météo — +40% demande accessoires',
+      detail: 'Signal météo actif jusqu\'à 18h',
       color:  '#2D9CDB', bg: '#E8F4FD',
-      chatMessage: 'How can I leverage the rain signal to boost accessory sales?'
+      chatMessage: 'Comment exploiter le signal météo pour booster les ventes d\'accessoires ?'
     },
   ]);
 
   quickPrompts = [
-    'Insurance bundle script?',
-    '5G argument vs competitors?',
-    'How to handle price objection?',
-    'Strategy for 5 PM peak traffic?',
-    'Accessory upsell — rain context?',
-    'How to reach 2,000 DT target?',
+    'Script bundle assurance ?',
+    'Argument 5G face aux concurrents ?',
+    'Comment gérer objection prix ?',
+    'Stratégie pic trafic 17h30 ?',
+    'Upsell accessoires — contexte météo ?',
+    'Comment atteindre l\'objectif ?',
   ];
 
-  messages = signal<ChatMessage[]>([
-    {
-      id:   'm0',
-      role: 'coach',
-      text: `Hi Karim! You are at 93% of your daily target with 3h28 remaining. The rain creates an opportunity for accessories (+40%). I'm monitoring the store in real time. What do you want to work on?`,
-      time: '10:09 AM'
-    }
-  ]);
-
-  products: Product[] = [
-    {
-      id: 'p1', name: 'iPhone 16 Pro', category: 'SMARTPHONE',
-      price: '1,299', unit: 'DT',
-      margin: 'High', marginColor: '#00B894',
-      hot: true, accentColor: '#6C5CE7',
-      script: 'iPhone 16 Pro Sales Script',
-      scriptLines: [
-        'Open with the need: "What do you mainly use your phone for?"',
-        'Highlight the A18 Pro chip — show the real difference in photos and video.',
-        'Bundle: iPhone 16 Pro + case + AppleCare+ = +340 DT average basket.',
-        'Price objection: "Over 24 months it\'s 54 DT/month."',
-        'Create urgency: "We only have 3 units left."',
-      ]
-    },
-    {
-      id: 'p2', name: 'Fiber 2G Pro', category: 'INTERNET',
-      price: '49', unit: 'DT/mo',
-      margin: 'Medium', marginColor: '#F9A825',
-      hot: true, accentColor: '#00B894',
-      script: 'Fiber Pro Sales Script',
-      scriptLines: [
-        'Qualify: "How many people at home use the internet simultaneously?"',
-        '2Gb symmetric = fast upload, ideal for remote work and gaming.',
-        'Bundle fiber + 4K TV decoder = +15 DT but 60% better retention.',
-        'Ask when their contract ends.',
-        'If < 3 months: offer pre-subscription with deferred activation.',
-      ]
-    },
-    {
-      id: 'p3', name: 'Premium Insurance', category: 'SERVICE',
-      price: '9', unit: 'DT/mo',
-      margin: 'High', marginColor: '#00B894',
-      hot: false, accentColor: '#E74C3C',
-      script: 'Premium Insurance Script',
-      scriptLines: [
-        'Best timing: offer AFTER the device purchase is confirmed.',
-        '"With Premium Insurance, screen replacement in 48h."',
-        'Reframe: "It\'s 9 DT/month — a coffee per week."',
-        'Show screen repair cost = 280 DT without insurance.',
-        'Target conversion rate: 70% of device sales.',
-      ]
-    },
-    {
-      id: 'p4', name: 'Apple Watch S10', category: 'ACCESSORY',
-      price: '449', unit: 'DT',
-      margin: 'High', marginColor: '#00B894',
-      hot: true, accentColor: '#F9A825',
-      script: 'Apple Watch S10 Script',
-      scriptLines: [
-        'Target iPhone buyers: "You have an iPhone? The Watch pairs perfectly."',
-        'Demo in store: show notifications, live health tracking.',
-        'Rain opportunity: "The Watch is waterproof to 50m."',
-        'Bundle: Watch + extra sport band + AppleCare = +80 DT margin.',
-        'Offer 3x installments if hesitation on price.',
-      ]
-    },
-    {
-      id: 'p5', name: 'AirPods Pro 3', category: 'ACCESSORY',
-      price: '279', unit: 'DT',
-      margin: 'High', marginColor: '#00B894',
-      hot: true, accentColor: '#2D9CDB',
-      script: 'AirPods Pro 3 Script',
-      scriptLines: [
-        '"Do you use earbuds right now? Let me show you the difference."',
-        'Let them listen to the active noise cancellation.',
-        'Rain context: "Perfect for commuting, water resistant."',
-        'Compare to Samsung — superior ANC quality at similar price.',
-        'Add protective case = +25 DT, high margin item.',
-      ]
-    },
-    {
-      id: 'p6', name: 'Pro Business Pack', category: 'BUNDLE',
-      price: '89', unit: 'DT/mo',
-      margin: 'Top', marginColor: '#6C5CE7',
-      hot: false, accentColor: '#6C5CE7',
-      script: 'Pro Business Pack Script',
-      scriptLines: [
-        'Target: self-employed professionals, business owners.',
-        '"5G Pro mobile line + 1Gb fiber + 1TB cloud backup."',
-        'Tax advantage: fully deductible as a business expense.',
-        '24-month commitment = stability + recurring revenue.',
-        'Offer free setup visit = key differentiator.',
-      ]
-    },
-  ];
-
-  private destroy$ = new Subject<void>();
-  private refreshTimer: any = null;
+  messages = signal<ChatMessage[]>([]);
 
   constructor(
     private data: MockDataService,
     private api:  ApiService,
-    private ws:   WebSocketService
-  ) {
-    this.advisors.set(this.data.getAdvisors());
-  }
+    public  ws:   WebSocketService
+  ) {}
 
   ngOnInit() {
-    // 1 — Charger advisors depuis API
+    // 1 — API advisors
     this.api.getAdvisors(this.storeId)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: d => this.liveAdvisors.set(d.advisors ?? []),
+        next: (d: any) => {
+          this.liveAdvisors.set(d.advisors ?? []);
+          this._tryInitMessage();
+        },
         error: () => {}
       });
 
-    // 2 — Connecter WebSocket store pour CA live
-    this.ws.connectStore(this.storeId);
+    // 2 — WS store
+    if (!this.ws.connected()) {
+      this.ws.connectStore(this.storeId);
+    }
 
-    // 3 — Connecter WebSocket advisor pour coach updates
-    this.ws.connectAdvisor(this.selectedId());
+    // 3 — WS advisor
+    this.ws.connectAdvisor(this.selectedId() || 'ahmed_ben_ali');
 
-    // 4 — Refresh HTTP toutes les 30s
+    // 4 — Message initial immédiat
+    this._tryInitMessage();
+
+    // 5 — Sync toutes les 3s
+    this._agentTimer = setInterval(() => {
+      this._syncAlertsFromAgents();
+      this._tryInitMessage();
+    }, 3000);
+
+    // 6 — Refresh HTTP
     this.refreshTimer = setInterval(() => {
       this.api.getAdvisors(this.storeId)
         .pipe(takeUntil(this.destroy$))
         .subscribe({
-          next: d => this.liveAdvisors.set(d.advisors ?? []),
+          next:  (d: any) => this.liveAdvisors.set(d.advisors ?? []),
           error: () => {}
         });
-    }, 30000);
+    }, 60000);
   }
 
   ngOnDestroy() {
     if (this.refreshTimer) clearInterval(this.refreshTimer);
+    if (this._agentTimer)  clearInterval(this._agentTimer);
     this.destroy$.next();
     this.destroy$.complete();
-    this.ws.disconnect();
+    // NE PAS déconnecter le WS global
   }
 
   ngAfterViewChecked() {
     if (this.shouldScroll) {
-      this.scrollChat();
+      this._scrollChat();
       this.shouldScroll = false;
     }
   }
 
+  // ─────────────────────────────────────────────────────
+  // Message initial coach
+  // ─────────────────────────────────────────────────────
+  private _tryInitMessage() {
+    if (this._msgInitDone) return;
+
+    const adv  = this.selected();
+    const live = this.ws.liveMetrics();
+    // Attendre qu'on ait au moins quelque chose
+    if (!adv && !live) return;
+
+    this._msgInitDone = true;
+
+    const now    = new Date();
+    const time   = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    const name   = adv?.name?.split(' ')[0] ?? 'Conseiller';
+    const perf   = adv?.performance ?? 0;
+    const ca     = adv?.caRealized  ?? 0;
+    const target = adv?.caObjectif  ?? 4500;
+    const gap    = Math.max(0, target - ca);
+    const heures = this.hoursRemaining();
+    const actions = this.strateActions();
+    const weather = this.weatherLabel() || this.weatherIcon();
+
+    let msg = '';
+    if (perf >= 80) {
+      msg = `Bravo ${name} ! Tu es à ${perf}% de ton objectif — excellent rythme.`;
+    } else if (perf >= 50) {
+      msg = `Bonjour ${name} ! Tu es à ${perf}% de ton objectif avec ${heures}h restantes.`;
+    } else if (perf > 0) {
+      msg = `${name}, gap de ${gap.toLocaleString()} DT à combler — ${heures}h pour agir.`;
+    } else {
+      msg = `Coach IA actif. Urgence : ${this.urgencyLevel()} — Gap : ${this.gapPct().toFixed(0)}%.`;
+    }
+
+    if (weather) {
+      msg += ` La météo (${weather}) crée une opportunité sur les accessoires.`;
+    }
+
+    if (actions.length > 0) {
+      msg += ` Action prioritaire : ${actions[0].action} → ${actions[0].produit_cible}.`;
+    }
+
+    msg += ` Je surveille la boutique en temps réel. Sur quoi veux-tu travailler ?`;
+
+    this.messages.set([{ id: 'm0', role: 'coach', text: msg, time }]);
+    this.shouldScroll = true;
+  }
+
+  // ─────────────────────────────────────────────────────
+  // Sync alertes agents
+  // ─────────────────────────────────────────────────────
+  private _syncAlertsFromAgents() {
+    const signals = this.ws.contextSignals() ?? [];
+    const actions = this.strateActions();
+    const urgency = this.urgencyLevel();
+    const dynamic: Alert[] = [];
+
+    const wSig = signals.find((s: any) =>
+      s.type === 'weather' && (s.level === 'high' || s.level === 'med')
+    );
+    if (wSig) {
+      dynamic.push({
+        id: 'a-weather',
+        label:  wSig.label ?? 'Signal météo',
+        detail: `Impact trafic détecté`,
+        color: '#2D9CDB', bg: '#E8F4FD',
+        chatMessage: `Signal météo : ${wSig.label}. Quelle stratégie adopter ?`
+      });
+    }
+
+    const sSig = signals.find((s: any) => s.type === 'stock');
+    if (sSig) {
+      dynamic.push({
+        id: 'a-stock',
+        label:  sSig.label ?? 'Stock critique',
+        detail: 'Risque de rupture détecté',
+        color: '#E74C3C', bg: '#FDEDEC',
+        chatMessage: `${sSig.label}. Comment gérer les clients intéressés ?`
+      });
+    }
+
+    if (urgency === 'HIGH') {
+      dynamic.push({
+        id: 'a-urgency',
+        label:  `🔴 Urgence HIGH — Gap ${this.gapPct().toFixed(0)}%`,
+        detail: this.causeRacine() || 'Action immédiate requise',
+        color: '#E74C3C', bg: '#FDEDEC',
+        chatMessage: `Urgence HIGH. Gap ${this.gapPct().toFixed(0)}%. ${this.causeRacine()}. Que faire ?`
+      });
+    }
+
+    if (actions.length > 0) {
+      const a1 = actions[0];
+      dynamic.push({
+        id: 'a-stratege',
+        label:  `🎯 Action : ${a1.produit_cible ?? ''}`,
+        detail: a1.action ?? '',
+        color: '#6C5CE7', bg: '#F0EDFD',
+        chatMessage: `Comment exécuter : ${a1.action} ?`
+      });
+    }
+
+    const hSig = signals.find((s: any) => s.type === 'holiday');
+    if (hSig) {
+      dynamic.push({
+        id: 'a-holiday',
+        label:  hSig.label ?? 'Jour férié',
+        detail: 'Adapter la stratégie au contexte',
+        color: '#F9A825', bg: '#FFF8E1',
+        chatMessage: `${hSig.label}. Quelle stratégie pour ce contexte ?`
+      });
+    }
+
+    if (dynamic.length > 0) {
+      const dynamicIds = new Set(dynamic.map(a => a.id));
+      const manual = this.alerts().filter(a =>
+        !dynamicIds.has(a.id) &&
+        !['a-weather','a-stock','a-urgency','a-stratege','a-holiday'].includes(a.id)
+      );
+      this.alerts.set([...dynamic, ...manual]);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────
+  // Actions UI
+  // ─────────────────────────────────────────────────────
   selectAdvisor(id: string) {
     this.selectedId.set(id);
     this.ws.connectAdvisor(id);
+    this._msgInitDone = false;
+    this.messages.set([]);
+    setTimeout(() => this._tryInitMessage(), 200);
   }
-
-  statusClass(s: string): string {
-    const m: Record<string, string> = {
-      top:    'status--top',    ok:     'status--ok',
-      urgent: 'status--urgent', attente:'status--attente'
-    };
-    return m[s] ?? '';
-  }
-
-  statusText(s: string): string {
-    const m: Record<string, string> = {
-      top: 'Top', ok: 'OK', urgent: 'Urgent', attente: 'Waiting'
-    };
-    return m[s] ?? s;
-  }
-
-  advPerfColor(p: number): string {
-    return p >= 80 ? '#00B894' : p >= 50 ? '#F9A825' : '#E74C3C';
-  }
-
-  toggleFlip(id: string) {
-    this.flippedProduct.update(cur => cur === id ? null : id);
-  }
-
-  isFlipped(id: string) { return this.flippedProduct() === id; }
 
   openChat() {
     this.chatOpen.set(true);
@@ -345,30 +556,75 @@ export class ConseillerComponent
     const msg = (text ?? this.chatInput()).trim();
     if (!msg) return;
 
+    // ── Message utilisateur ───────────────────────────────
     this.messages.update(list => [...list, {
       id:   'u' + Date.now(),
       role: 'user' as const,
       text: msg,
-      time: new Date().toLocaleTimeString('en-US', {
+      time: new Date().toLocaleTimeString('fr-FR', {
         hour: '2-digit', minute: '2-digit'
       })
     }]);
-
     this.chatInput.set('');
     this.shouldScroll = true;
 
-    setTimeout(() => {
-      this.messages.update(list => [...list, {
-        id:   'c' + Date.now(),
-        role: 'coach' as const,
-        text: this.generateReply(msg),
-        time: new Date().toLocaleTimeString('en-US', {
-          hour: '2-digit', minute: '2-digit'
-        })
-      }]);
-      this.shouldScroll = true;
-    }, 900);
-  }
+    // ── Indicateur typing ─────────────────────────────────
+    const typingId = 'typing-' + Date.now();
+    this.messages.update(list => [...list, {
+      id:   typingId,
+      role: 'coach' as const,
+      text: '...',
+      time: ''
+    }]);
+    this.shouldScroll = true;
+
+    // ── Contexte complet pour le LLM ─────────────────────
+    const context = {
+      strategie:         this.ws.liveMetrics()?.strategie         ?? '',
+      strategie_actions: this.ws.liveMetrics()?.strategie_actions ?? [],
+      cause_racine:      this.causeRacine(),
+      weather:           this.weatherContext(),
+      urgency:           this.urgencyLevel(),
+    };
+
+    // ── Appel API CoachAgent ──────────────────────────────
+    this.api.coachChat({
+      message:      msg,
+      advisor_name: this.selected()?.name ?? '',
+      store_id:     this.storeId,
+      context,
+    }).pipe(takeUntil(this.destroy$)).subscribe({
+      next: (res: any) => {
+        this.messages.update(list => [
+          ...list.filter(m => m.id !== typingId),
+          {
+            id:   'c' + Date.now(),
+            role: 'coach' as const,
+            text: res.reply ?? '',
+            time: new Date().toLocaleTimeString('fr-FR', {
+              hour: '2-digit', minute: '2-digit'
+            })
+          }
+        ]);
+        this.shouldScroll = true;
+      },
+      error: () => {
+        // Fallback local si API indisponible
+        this.messages.update(list => [
+          ...list.filter(m => m.id !== typingId),
+          {
+            id:   'c' + Date.now(),
+            role: 'coach' as const,
+            text: this._generateReply(msg),
+            time: new Date().toLocaleTimeString('fr-FR', {
+              hour: '2-digit', minute: '2-digit'
+            })
+          }
+        ]);
+        this.shouldScroll = true;
+      }
+    });
+}
 
   sendQuick(prompt: string) {
     this.chatTab.set('coach');
@@ -397,37 +653,112 @@ export class ConseillerComponent
     this.alerts.update(list => list.filter(a => a.id !== id));
   }
 
-  private generateReply(msg: string): string {
-    const m = msg.toLowerCase();
-
-    if (m.includes('insurance'))
-      return 'Insurance bundle script:\n\n1. Timing: offer AFTER device purchase.\n2. "It\'s 9 DT/month — a coffee per week. Screen replacement in 48h."\n3. Show repair cost = 280 DT without insurance.\n4. Target: 70% conversion on device sales.';
-
-    if (m.includes('5g') || m.includes('competitor'))
-      return 'Against competitors on 5G:\n\n1. Our network covers 94% vs 87% competitors.\n2. Guaranteed speed vs shared bandwidth.\n3. Let the customer test their current network in store.\n4. Highlight exclusive 5G Pro bundle pricing.';
-
-    if (m.includes('price') || m.includes('objection'))
-      return 'Price reframing:\n\n1. Break it down: "1,299 DT = 54 DT/month over 24 months."\n2. "Less than your Netflix + Spotify subscription."\n3. Pro camera, 5-year durability, trade-in value.\n4. Offer 3x installments with no fees.';
-
-    if (m.includes('peak') || m.includes('traffic') || m.includes('5 pm'))
-      return 'Team plan for the 5–7 PM peak:\n\n1. Karim → premium handsets.\n2. Sara → fiber and Pro offers.\n3. Amine → accessories (easy traffic).\n4. Leila → welcome and orientation.\n5. Prepare 3 iPhones in window by 4:45 PM.';
-
-    if (m.includes('rain') || m.includes('accessor'))
-      return 'Accessories strategy — rain context:\n\n1. Active signal: +40% demand until 6 PM.\n2. Priority: AirPods Pro 3 (water resistant), Apple Watch (waterproof 50m).\n3. Hook: "Perfect in this weather, certified water resistant."\n4. Move Amine to accessories zone immediately.';
-
-    if (m.includes('stock') || m.includes('iphone'))
-      return 'iPhone 16 Pro stock critical (3 units):\n\nStrategy: create urgency.\nFor hesitant customers: reservation with 10% deposit.\nRedirect others to Samsung A55 (24 units available).';
-
-    if (m.includes('target') || m.includes('2,000') || m.includes('2000')) {
-      const ca   = this.selectedCaLive();
-      const gap  = 2000 - ca;
-      return `Reaching 2,000 DT target:\n\nCurrent: ${ca.toLocaleString()} DT · Gap: ${Math.round(gap).toLocaleString()} DT\n\n1. One iPhone 16 Pro closes the gap immediately.\n2. Two accessory bundles = ~300 DT.\n3. Premium Insurance on every device sale.`;
-    }
-
-    return `Analyzing: "${msg.slice(0, 60)}..."\n\nCross-referencing live POS data, weather signals, stock levels, and TimesFM forecasts. Want me to drill down on a specific product or advisor?`;
+  toggleFlip(id: string) {
+    this.flippedProduct.update(cur => cur === id ? null : id);
   }
 
-  private scrollChat() {
+  isFlipped(id: string) { return this.flippedProduct() === id; }
+
+  // ─────────────────────────────────────────────────────
+  // Réponses coach contextualisées
+  // ─────────────────────────────────────────────────────
+  private _generateReply(msg: string): string {
+    const m       = msg.toLowerCase();
+    const adv     = this.selected();
+    const ca      = adv?.caRealized ?? 0;
+    const target  = adv?.caObjectif ?? 4500;
+    const gap     = Math.max(0, target - ca);
+    const actions = this.strateActions();
+    const weather = this.weatherLabel() || this.weatherIcon();
+    const urgency = this.urgencyLevel();
+
+    const strateCtx = actions.length > 0
+      ? `\n\n💡 Action Stratège : ${actions[0].action} → ${actions[0].produit_cible}`
+      : '';
+
+    if (m.includes('assurance') || m.includes('insurance')) {
+      return `Script Assurance Premium :\n\n1. Proposer APRÈS confirmation d'achat.\n2. "Remplacement écran en 48h avec l'Assurance Premium."\n3. Recadrer : "9 DT/mois — un café par semaine."\n4. Montrer coût réparation = 280 DT sans assurance.\n5. Taux de conversion cible : 70% des ventes terminaux.`;
+    }
+
+    if (m.includes('5g') || m.includes('concurrent')) {
+      return `Argument 5G face aux concurrents :\n\n1. Notre réseau couvre 94% vs 87% concurrents.\n2. Débit garanti vs bande passante partagée.\n3. Faites tester le réseau actuel du client en boutique.\n4. Mettez en avant le bundle exclusif 5G Pro.${strateCtx}`;
+    }
+
+    if (m.includes('prix') || m.includes('objection') || m.includes('cher')) {
+      return `Recadrage prix :\n\n1. Décomposer : "1 299 DT = 54 DT/mois sur 24 mois."\n2. "Moins que votre abonnement Netflix + Spotify."\n3. Caméra pro, durabilité 5 ans, valeur de reprise.\n4. Proposer 3x sans frais si hésitation.`;
+    }
+
+    if (m.includes('trafic') || m.includes('pic') || m.includes('17h') || m.includes('18h')) {
+      const list = this.advisors();
+      const roles = ['terminaux premium', 'fibre et offres Pro', 'accessoires', 'accueil et orientation'];
+      return `Plan équipe pour le pic 17h-19h :\n\n${
+        list.map((a, i) => `${i+1}. ${a.name?.split(' ')[0]} → ${roles[i] ?? 'support'}`).join('\n')
+      }\n\nPréparez les produits phares en vitrine avant 16h45.${strateCtx}`;
+    }
+
+    if (m.includes('pluie') || m.includes('accessoire') || m.includes('météo')) {
+      return `Stratégie accessoires — contexte météo ${weather} :\n\n1. Signal actif : +40% demande.\n2. Priorité : AirPods Pro 3 (résistant eau), Apple Watch (étanche 50m).\n3. Accroche : "Parfait par ce temps, certifié résistant à l'eau."\n4. Déplacer un conseiller en zone accessoires immédiatement.`;
+    }
+
+    if (m.includes('stock') || m.includes('iphone') || m.includes('rupture')) {
+      return `Stock iPhone 16 Pro critique (3 unités) :\n\nStratégie : créer l'urgence.\nClients hésitants : réservation avec acompte 10%.\nRediriger vers Samsung A55 (24 unités disponibles).`;
+    }
+
+    if (m.includes('objectif') || m.includes('target') || m.includes('dépasser')) {
+      return `Atteindre l'objectif ${target.toLocaleString()} DT :\n\nActuel : ${ca.toLocaleString()} DT · Gap : ${Math.round(gap).toLocaleString()} DT\n\n1. Un iPhone 16 Pro comble le gap immédiatement.\n2. Deux bundles accessoires = ~300 DT.\n3. Assurance Premium sur chaque vente de terminal.${strateCtx}`;
+    }
+
+    if (m.includes('stratégie') || m.includes('agent') || m.includes('recommand') || m.includes('exécuter')) {
+      if (actions.length > 0) {
+        const txt = actions.slice(0, 3).map((a: any, i: number) =>
+          `${i+1}. ${a.action}\n   → ${a.produit_cible}${a.argument_vente ? '\n   💬 ' + a.argument_vente : ''}`
+        ).join('\n\n');
+        return `Recommandations Agent Stratège :\n\n${txt}\n\nCause racine : ${this.causeRacine() || 'Gap structurel'}\nUrgence : ${urgency}`;
+      }
+    }
+
+    return `Analyse de votre question...\n\nCroisant données POS live, signaux météo, stocks et prévisions TimesFM.${strateCtx}\n\nVoulez-vous que je détaille un produit ou un conseiller spécifique ?`;
+  }
+
+  // ─────────────────────────────────────────────────────
+  // Helpers
+  // ─────────────────────────────────────────────────────
+  statusClass(s: string): string {
+    return ({ top: 'status--top', ok: 'status--ok',
+              urgent: 'status--urgent', attente: 'status--attente' } as any)[s] ?? '';
+  }
+
+  statusText(s: string): string {
+    return ({ top: 'Top', ok: 'OK', urgent: 'Urgent', attente: 'Waiting' } as any)[s] ?? s;
+  }
+
+  advPerfColor(p: number): string {
+    return p >= 80 ? '#00B894' : p >= 50 ? '#F9A825' : '#E74C3C';
+  }
+
+  private _initials(name: string): string {
+    return name.split(' ').map(x => x[0]).join('').slice(0, 2).toUpperCase();
+  }
+
+  private _avatarColor(i: number): string {
+    return ['#2D9CDB','#9B51E0','#27AE60','#F2994A'][i % 4];
+  }
+
+  private _roleFromName(name: string): string {
+    const roles: Record<string, string> = {
+      'Ahmed Ben Ali':  'Smartphones · 5G',
+      'Nour Hamdi':     'Fibre · Offres Pro',
+      'Rami Jlassi':    'Accessoires',
+      'Ines Baccouche': 'Rétention · CRM',
+    };
+    return roles[name] ?? 'Conseiller';
+  }
+
+  private _coachScore(attainment: number): string {
+    return Math.min(0.99, 0.50 + (attainment / 100) * 0.49).toFixed(2);
+  }
+
+  private _scrollChat() {
     try {
       this.chatBottom?.nativeElement?.scrollIntoView({ behavior: 'smooth' });
     } catch {}

@@ -84,6 +84,7 @@ export class SidebarComponent implements OnInit, OnDestroy {
     );
   });
 
+    // Modifier storeContext pour inclure promo :
   storeContext = computed(() => {
     const wsCtx = this.ws.liveMetrics()?.store_context;
     if (wsCtx) return wsCtx;
@@ -106,6 +107,13 @@ export class SidebarComponent implements OnInit, OnDestroy {
     ?? this.store()?.context?.stockAlert
     ?? ''
   );
+  // Ajouter après stockAlert :
+
+  promoInfo = computed(() =>
+    this.storeContext()?.promo ?? ''
+  );
+
+
 
   progressColor = computed(() => {
     const p = this.caPercent();
@@ -135,11 +143,10 @@ export class SidebarComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit() {
-    this.loadData();
-    // ── La sidebar ne gère PAS la connexion WS ────────────
-    // Le dashboard est le seul responsable de connectStore()
-    this._refreshInterval = setInterval(() => this.loadData(), 60_000);
-  }
+  this.loadData();
+  // ── La sidebar ne gère PAS la connexion WS ────────────
+  this._refreshInterval = setInterval(() => this.loadData(), 60_000);
+}
 
   ngOnDestroy() {
     if (this._refreshInterval) clearInterval(this._refreshInterval);

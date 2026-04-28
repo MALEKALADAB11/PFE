@@ -10,14 +10,31 @@ export interface AnalystNodes {
   llm_summary:    { status: string; summary?: string };
 }
 
+export interface StrategeAction {
+  priorite:       number;
+  action:         string;
+  produit_cible:  string;
+  argument_vente: string;
+  impact_estime:  string;
+}
+
+export interface ContextSignal {
+  type:  string;
+  level: string;
+  label: string;
+  value: number;
+}
+
 @Injectable({ providedIn: 'root' })
 export class WebSocketService {
 
+  // ── Signals existants ─────────────────────────────────
   liveMetrics  = signal<any>(null);
   liveAdvisors = signal<any[]>([]);
   liveCoach    = signal<any>(null);
   connected    = signal(false);
 
+  // ── Agent Analyste ────────────────────────────────────
   analystNodes   = signal<AnalystNodes | null>(null);
   urgencyLevel   = signal<'HIGH' | 'MEDIUM' | 'LOW'>('LOW');
   urgencyScore   = signal<number>(0);
@@ -26,6 +43,20 @@ export class WebSocketService {
   analystSummary = signal<string>('');
   forecastEod    = signal<number>(0);
   lastUpdated    = signal<string>('');
+
+  // ── Agent Stratège ────────────────────────────────────
+  strategie        = signal<string>('');
+  strateActions    = signal<StrategeAction[]>([]);
+  causeRacine      = signal<string>('');
+  focusProduits    = signal<string[]>([]);
+  messageManager   = signal<string>('');
+  contextSignals   = signal<ContextSignal[]>([]);
+  contextHeatmap   = signal<any>({});
+  weatherLabel     = signal<string>('');
+  weatherIcon      = signal<string>('');
+  weatherEffect    = signal<number>(0);
+  isHolidayToday   = signal<boolean>(false);
+  nextHoliday      = signal<string>('');
 
   private storeWs:        WebSocket | null = null;
   private advisorWs:      WebSocket | null = null;
@@ -43,7 +74,6 @@ export class WebSocketService {
   connectStore(storeId: string) {
     if (!this.isBrowser) return;
 
-    // ── Déjà connecté au même store → skip ───────────────
     if (this.storeWs &&
        (this.storeWs.readyState === WebSocket.OPEN ||
         this.storeWs.readyState === WebSocket.CONNECTING) &&
@@ -52,7 +82,6 @@ export class WebSocketService {
       return;
     }
 
-    // ── Connexion en cours → skip ─────────────────────────
     if (this._isConnecting) {
       console.log('[WS] Connexion en cours, skip');
       return;
@@ -60,13 +89,11 @@ export class WebSocketService {
 
     this.storeId = storeId;
 
-    // ── Annuler timer reconnexion ─────────────────────────
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
 
-    // ── Fermer ancienne connexion proprement ──────────────
     if (this.storeWs) {
       this.storeWs.onopen    = null;
       this.storeWs.onmessage = null;
@@ -92,7 +119,6 @@ export class WebSocketService {
       const ws = new WebSocket(`ws://localhost:8000/ws/store/${storeId}`);
       this.storeWs = ws;
 
-      // ── Timeout 15s ───────────────────────────────────
       const timeout = setTimeout(() => {
         if (ws.readyState !== WebSocket.OPEN) {
           console.warn('[WS] Timeout — retry dans 20s');
@@ -140,18 +166,13 @@ export class WebSocketService {
         this._isConnecting = false;
         this.connected.set(false);
 
-        // Fermeture volontaire → pas de reconnexion
         if (event.code === 1000) {
           console.log('[WS] Fermeture volontaire');
           return;
         }
 
-        // Bloqué serveur (slot occupé) → attendre 30s
-        // Autres → attendre 20s
         const delay = event.code === 1008 ? 30000 : 20000;
-        console.log(
-          `[WS] Déconnecté (code=${event.code}) → retry dans ${delay/1000}s`
-        );
+        console.log(`[WS] Déconnecté (code=${event.code}) → retry dans ${delay/1000}s`);
         this.reconnectTimer = setTimeout(
           () => this._doConnect(storeId), delay
         );
@@ -168,6 +189,7 @@ export class WebSocketService {
   }
 
   private _handleMetricsUpdate(data: any) {
+    // ── liveMetrics complet ───────────────────────────────
     this.liveMetrics.set({
       ca_today:               data.ca_today,
       ca_target:              data.ca_target,
@@ -193,13 +215,23 @@ export class WebSocketService {
       ca_yesterday_same_hour: data.ca_yesterday_same_hour,
       analyst_summary:        data.analyst_summary        ?? '',
       advisors:               data.advisors               ?? [],
+      // ── Stratège ──────────────────────────────────────
+      strategie:              data.strategie              ?? '',
+      strategie_actions:      data.strategie_actions      ?? [],
+      cause_racine:           data.cause_racine           ?? '',
+      focus_produits:         data.focus_produits         ?? [],
+      message_manager:        data.message_manager        ?? '',
+      coaching_cards:         data.coaching_cards         ?? [],
+      context_heatmap:        data.context_heatmap        ?? {},
       timestamp:              data.timestamp,
     });
 
+    // ── Advisors ─────────────────────────────────────────
     if (data.advisors?.length) {
       this.liveAdvisors.set(data.advisors);
     }
 
+    // ── Signals Analyste ──────────────────────────────────
     this.urgencyLevel.set(data.niveau_urgence   ?? 'LOW');
     this.urgencyScore.set(data.urgency_score    ?? 0);
     this.gapPct.set(data.ecart_objectif         ?? 0);
@@ -223,11 +255,56 @@ export class WebSocketService {
       this.analystNodes.set(data.analyst_nodes);
     }
 
+    // ── Signals Stratège ──────────────────────────────────
+    if (data.strategie) {
+      this.strategie.set(data.strategie);
+    }
+    if (data.strategie_actions?.length) {
+      this.strateActions.set(data.strategie_actions);
+    }
+    if (data.cause_racine) {
+      this.causeRacine.set(data.cause_racine);
+    }
+    if (data.focus_produits?.length) {
+      this.focusProduits.set(data.focus_produits);
+    }
+    if (data.message_manager) {
+      this.messageManager.set(data.message_manager);
+    }
+    if (data.context_signals?.length) {
+      this.contextSignals.set(data.context_signals);
+    }
+    if (data.context_heatmap && Object.keys(data.context_heatmap).length) {
+      this.contextHeatmap.set(data.context_heatmap);
+    }
+
+    // ── Météo depuis store_context ────────────────────────
+    const ctx = data.store_context ?? {};
+    if (ctx.weather) {
+      const parts = ctx.weather.split(' ');
+      this.weatherIcon.set(parts[0] ?? '');
+      this.weatherLabel.set(parts.slice(1).join(' ') ?? '');
+    }
+
+    // ── Jours fériés ─────────────────────────────────────
+    const holidaySignal = (data.context_signals ?? []).find(
+      (s: any) => s.type === 'holiday'
+    );
+    this.isHolidayToday.set(
+      (data.context_signals ?? []).some(
+        (s: any) => s.type === 'holiday' && s.level === 'high'
+      )
+    );
+    if (holidaySignal) {
+      this.nextHoliday.set(holidaySignal.label ?? '');
+    }
+
     console.log(
       `[WS] ✓ metrics_update | ` +
       `urgence=${data.niveau_urgence} | ` +
       `gap=${data.ecart_objectif}% | ` +
-      `CA=${(data.ca_today ?? 0).toLocaleString()} TND`
+      `CA=${(data.ca_today ?? 0).toLocaleString()} TND | ` +
+      `strategie=${data.strategie ? 'OK' : 'none'}`
     );
   }
 

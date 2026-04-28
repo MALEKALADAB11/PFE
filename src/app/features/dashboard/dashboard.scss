@@ -2083,3 +2083,100 @@
     border-bottom: none;
   }
 }
+// Stratège actions dans coaching cards
+.stratege-actions {
+  margin-top: 10px;
+  padding: 8px;
+  background: rgba(108, 92, 231, 0.05);
+  border-radius: 6px;
+  border-left: 3px solid #6C5CE7;
+}
+
+.stratege-action-item {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 4px 0;
+
+  .stratege-action-num {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #6C5CE7;
+    color: white;
+    font-size: 10px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .stratege-action-content {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .stratege-action-text {
+    font-size: 11px;
+    color: var(--text-primary);
+    font-weight: 500;
+  }
+
+  .stratege-action-produit {
+    font-size: 10px;
+    color: #6C5CE7;
+    font-weight: 600;
+  }
+}
+
+// Affichage direct des actions si pas de cards
+.stratege-direct {
+  padding: 12px;
+
+  .stratege-cause {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+    padding: 6px 8px;
+    background: rgba(249, 168, 37, 0.08);
+    border-radius: 4px;
+  }
+}
+
+.stratege-action-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--color-border);
+
+  &:last-child { border-bottom: none; }
+
+  .stratege-priority-badge {
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  .stratege-action-main {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin: 0 0 2px;
+  }
+
+  .stratege-action-sub {
+    font-size: 10px;
+    color: var(--text-secondary);
+    margin: 0;
+  }
+}
+.perf-bar--forecast-only {
+  background: rgba(39, 174, 96, 0.15) !important;
+  border: 1px dashed #27AE60;
+  border-radius: 3px 3px 0 0;
+}

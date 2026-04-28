@@ -59,4 +59,17 @@ export class ApiService {
     return this.http.get(`${this.base}/cycle/status`)
       .pipe(timeout(this.requestTimeout));
   }
+  coachChat(payload: {
+    message:      string;
+    advisor_name: string;
+    store_id:     string;
+    context:      any;
+  }) {
+    return this.http.post<{
+      reply:     string;
+      source:    string;
+      timestamp: string;
+    }>(`${this.base}/coach/chat`, payload)
+      .pipe(timeout(this.requestTimeout));
+}
 }

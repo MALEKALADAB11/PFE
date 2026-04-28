@@ -5,7 +5,7 @@
       <h1 class="page-title">Dashboard</h1>
       <p class="page-sub">
         <span class="status-dot"></span>
-        System nominal · APP06 Agent LIVE · Updated 2:32 PM
+        System nominal · APP06 Agent LIVE · Updated {{ ws.lastUpdated() || '...' }}
       </p>
     </div>
     <div class="page-header__right">
@@ -30,8 +30,9 @@
     </div>
   </div>
 
+  <!-- KPI Flip Cards -->
   <div class="kpi-grid">
-    @for (card of flipCards(); track card.label)  {
+    @for (card of flipCards(); track card.label) {
       <app-flip-kpi-card [data]="card" [height]="148" />
     }
   </div>
@@ -94,34 +95,47 @@
                     <span class="perf-bar-val">
                       {{ h.actual > 0 ? (h.actual | number:'1.0-0') : '' }}
                     </span>
-                    <div class="perf-bar"
-                         [class.perf-bar--risk]="h.risk"
-                         [style.height.%]="perfBarHeight(h.actual)">
-                    </div>
+                    @if (h.actual > 0) {
+                      <div class="perf-bar"
+                           [class.perf-bar--risk]="h.risk"
+                           [style.height.%]="perfBarHeight(h.actual)">
+                      </div>
+                    } @else {
+                      <div class="perf-bar perf-bar--forecast-only"
+                           [style.height.%]="perfBarHeight(h.forecast)">
+                      </div>
+                    }
                   </div>
                   <span class="perf-bar-label">{{ h.hour }}</span>
                 </div>
               }
             </div>
-            <svg class="perf-lines-svg"
-                 viewBox="0 0 1200 200"
-                 preserveAspectRatio="none">
-              <polyline
-                [attr.points]="targetPoints()"
-                fill="none" stroke="#C0392B"
-                stroke-width="2" stroke-dasharray="6,4" opacity="0.85"/>
-              <polyline
-                [attr.points]="forecastPoints()"
-                fill="none" stroke="#27AE60"
-                stroke-width="2.5" opacity="0.9"/>
-              @for (h of hourlyPerf(); track h.hour; let i = $index) {
-                <circle
-                  [attr.cx]="(i / (hourlyPerf().length - 1)) * 1200"
-                  [attr.cy]="perfLineY(h.forecast)"
-                  r="4" fill="white"
-                  stroke="#27AE60" stroke-width="2"/>
-              }
-            </svg>
+
+            <!-- SVG sécurisé — guard sur length > 1 -->
+            @if (hourlyPerf().length > 1) {
+              <svg class="perf-lines-svg"
+                   viewBox="0 0 1200 200"
+                   preserveAspectRatio="none">
+                <polyline
+                  [attr.points]="targetPoints()"
+                  fill="none" stroke="#C0392B"
+                  stroke-width="2" stroke-dasharray="6,4" opacity="0.85"/>
+                <polyline
+                  [attr.points]="forecastPoints()"
+                  fill="none" stroke="#27AE60"
+                  stroke-width="2.5" opacity="0.9"/>
+                @for (h of hourlyPerf(); track h.hour; let i = $index) {
+                  @if (h.forecast > 0) {
+                    <circle
+                      [attr.cx]="circleX(i)"
+                      [attr.cy]="circleY(h)"
+                      r="4" fill="white"
+                      stroke="#27AE60" stroke-width="2"/>
+                  }
+                }
+              </svg>
+            }
+
           </div>
         </div>
 
@@ -194,8 +208,7 @@
             <span>6d</span><span>4d</span><span>2d</span><span>0d</span>
           </div>
           <div class="lt-bars-area">
-            <div class="lt-target-line" [style.bottom.%]="targetLineBottom()">
-            </div>
+            <div class="lt-target-line" [style.bottom.%]="targetLineBottom()"></div>
             @for (item of leadTimeData; track item.label) {
               <div class="lt-bar-group">
                 <div class="lt-bar-wrap">
@@ -392,8 +405,6 @@
           </span>
         </div>
 
-        
-
         <div class="coaching-list">
           @for (card of cards(); track card.id ?? $index) {
             <div class="coaching-item"
@@ -421,10 +432,36 @@
                   </div>
                   <span class="coaching-time mono">{{ card.time }}</span>
                 </div>
+
                 <p class="coaching-context">
                   Gap {{ card.gap }}% · {{ card.context }}
                 </p>
                 <p class="coaching-advice">"{{ card.advice }}"</p>
+
+                <!-- Actions Stratège inline -->
+                @if (strateActions().length > 0 && $index === 0) {
+                  <div class="stratege-actions">
+                    <div class="stratege-actions__title">
+                      <svg width="10" height="10" viewBox="0 0 24 24"
+                           fill="none" stroke="#6C5CE7" stroke-width="2.5">
+                        <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/>
+                      </svg>
+                      Stratégie Agent
+                    </div>
+                    @for (action of strateActions().slice(0, 2); track action.priorite) {
+                      <div class="stratege-action-item">
+                        <span class="stratege-action-num">{{ action.priorite }}</span>
+                        <div class="stratege-action-content">
+                          <span class="stratege-action-text">{{ action.action }}</span>
+                          <span class="stratege-action-produit">
+                            → {{ action.produit_cible }}
+                          </span>
+                        </div>
+                      </div>
+                    }
+                  </div>
+                }
+
                 @if (card.status === 'pending') {
                   <div class="coaching-actions">
                     <button class="btn-escalate" (click)="escalate(card.id)">
@@ -449,8 +486,58 @@
               </div>
             </div>
           }
+
+          <!-- Si pas de cards → actions Stratège directement -->
           @if (cards().length === 0) {
-            <p class="no-data">Chargement des coaching cards...</p>
+            @if (strateActions().length > 0) {
+              <div class="stratege-direct">
+                @if (causeRacine()) {
+                  <div class="stratege-cause-banner">
+                    <svg width="11" height="11" viewBox="0 0 24 24"
+                         fill="none" stroke="#F9A825" stroke-width="2">
+                      <circle cx="12" cy="12" r="10"/>
+                      <line x1="12" y1="8" x2="12" y2="12"/>
+                      <line x1="12" y1="16" x2="12.01" y2="16"/>
+                    </svg>
+                    <span>{{ causeRacine() }}</span>
+                  </div>
+                }
+                @for (action of strateActions(); track action.priorite) {
+                  <div class="stratege-action-row">
+                    <span class="stratege-priority-badge"
+                          [style.background]="action.priorite === 1 ? '#FDEDEC' : action.priorite === 2 ? '#FFF8E1' : '#EAF4FE'"
+                          [style.color]="action.priorite === 1 ? '#E74C3C' : action.priorite === 2 ? '#F9A825' : '#2D9CDB'">
+                      P{{ action.priorite }}
+                    </span>
+                    <div class="stratege-action-body">
+                      <p class="stratege-action-main">{{ action.action }}</p>
+                      <p class="stratege-action-sub">
+                        <strong>{{ action.produit_cible }}</strong>
+                        @if (action.argument_vente) {
+                          — {{ action.argument_vente }}
+                        }
+                      </p>
+                      @if (action.impact_estime) {
+                        <span class="stratege-action-impact">
+                          📈 {{ action.impact_estime }}
+                        </span>
+                      }
+                    </div>
+                  </div>
+                }
+                @if (messageManager()) {
+                  <div class="stratege-manager-msg">
+                    <svg width="11" height="11" viewBox="0 0 24 24"
+                         fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+                    </svg>
+                    {{ messageManager() }}
+                  </div>
+                }
+              </div>
+            } @else {
+              <p class="no-data">Chargement des coaching cards...</p>
+            }
           }
         </div>
       </div>
@@ -471,6 +558,22 @@
             <span class="heat-leg" style="background:#E74C3C;color:white">Crit</span>
           </div>
         </div>
+
+        <!-- Signaux contextuels réels -->
+        @if (ws.contextSignals().length > 0) {
+          <div class="context-signals-bar">
+            @for (sig of ws.contextSignals(); track sig.type) {
+              <div class="context-signal-chip"
+                   [class.context-signal-chip--low]="sig.level === 'low'"
+                   [class.context-signal-chip--med]="sig.level === 'med'"
+                   [class.context-signal-chip--high]="sig.level === 'high'"
+                   [class.context-signal-chip--crit]="sig.level === 'crit'">
+                {{ sig.label }}
+              </div>
+            }
+          </div>
+        }
+
         <div class="heatmap-grid heatmap-grid--compact">
           <div class="heat-row heat-row--header">
             <span class="heat-row-label"></span>
@@ -483,13 +586,15 @@
               <span class="heat-row-label">{{ row.label }}</span>
               @for (h of heatHours; track h; let i = $index) {
                 <div class="heat-cell"
-                     [style.background]="heatColor(heatData[row.key][i])"
-                     [title]="row.label+' '+h+' : '+heatLabel(heatData[row.key][i])">
+                     [style.background]="heatColor((heatData[row.key] ?? [])[i] ?? 1)"
+                     [title]="row.label + ' ' + h + ' : ' + heatLabel((heatData[row.key] ?? [])[i] ?? 1)">
                 </div>
               }
             </div>
           }
         </div>
+
+        <!-- Alert cause racine -->
         <div class="heat-alert">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
                stroke="#E74C3C" stroke-width="2">
@@ -497,8 +602,18 @@
             <line x1="12" y1="9"  x2="12"    y2="13"/>
             <line x1="12" y1="17" x2="12.01" y2="17"/>
           </svg>
-          {{ analystSummary() || 'Analyse en cours...' }}
+          {{ causeRacine() || analystSummary() || 'Analyse en cours...' }}
         </div>
+
+        <!-- Focus produits -->
+        @if (focusProduits().length > 0) {
+          <div class="heat-focus">
+            <span class="heat-focus__label">Focus produits :</span>
+            @for (p of focusProduits(); track p) {
+              <span class="heat-focus__chip">{{ p }}</span>
+            }
+          </div>
+        }
       </div>
 
       <!-- Team Ranking -->
@@ -547,8 +662,7 @@
                   </div>
                 </div>
               </div>
-              <span class="badge"
-                    [class]="statusBadge(adv.status ?? 'ok')">
+              <span class="badge" [class]="statusBadge(adv.status ?? 'ok')">
                 {{ statusText(adv.status ?? 'ok') }}
               </span>
             </div>

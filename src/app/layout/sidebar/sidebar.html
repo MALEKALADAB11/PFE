@@ -35,61 +35,166 @@
         <p class="sidebar-label">Daily Revenue</p>
         <div class="kpi-row">
           <span class="kpi-value">
-            {{ store().caJournalier | number:'1.0-0' }} DT
+            {{ caToday() | number:'1.0-0' }} DT
           </span>
           <span class="kpi-target">
-            / {{ store().caObjectif | number:'1.0-0' }}
+            / {{ caTarget() | number:'1.0-0' }}
           </span>
         </div>
         <div class="progress-track" style="margin-top:6px">
           <div class="progress-fill"
                [style.width.%]="caPercent()"
-               [class.amber]="caPercent() < 60"
-               [class.teal]="caPercent() >= 80">
+               [style.background]="progressColor()">
           </div>
         </div>
-        <p class="kpi-percent">{{ caPercent() }}% of target</p>
+        <div class="revenue-meta">
+          <p class="kpi-percent">{{ caPercent() }}% of target</p>
+          @if (ws.gapPct() > 0) {
+            <span class="gap-badge"
+                  [class.gap-badge--high]="ws.urgencyLevel() === 'HIGH'"
+                  [class.gap-badge--med]="ws.urgencyLevel() === 'MEDIUM'">
+              Gap {{ ws.gapPct() }}%
+            </span>
+          }
+        </div>
       </div>
 
-      <!-- Context -->
-      <div class="sidebar-section">
-        <p class="sidebar-label">Context</p>
+      <!-- Agent Analyste — Nodes LangGraph -->
+      @if (ws.analystNodes()) {
+        <div class="sidebar-section">
+          <p class="sidebar-label">Agent Analyste</p>
+          <div class="analyst-nodes">
 
-        <div class="context-item context-item--weather">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-               stroke="currentColor" stroke-width="2">
-            <path d="M20 17.58A5 5 0 0018 8h-1.26A8 8 0 104 16.25"/>
-          </svg>
-          <span>{{ store().context?.weather }}</span>
-        </div>
+            <div class="analyst-node"
+                 [class.done]="ws.analystNodes()?.receive_pos?.status === 'done'">
+              <span class="node-dot"></span>
+              <span class="node-text">Flux POS</span>
+              <span class="node-val">
+                {{ ws.analystNodes()?.receive_pos?.transactions ?? 0 }} tx
+              </span>
+            </div>
 
-        <div class="context-item context-item--event">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-               stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10"/>
-            <polyline points="12,6 12,12 16,14"/>
-          </svg>
-          <span>{{ store().context?.event }}</span>
-        </div>
+            <div class="analyst-node"
+                 [class.done]="ws.analystNodes()?.compute_gap?.status === 'done'">
+              <span class="node-dot"></span>
+              <span class="node-text">Gap objectif</span>
+              <span class="node-val">
+                {{ ws.analystNodes()?.compute_gap?.gap_pct ?? 0 }}%
+              </span>
+            </div>
 
-        @if (store().context?.stockAlert) {
-          <div class="context-item context-item--alert">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-                 stroke="currentColor" stroke-width="2">
-              <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
-              <line x1="12" y1="9"  x2="12"    y2="13"/>
-              <line x1="12" y1="17" x2="12.01" y2="17"/>
-            </svg>
-            <span>{{ store().context?.stockAlert }}</span>
+            <div class="analyst-node"
+                 [class.done]="ws.analystNodes()?.call_timesfm?.status === 'done'">
+              <span class="node-dot"></span>
+              <span class="node-text">Prévision EOD</span>
+              <span class="node-val">
+                {{ (ws.analystNodes()?.call_timesfm?.forecast_eod ?? 0) | number:'1.0-0' }} TND
+              </span>
+            </div>
+
+            <div class="analyst-node"
+                 [class.done]="ws.analystNodes()?.detect_urgency?.status === 'done'">
+              <span class="node-dot"></span>
+              <span class="node-text">Urgence</span>
+              <span class="node-val urgency-val"
+                    [class.high]="ws.urgencyLevel() === 'HIGH'"
+                    [class.medium]="ws.urgencyLevel() === 'MEDIUM'"
+                    [class.low]="ws.urgencyLevel() === 'LOW'">
+                {{ ws.urgencyLevel() }}
+              </span>
+            </div>
+
+            <div class="analyst-node"
+                 [class.done]="ws.analystNodes()?.llm_summary?.status === 'done'">
+              <span class="node-dot"></span>
+              <span class="node-text">LLM Llama3</span>
+              <span class="node-val">✓</span>
+            </div>
+
           </div>
-        }
-      </div>
 
-      <!-- Store Traffic -->
+          <!-- Résumé LLM — texte propre uniquement -->
+          @if (ws.analystSummary()) {
+            <div class="analyst-summary">
+              <p>{{ ws.analystSummary() }}</p>
+              <span class="updated-at">{{ ws.lastUpdated() }}</span>
+            </div>
+          }
+        </div>
+      }
+
+              <!-- Remplacer la section Context par : -->
+        <div class="sidebar-section">
+          <p class="sidebar-label">Context</p>
+
+          <!-- Météo réelle -->
+          @if (weatherInfo()) {
+            <div class="context-item context-item--weather">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" stroke-width="2">
+                <path d="M20 17.58A5 5 0 0018 8h-1.26A8 8 0 104 16.25"/>
+              </svg>
+              <span>{{ weatherInfo() }}</span>
+            </div>
+          }
+
+          <!-- Événement / Jour férié -->
+          @if (eventInfo()) {
+            <div class="context-item context-item--event">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" stroke-width="2">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                <line x1="16" y1="2" x2="16" y2="6"/>
+                <line x1="8"  y1="2" x2="8"  y2="6"/>
+                <line x1="3"  y1="10" x2="21" y2="10"/>
+              </svg>
+              <span>{{ eventInfo() }}</span>
+            </div>
+          }
+
+          <!-- Promos Ooredoo -->
+          @if (promoInfo()) {
+            <div class="context-item context-item--promo">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                  stroke="#6C5CE7" stroke-width="2">
+                <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/>
+              </svg>
+              <span>{{ promoInfo() }}</span>
+            </div>
+          }
+
+          <!-- Stock alert -->
+          @if (stockAlert()) {
+            <div class="context-item context-item--alert">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" stroke-width="2">
+                <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+                <line x1="12" y1="9"  x2="12"    y2="13"/>
+                <line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+              <span>{{ stockAlert() }}</span>
+            </div>
+          }
+
+          <!-- Prochain jour férié depuis WS signals -->
+          @if (ws.nextHoliday() && !eventInfo()) {
+            <div class="context-item context-item--event">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                  stroke="#F9A825" stroke-width="2">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                <line x1="16" y1="2" x2="16" y2="6"/>
+                <line x1="8"  y1="2" x2="8"  y2="6"/>
+                <line x1="3"  y1="10" x2="21" y2="10"/>
+              </svg>
+              <span>{{ ws.nextHoliday() }}</span>
+            </div>
+          }
+        </div>
+      <!-- Store Traffic depuis WS -->
       <div class="sidebar-section">
         <p class="sidebar-label">Store Traffic</p>
         <div class="kpi-row">
-          <span class="kpi-value">{{ store().visitors }}</span>
+          <span class="kpi-value">{{ visitorsH() }}</span>
           <span class="kpi-target">visitors / h</span>
         </div>
         <div class="progress-track" style="margin-top:6px">
@@ -97,56 +202,59 @@
                [style.width.%]="traficPercent()">
           </div>
         </div>
-        <p class="kpi-percent">Capacity {{ traficPercent() }}%</p>
+        <p class="kpi-percent">
+          Capacity {{ traficPercent() }}%
+          @if (ws.connected()) {
+            <span class="live-dot">● LIVE</span>
+          }
+        </p>
       </div>
+
       <!-- Stock Status -->
-<div class="sidebar-section">
-  <p class="sidebar-label">Stock Status</p>
-
-  <div class="stock-status-mini">
-    <div class="stock-mini-top">
-      <div class="stock-mini-val-row">
-        <span class="stock-mini-val" style="color:#E74C3C">2</span>
-        <span class="stock-mini-total">/ 6</span>
-        <span class="stock-mini-unit">critical SKUs</span>
+      <div class="sidebar-section">
+        <p class="sidebar-label">Stock Status</p>
+        <div class="stock-status-mini">
+          <div class="stock-mini-top">
+            <div class="stock-mini-val-row">
+              <span class="stock-mini-val" style="color:#E74C3C">2</span>
+              <span class="stock-mini-total">/ 6</span>
+              <span class="stock-mini-unit">critical SKUs</span>
+            </div>
+            <div class="stock-mini-dot" style="background:#E74C3C"></div>
+          </div>
+          <div class="stock-mini-alert">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+                 stroke="#E74C3C" stroke-width="2">
+              <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+              <line x1="12" y1="9"  x2="12"    y2="13"/>
+              <line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+            <span>2 SKU(s) below threshold</span>
+          </div>
+          <div class="stock-mini-stats">
+            <div class="stock-mini-stat">
+              <span class="stock-mini-stat__val" style="color:#00B894">3</span>
+              <span class="stock-mini-stat__label">Optimal</span>
+            </div>
+            <div class="stock-mini-stat">
+              <span class="stock-mini-stat__val" style="color:#E74C3C">2</span>
+              <span class="stock-mini-stat__label">Critical</span>
+            </div>
+            <div class="stock-mini-stat">
+              <span class="stock-mini-stat__val">1.8x</span>
+              <span class="stock-mini-stat__label">Coverage</span>
+            </div>
+          </div>
+          <a class="stock-mini-link" routerLink="/inventory">
+            View details
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2">
+              <polyline points="9,18 15,12 9,6"/>
+            </svg>
+          </a>
+        </div>
       </div>
-      <div class="stock-mini-dot" style="background:#E74C3C"></div>
-    </div>
 
-    <div class="stock-mini-alert">
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
-           stroke="#E74C3C" stroke-width="2">
-        <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
-        <line x1="12" y1="9"  x2="12"    y2="13"/>
-        <line x1="12" y1="17" x2="12.01" y2="17"/>
-      </svg>
-      <span>2 SKU(s) below threshold</span>
-    </div>
-
-    <div class="stock-mini-stats">
-      <div class="stock-mini-stat">
-        <span class="stock-mini-stat__val" style="color:#00B894">3</span>
-        <span class="stock-mini-stat__label">Optimal</span>
-      </div>
-      <div class="stock-mini-stat">
-        <span class="stock-mini-stat__val" style="color:#E74C3C">2</span>
-        <span class="stock-mini-stat__label">Critical</span>
-      </div>
-      <div class="stock-mini-stat">
-        <span class="stock-mini-stat__val">1.8x</span>
-        <span class="stock-mini-stat__label">Coverage</span>
-      </div>
-    </div>
-
-    <a class="stock-mini-link" routerLink="/inventory">
-      View details
-      <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
-           stroke="currentColor" stroke-width="2">
-        <polyline points="9,18 15,12 9,6"/>
-      </svg>
-    </a>
-  </div>
-</div>
       <!-- Agent Status — monitoring page only -->
       @if (showAgentStatus()) {
         <div class="sidebar-section">
@@ -169,6 +277,5 @@
       }
 
     }
-
   </div>
 </aside>

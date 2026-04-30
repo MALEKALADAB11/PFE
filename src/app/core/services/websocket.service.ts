@@ -72,6 +72,12 @@ export class WebSocketService {
   private isBrowser                = false;
   private _isConnecting            = false;
 
+  // ── Délais de reconnexion (ms) ────────────────────────
+  // Le cycle backend prend ~2min → on attend 30s avant retry
+  private readonly RECONNECT_DELAY_NORMAL = 30000;
+  private readonly RECONNECT_DELAY_BLOCK  = 60000; // code 1008 = double connexion bloquée
+  private readonly CONNECT_TIMEOUT        = 15000;
+
   constructor() {
     const platformId = inject(PLATFORM_ID);
     this.isBrowser   = isPlatformBrowser(platformId);
@@ -82,6 +88,7 @@ export class WebSocketService {
   connectStore(storeId: string) {
     if (!this.isBrowser) return;
 
+    // Déjà connecté au même store → skip
     if (
       this.storeWs &&
       (this.storeWs.readyState === WebSocket.OPEN ||
@@ -92,6 +99,7 @@ export class WebSocketService {
       return;
     }
 
+    // Connexion déjà en cours → skip
     if (this._isConnecting) {
       console.log('[WS] Connexion en cours, skip');
       return;
@@ -99,11 +107,13 @@ export class WebSocketService {
 
     this.storeId = storeId;
 
+    // Annuler le timer de reconnexion en cours
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
 
+    // Fermer proprement l'ancien socket
     if (this.storeWs) {
       this.storeWs.onopen    = null;
       this.storeWs.onmessage = null;
@@ -131,9 +141,10 @@ export class WebSocketService {
       const ws = new WebSocket(`ws://localhost:8000/ws/store/${storeId}`);
       this.storeWs = ws;
 
+      // Timeout si la connexion ne s'ouvre pas
       const timeout = setTimeout(() => {
         if (ws.readyState !== WebSocket.OPEN) {
-          console.warn('[WS] Timeout — retry dans 20s');
+          console.warn('[WS] Timeout connexion → retry dans 30s');
           ws.onopen    = null;
           ws.onmessage = null;
           ws.onerror   = null;
@@ -142,9 +153,12 @@ export class WebSocketService {
           this.storeWs       = null;
           this._isConnecting = false;
           this.connected.set(false);
-          this.reconnectTimer = setTimeout(() => this._doConnect(storeId), 20000);
+          this.reconnectTimer = setTimeout(
+            () => this._doConnect(storeId),
+            this.RECONNECT_DELAY_NORMAL
+          );
         }
-      }, 15000);
+      }, this.CONNECT_TIMEOUT);
 
       ws.onopen = () => {
         clearTimeout(timeout);
@@ -159,6 +173,7 @@ export class WebSocketService {
           if (data.type === 'metrics_update') {
             this._handleMetricsUpdate(data);
           }
+          // Ignorer les pings
         } catch (e) {
           console.warn('[WS] Parse error', e);
         }
@@ -176,21 +191,35 @@ export class WebSocketService {
         this._isConnecting = false;
         this.connected.set(false);
 
+        // Fermeture volontaire → pas de reconnexion
         if (event.code === 1000) {
           console.log('[WS] Fermeture volontaire');
           return;
         }
 
-        const delay = event.code === 1008 ? 30000 : 20000;
-        console.log(`[WS] Déconnecté (code=${event.code}) → retry dans ${delay / 1000}s`);
-        this.reconnectTimer = setTimeout(() => this._doConnect(storeId), delay);
+        // Code 1008 = double connexion bloquée côté backend
+        // → attendre plus longtemps avant de réessayer
+        const delay = event.code === 1008
+          ? this.RECONNECT_DELAY_BLOCK
+          : this.RECONNECT_DELAY_NORMAL;
+
+        console.log(
+          `[WS] Déconnecté (code=${event.code}) → retry dans ${delay / 1000}s`
+        );
+        this.reconnectTimer = setTimeout(
+          () => this._doConnect(storeId),
+          delay
+        );
       };
 
     } catch (e) {
       this._isConnecting = false;
       console.warn('[WS] Connexion échouée', e);
       this.connected.set(false);
-      this.reconnectTimer = setTimeout(() => this._doConnect(storeId), 20000);
+      this.reconnectTimer = setTimeout(
+        () => this._doConnect(storeId),
+        this.RECONNECT_DELAY_NORMAL
+      );
     }
   }
 
@@ -235,11 +264,11 @@ export class WebSocketService {
     }
 
     // ── Analyste signals ──────────────────────────────────
-    this.urgencyLevel.set(data.niveau_urgence   ?? 'LOW');
-    this.urgencyScore.set(data.urgency_score    ?? 0);
-    this.gapPct.set(data.ecart_objectif         ?? 0);
-    this.gapAmount.set(data.gap_amount          ?? 0);
-    this.forecastEod.set(data.forecast_eod      ?? 0);
+    this.urgencyLevel.set(data.niveau_urgence    ?? 'LOW');
+    this.urgencyScore.set(data.urgency_score     ?? 0);
+    this.gapPct.set(data.ecart_objectif          ?? 0);
+    this.gapAmount.set(data.gap_amount           ?? 0);
+    this.forecastEod.set(data.forecast_eod       ?? 0);
     this.analystSummary.set(data.analyst_summary ?? '');
 
     if (data.timestamp) {
@@ -259,11 +288,11 @@ export class WebSocketService {
     }
 
     // ── Stratège signals ──────────────────────────────────
-    if (data.strategie)              this.strategie.set(data.strategie);
+    if (data.strategie)               this.strategie.set(data.strategie);
     if (data.strategie_actions?.length) this.strateActions.set(data.strategie_actions);
-    if (data.cause_racine)           this.causeRacine.set(data.cause_racine);
-    if (data.focus_produits?.length) this.focusProduits.set(data.focus_produits);
-    if (data.message_manager)        this.messageManager.set(data.message_manager);
+    if (data.cause_racine)            this.causeRacine.set(data.cause_racine);
+    if (data.focus_produits?.length)  this.focusProduits.set(data.focus_produits);
+    if (data.message_manager)         this.messageManager.set(data.message_manager);
     if (data.context_signals?.length) this.contextSignals.set(data.context_signals);
     if (data.context_heatmap && Object.keys(data.context_heatmap).length) {
       this.contextHeatmap.set(data.context_heatmap);
@@ -327,8 +356,9 @@ export class WebSocketService {
         }
       };
 
+      // Reconnexion lente pour éviter la surcharge
       ws.onclose = () => {
-        setTimeout(() => this.connectAdvisor(this.advisorId), 15000);
+        setTimeout(() => this.connectAdvisor(this.advisorId), 30000);
       };
 
       ws.onerror = () => {};
@@ -351,7 +381,7 @@ export class WebSocketService {
     if (this.inventoryWs) {
       console.log('[WS] Closing existing inventory WebSocket');
       const old = this.inventoryWs;
-      this.inventoryWs = null;   // null first so onclose skips reconnect
+      this.inventoryWs = null;
       old.close();
     }
 
@@ -359,6 +389,7 @@ export class WebSocketService {
     this.inventoryObjective = objective;
 
     try {
+      // const url = `ws://localhost:11434/api/inventory/ws/${storeId}?business_objective=${objective}`;
       const url = `ws://localhost:8000/api/inventory/ws/${storeId}?business_objective=${objective}`;
       console.log('[WS] Connecting to inventory WebSocket:', url);
 
@@ -372,15 +403,11 @@ export class WebSocketService {
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          console.log('[WS] 📦 Received message type:', data.type);
 
-          if (data.type === 'heartbeat') {
-            console.log('[WS] 💓 Heartbeat received');
-            return;
-          }
+          if (data.type === 'heartbeat') return;
 
           if (data.type === 'inventory_update') {
-            console.log('[WS] 📊 Inventory update received, items:', data.items?.length);
+            console.log('[WS] 📦 Inventory update:', data.items?.length, 'items');
             this.liveInventory.set(data);
           }
         } catch (e) {
@@ -393,20 +420,15 @@ export class WebSocketService {
       };
 
       ws.onclose = (event) => {
-        console.log('[WS] 🔌 Inventory WebSocket closed, code:', event.code, 'reason:', event.reason);
+        console.log('[WS] 🔌 Inventory closed, code:', event.code);
 
-        // Stale socket (already replaced): skip reconnect
-        if (this.inventoryWs !== ws && this.inventoryWs !== null) {
-          console.log('[WS] Stale socket closed, skipping reconnect');
-          return;
-        }
-
-        // Intentional close (inventoryWs already nulled above): skip reconnect
+        if (this.inventoryWs !== ws && this.inventoryWs !== null) return;
         if (this.inventoryWs === null) return;
 
+        // Reconnexion lente pour éviter la surcharge
         this.inventoryReconnectTimer = setTimeout(
           () => this.connectInventory(this.inventoryStore, this.inventoryObjective),
-          5000,
+          15000,
         );
       };
 
@@ -445,7 +467,6 @@ export class WebSocketService {
       this.advisorWs = null;
     }
 
-    // Null before close so onclose handler skips reconnect
     const inv = this.inventoryWs;
     this.inventoryWs = null;
     inv?.close(1000, 'disconnect');

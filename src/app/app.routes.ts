@@ -12,7 +12,8 @@ export const routes: Routes = [
     path: 'dashboard',
     loadComponent: () =>
       import('./features/dashboard/dashboard')
-        .then(m => m.Dashboard)
+        .then(m => m.Dashboard),
+    data: { prerender: false } 
   },
   {
     path: 'inventory',

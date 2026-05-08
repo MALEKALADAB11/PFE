@@ -1,0 +1,508 @@
+<div class="conseiller" [class.chat-open]="chatOpen()">
+
+  <!-- ══ MAIN CONTENT ══ -->
+  <div class="conseiller__main">
+
+    <!-- PAGE HEADER -->
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Advisor</h1>
+        <p class="page-sub">
+          <span class="status-dot"
+                [class.status-dot--live]="ws.connected()"></span>
+          {{ ws.connected() ? 'Connecté' : 'Polling' }} · Lac 2 ·
+          Analysé {{ ws.lastUpdated() || '--:--' }}
+        </p>
+      </div>
+      <button class="btn-coach" (click)="openChat()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2">
+          <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+        </svg>
+        Coach now
+      </button>
+    </div>
+
+    <!-- ══ ADVISOR PROFILE ══ -->
+    @if (selected()) {
+      <div class="profile-card">
+        <div class="profile-card__left">
+          <div class="profile-avatar"
+               [style.background]="selected()!.avatarColor">
+            {{ selected()!.initials }}
+          </div>
+          <div class="profile-info">
+            <h2 class="profile-name">{{ selected()!.name }}</h2>
+            <p class="profile-role">{{ selected()!.role }}</p>
+            <span class="profile-status"
+                  [class]="statusClass(selected()!.status)">
+              {{ statusText(selected()!.status) }}
+            </span>
+          </div>
+        </div>
+
+        <div class="profile-kpis">
+          <div class="profile-kpi">
+            <span class="profile-kpi__val">
+              {{ selected()!.caRealized | number:'1.0-0' }} DT
+            </span>
+            <span class="profile-kpi__label">CA actuel</span>
+          </div>
+          <div class="profile-kpi">
+            <span class="profile-kpi__val">
+              {{ selected()!.caObjectif | number:'1.0-0' }} DT
+            </span>
+            <span class="profile-kpi__label">Objectif</span>
+          </div>
+          <div class="profile-kpi">
+            <span class="profile-kpi__val" [style.color]="perfColor()">
+              {{ selected()!.performance }}%
+            </span>
+            <span class="profile-kpi__label">Atteinte</span>
+          </div>
+          <div class="profile-kpi">
+            <span class="profile-kpi__val" style="color:#6C5CE7">
+              {{ selected()!.coachScore }}
+            </span>
+            <span class="profile-kpi__label">Score IA</span>
+          </div>
+          <div class="profile-kpi">
+            <span class="profile-kpi__val">{{ selected()!.nbVentes }}</span>
+            <span class="profile-kpi__label">Ventes</span>
+          </div>
+        </div>
+
+        <div class="profile-progress">
+          <div class="profile-progress__track">
+            <div class="profile-progress__fill"
+                 [style.width.%]="caPercent()"
+                 [style.background]="perfColor()">
+            </div>
+          </div>
+          <span class="profile-progress__label" [style.color]="perfColor()">
+            Objectif journalier {{ caPercent() }}%
+          </span>
+        </div>
+      </div>
+    }
+
+    <!-- ══ TEAM RANKING ══ -->
+    <div class="section">
+      <h2 class="section-title">
+        Team Ranking · Aujourd'hui
+        @if (ws.connected()) {
+          <span class="live-dot-small">● LIVE</span>
+        }
+      </h2>
+
+      <div class="team-table">
+        <div class="team-table__header">
+          <span>#</span>
+          <span>Conseiller</span>
+          <span>CA Réalisé</span>
+          <span>Performance</span>
+          <span>Prévision EOD</span>
+          <span>Statut</span>
+        </div>
+
+        @for (adv of advisors(); track adv.id; let i = $index) {
+          <div class="team-row"
+               [class.team-row--selected]="adv.id === selectedId()"
+               (click)="selectAdvisor(adv.id)">
+
+            <span class="rank" [class.rank--gold]="i === 0">{{ i + 1 }}</span>
+
+            <div class="team-advisor">
+              <div class="adv-avatar" [style.background]="adv.avatarColor">
+                {{ adv.initials }}
+              </div>
+              <div class="adv-info">
+                <span class="adv-name">
+                  {{ adv.name }}
+                  @if (i === 0) {
+                    <span class="me-tag">Top</span>
+                  }
+                </span>
+                <span class="adv-role">{{ adv.role }}</span>
+              </div>
+            </div>
+
+            <span class="team-ca">{{ adv.caRealized | number:'1.0-0' }} DT</span>
+
+            <div class="team-perf-col">
+              <div class="mini-bar">
+                <div class="mini-bar__fill"
+                     [style.width.%]="adv.performance"
+                     [style.background]="advPerfColor(adv.performance)">
+                </div>
+              </div>
+              <span class="perf-pct" [style.color]="advPerfColor(adv.performance)">
+                {{ adv.performance }}%
+              </span>
+            </div>
+
+            <span class="team-eod">{{ adv.previsionEod | number:'1.0-0' }} DT</span>
+
+            <span class="status-badge" [class]="statusClass(adv.status)">
+              {{ statusText(adv.status) }}
+            </span>
+          </div>
+        }
+
+        @if (advisors().length === 0) {
+          <p class="no-data" style="padding:20px;text-align:center;
+             color:var(--text-tertiary);font-size:12px">
+            Chargement des conseillers...
+          </p>
+        }
+      </div>
+    </div>
+
+    <!-- ══ ACTIONS STRATÈGE ══ -->
+    @if (strateActions().length > 0) {
+      <div class="section">
+        
+
+        @if (causeRacine()) {
+          <p class="cause-racine-label">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                 stroke="#F9A825" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="8" x2="12" y2="12"/>
+              <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            {{ causeRacine() }}
+          </p>
+        }
+
+        <div class="strate-actions-grid">
+          @for (action of strateActions(); track action.priorite) {
+            <div class="strate-action-card"
+                 [class.strate-action-card--p1]="action.priorite === 1"
+                 [class.strate-action-card--p2]="action.priorite === 2"
+                 [class.strate-action-card--p3]="action.priorite === 3">
+              <div class="strate-action-card__header">
+                <span class="strate-priority-num">P{{ action.priorite }}</span>
+                <span class="strate-produit">{{ action.produit_cible }}</span>
+              </div>
+              <p class="strate-action-text">{{ action.action }}</p>
+              @if (action.argument_vente) {
+                <p class="strate-argument">"{{ action.argument_vente }}"</p>
+              }
+              @if (action.impact_estime) {
+                <span class="strate-impact">📈 {{ action.impact_estime }}</span>
+              }
+              <button class="strate-ask-btn"
+                      (click)="sendQuick('Comment exécuter : ' + action.action)">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="2">
+                  <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+                </svg>
+                Demander au coach
+              </button>
+            </div>
+          }
+        </div>
+      </div>
+    }
+
+    <!-- ══ RECOMMENDED PRODUCTS ══ -->
+    <div class="section">
+      <div class="section-header">
+        <h2 class="section-title">
+          Produits Recommandés
+          @if (contextTag()) {
+            <span class="context-tag">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" stroke-width="2">
+                <path d="M20 17.58A5 5 0 0018 8h-1.26A8 8 0 104 16.25"/>
+              </svg>
+              {{ contextTag() }}
+            </span>
+          }
+        </h2>
+        <p class="section-sub">Cliquez sur une carte pour révéler le script IA</p>
+      </div>
+
+      <div class="products-grid">
+        @for (product of products(); track product.id) {
+          <div class="product-flip"
+               [class.flipped]="isFlipped(product.id)"
+               (click)="toggleFlip(product.id)">
+            <div class="product-inner">
+
+              <!-- FRONT -->
+              <div class="product-front">
+                @if (product.hot) {
+                  <div class="hot-badge">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 2c0 6-6 8-6 14a6 6 0 0012 0c0-6-6-8-6-14z"/>
+                    </svg>
+                    Hot
+                  </div>
+                }
+                <p class="product-category">{{ product.category }}</p>
+                <h3 class="product-name">{{ product.name }}</h3>
+                <div class="product-price-row">
+                  <span class="product-price">{{ product.price }}</span>
+                  <span class="product-unit">{{ product.unit }}</span>
+                </div>
+                <div class="product-margin" [style.color]="product.marginColor">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                    <circle cx="12" cy="12" r="10"/>
+                  </svg>
+                  {{ product.margin }} margin
+                </div>
+                <div class="product-cta">
+                  <span>Script IA</span>
+                  <svg width="12" height="12" viewBox="0 0 24 24"
+                       fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="9,18 15,12 9,6"/>
+                  </svg>
+                </div>
+              </div>
+
+              <!-- BACK -->
+              <div class="product-back" [style.--accent]="product.accentColor">
+                <div class="back-script-header">
+                  <p class="back-script-label">Script IA</p>
+                  <h3 class="back-script-title">{{ product.script }}</h3>
+                </div>
+                <ol class="script-steps">
+                  @for (line of product.scriptLines; track $index) {
+                    <li class="script-step">
+                      <span class="step-num">{{ $index + 1 }}</span>
+                      <span class="step-text">{{ line }}</span>
+                    </li>
+                  }
+                </ol>
+                <div class="back-hint">
+                  <svg width="10" height="10" viewBox="0 0 24 24"
+                       fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="1,4 1,10 7,10"/>
+                    <path d="M3.51 15a9 9 0 102.13-9.36L1 10"/>
+                  </svg>
+                  Retour
+                </div>
+              </div>
+
+            </div>
+          </div>
+        }
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ══ CHAT SIDEBAR ══ -->
+  <aside class="chat-sidebar" [class.is-open]="chatOpen()">
+
+    <div class="chat-sidebar__header">
+      <div class="chat-tabs">
+        <button class="chat-tab"
+                [class.is-active]="chatTab() === 'coach'"
+                (click)="chatTab.set('coach')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2">
+            <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+          </svg>
+          CoachAgent
+        </button>
+        <button class="chat-tab"
+                [class.is-active]="chatTab() === 'alertes'"
+                (click)="chatTab.set('alertes')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2">
+            <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+            <path d="M13.73 21a2 2 0 01-3.46 0"/>
+          </svg>
+          Alertes
+          @if (alerts().length > 0) {
+            <span class="tab-count">{{ alerts().length }}</span>
+          }
+        </button>
+      </div>
+
+      <button class="chat-close" (click)="chatOpen.set(false)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2.5">
+          <line x1="18" y1="6" x2="6" y2="18"/>
+          <line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Context pills dynamiques -->
+    <div class="chat-context">
+      @if (weatherIcon()) {
+        <span class="ctx-pill ctx-pill--blue">
+          {{ weatherIcon() }} {{ weatherLabel() }}
+        </span>
+      } @else {
+        <span class="ctx-pill ctx-pill--blue">⛅ Météo</span>
+      }
+      <span class="ctx-pill ctx-pill--gray">
+        {{ hoursRemaining() }}h restantes
+      </span>
+      @if (selected()) {
+        <span class="ctx-pill ctx-pill--purple">
+          {{ selected()!.performance }}% obj.
+        </span>
+      }
+      @if (nextHolidayLabel()) {
+        <span class="ctx-pill ctx-pill--amber">{{ nextHolidayLabel() }}</span>
+      }
+    </div>
+
+    <!-- ── TAB: COACH ── -->
+    @if (chatTab() === 'coach') {
+
+      <div class="chat-messages">
+
+        @for (msg of messages(); track msg.id) {
+          <div class="chat-msg" [class.chat-msg--user]="msg.role === 'user'">
+
+            @if (msg.role === 'coach') {
+              <div class="msg-avatar msg-avatar--coach">IA</div>
+            }
+
+            <!-- Dans la liste des messages, remplacer le bloc msg-bubble par : -->
+            <div class="msg-bubble"
+                [class.msg-bubble--user]="msg.role === 'user'"
+                [class.msg-bubble--typing]="msg.text === '...'">
+              @if (msg.text === '...') {
+                <div class="typing-dots">
+                  <span></span><span></span><span></span>
+                </div>
+              } @else {
+                <p class="msg-text" style="white-space:pre-line">{{ msg.text }}</p>
+                @if (msg.time) {
+                  <span class="msg-time mono">{{ msg.time }}</span>
+                }
+              }
+            </div>
+
+            @if (msg.role === 'user') {
+              <div class="msg-avatar msg-avatar--user">
+                {{ selected()?.initials ?? 'U' }}
+              </div>
+            }
+          </div>
+        }
+
+        <!-- Message de bienvenue si pas encore initialisé -->
+        @if (messages().length === 0) {
+          <div class="chat-msg">
+            <div class="msg-avatar msg-avatar--coach">IA</div>
+            <div class="msg-bubble">
+              <p class="msg-text">
+                Coach IA actif.
+                @if (urgencyLevel() !== 'LOW') {
+                  Urgence {{ urgencyLevel() }} — Gap {{ gapPct().toFixed(0) }}%.
+                }
+                Sur quoi voulez-vous travailler ?
+              </p>
+              <span class="msg-time mono">{{ ws.lastUpdated() || '--:--' }}</span>
+            </div>
+          </div>
+        }
+
+        <div #chatBottom></div>
+      </div>
+
+      <!-- Quick prompts -->
+      <div class="quick-prompts">
+        @for (p of quickPrompts; track p) {
+          <button class="quick-btn" (click)="sendQuick(p)">{{ p }}</button>
+        }
+      </div>
+
+      <!-- Input -->
+      <div class="chat-input-wrap">
+        <textarea
+          class="chat-input"
+          rows="2"
+          placeholder="Posez votre question… (↵ Envoyer, Shift+↵ Nouvelle ligne)"
+          [value]="chatInput()"
+          (input)="updateInput($event)"
+          (keydown)="onKey($event)">
+        </textarea>
+        <button class="send-btn"
+                [disabled]="!chatInput().trim()"
+                (click)="sendMessage()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2">
+            <line x1="22" y1="2" x2="11" y2="13"/>
+            <polygon points="22,2 15,22 11,13 2,9"/>
+          </svg>
+        </button>
+      </div>
+
+    }
+
+    <!-- ── TAB: ALERTS ── -->
+    @if (chatTab() === 'alertes') {
+
+      <div class="alerts-panel">
+
+        @if (alerts().length === 0) {
+          <div class="no-alerts">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none"
+                 stroke="var(--text-tertiary)" stroke-width="1.5">
+              <polyline points="20,6 9,17 4,12"/>
+            </svg>
+            <p>Aucune alerte active</p>
+          </div>
+        }
+
+        @for (alert of alerts(); track alert.id) {
+          <div class="alert-card"
+               [style.border-left-color]="alert.color"
+               [style.background]="alert.bg">
+            <div class="alert-card__body">
+              <p class="alert-card__label" [style.color]="alert.color">
+                {{ alert.label }}
+              </p>
+              <p class="alert-card__detail">{{ alert.detail }}</p>
+            </div>
+            <div class="alert-card__actions">
+              <button class="alert-ask-btn"
+                      [style.background]="alert.color"
+                      (click)="alertToChat(alert)">
+                <svg width="11" height="11" viewBox="0 0 24 24"
+                     fill="none" stroke="white" stroke-width="2">
+                  <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+                </svg>
+                Ask the coach
+              </button>
+              <button class="alert-dismiss-btn" (click)="dismissAlert(alert.id)">
+                <svg width="11" height="11" viewBox="0 0 24 24"
+                     fill="none" stroke="currentColor" stroke-width="2.5">
+                  <line x1="18" y1="6" x2="6" y2="18"/>
+                  <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        }
+
+      </div>
+
+    }
+
+  </aside>
+
+  <!-- FAB when chat is closed -->
+  @if (!chatOpen()) {
+    <button class="chat-toggle-fab" (click)="openChat()">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+           stroke="white" stroke-width="2">
+        <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+      </svg>
+      @if (alerts().length > 0) {
+        <span class="fab-pulse"></span>
+      }
+    </button>
+  }
+
+</div>

@@ -1,0 +1,296 @@
+<div class="chat-page">
+
+  <!-- ══ LEFT SIDEBAR — Conversations ══ -->
+  <aside class="conv-sidebar" [class.is-hidden]="!showSidebar()">
+
+    <!-- Header -->
+    <div class="conv-sidebar__header">
+      <div class="conv-brand">
+        <div class="conv-brand__icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+               stroke="white" stroke-width="2">
+            <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+          </svg>
+        </div>
+        <span class="conv-brand__label">CoachAgent</span>
+      </div>
+      <button class="new-conv-btn"
+              (click)="newConv()"
+              title="New session">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2.5">
+          <line x1="12" y1="5"  x2="12" y2="19"/>
+          <line x1="5"  y1="12" x2="19" y2="12"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Search -->
+    <div class="conv-search">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"/>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+      <input
+        type="text"
+        placeholder="Search sessions…"
+        class="conv-search__input"
+        (input)="onSearch($event)"/>
+    </div>
+
+    <!-- Conversations list -->
+    <div class="conv-list">
+      @for (conv of filteredConvs(); track conv.id) {
+        <div class="conv-item"
+             [class.is-active]="conv.id === activeConvId()"
+             (click)="selectConv(conv.id)">
+
+          <div class="conv-mode-dot"
+               [style.background]="modeColors[conv.mode]">
+          </div>
+
+          <div class="conv-item__body">
+            <div class="conv-item__top">
+              <span class="conv-item__title">{{ conv.title }}</span>
+              <span class="conv-item__time mono">{{ conv.time }}</span>
+            </div>
+            <p class="conv-item__preview">{{ conv.preview }}</p>
+          </div>
+
+          @if (conv.unread > 0) {
+            <span class="conv-unread">{{ conv.unread }}</span>
+          }
+
+          <button class="conv-delete"
+                  (click)="deleteConv(conv.id, $event)"
+                  title="Delete">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2.5">
+              <line x1="18" y1="6"  x2="6"  y2="18"/>
+              <line x1="6"  y1="6"  x2="18" y2="18"/>
+            </svg>
+          </button>
+
+        </div>
+      }
+
+      @if (filteredConvs().length === 0) {
+        <div class="conv-empty">
+          <p>No sessions found</p>
+        </div>
+      }
+    </div>
+
+    <!-- Advisors quick access -->
+    <div class="conv-sidebar__footer">
+      <p class="footer-label">Active advisors</p>
+      <div class="advisor-chips">
+        @for (adv of advisors; track adv.id) {
+          <div class="adv-chip"
+               [style.border-color]="adv.avatarColor"
+               [title]="adv.name + ' · ' + adv.performance + '%'">
+            <div class="adv-chip__avatar"
+                 [style.background]="adv.avatarColor">
+              {{ adv.initials }}
+            </div>
+            <span class="adv-chip__pct"
+                  [style.color]="adv.performance >= 80 ? '#00B894' :
+                                  adv.performance >= 50 ? '#F9A825' : '#E74C3C'">
+              {{ adv.performance }}%
+            </span>
+          </div>
+        }
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- ══ MAIN CHAT AREA ══ -->
+  <div class="chat-main">
+
+    <!-- Chat header -->
+    <div class="chat-header">
+      <button class="sidebar-toggle"
+              (click)="showSidebar.update(v => !v)"
+              title="Toggle sidebar">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2">
+          <line x1="3"  y1="6"  x2="21" y2="6"/>
+          <line x1="3"  y1="12" x2="21" y2="12"/>
+          <line x1="3"  y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+
+      <div class="chat-header__info">
+        <div class="chat-header__mode"
+             [style.background]="modeColors[activeConv().mode] + '22'"
+             [style.color]="modeColors[activeConv().mode]">
+          {{ modeLabels[activeConv().mode] }}
+        </div>
+        <span class="chat-header__title">{{ activeConv().title }}</span>
+      </div>
+
+      <div class="chat-header__meta">
+        <div class="agent-status">
+          <span class="agent-status__dot"></span>
+        </div>
+        <div class="msg-count mono">
+          {{ activeConv().messages.length }} messages
+        </div>
+      </div>
+    </div>
+
+    <!-- Messages area -->
+    <div class="messages-area">
+
+      @for (msg of activeConv().messages; track msg.id) {
+
+        <!-- System message -->
+        @if (msg.role === 'system') {
+          <div class="sys-msg">
+            <span class="sys-msg__line"></span>
+            <span class="sys-msg__text">{{ msg.text }}</span>
+            <span class="sys-msg__line"></span>
+          </div>
+        }
+
+        <!-- Coach message -->
+        @if (msg.role === 'coach') {
+          <div class="msg-row msg-row--coach">
+            <div class="msg-avatar msg-avatar--coach">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                   stroke="white" stroke-width="2">
+                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                <path d="M2 17l10 5 10-5"/>
+                <path d="M2 12l10 5 10-5"/>
+              </svg>
+            </div>
+
+            <div class="msg-content">
+              @if (msg.typing) {
+                <div class="msg-bubble msg-bubble--coach typing-bubble">
+                  <div class="typing-dots">
+                    <span></span><span></span><span></span>
+                  </div>
+                </div>
+              } @else {
+                <div class="msg-bubble msg-bubble--coach">
+                  <p class="msg-text">{{ msg.text }}</p>
+
+                  @if (msg.sources?.length) {
+                    <div class="msg-sources">
+                      <svg width="10" height="10" viewBox="0 0 24 24"
+                           fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="12" y1="8"  x2="12"    y2="12"/>
+                        <line x1="12" y1="16" x2="12.01" y2="16"/>
+                      </svg>
+                      <span>Sources:</span>
+                      @for (src of msg.sources; track src) {
+                        <span class="source-tag">{{ src }}</span>
+                      }
+                      @if (msg.confidence) {
+                        <span class="confidence-tag"
+                              [style.color]="msg.confidence >= 0.85
+                                ? '#00B894' : '#F9A825'">
+                          {{ (msg.confidence * 100).toFixed(0) }}% confidence
+                        </span>
+                      }
+                    </div>
+                  }
+                </div>
+                <span class="msg-time mono">{{ msg.time }}</span>
+              }
+            </div>
+          </div>
+        }
+
+        <!-- User message -->
+        @if (msg.role === 'user') {
+          <div class="msg-row msg-row--user">
+            <div class="msg-content msg-content--user">
+              <div class="msg-bubble msg-bubble--user">
+                <p class="msg-text">{{ msg.text }}</p>
+              </div>
+              <span class="msg-time mono">{{ msg.time }}</span>
+            </div>
+            <div class="msg-avatar msg-avatar--user">
+              {{ advisors[0]?.initials ?? 'U' }}
+            </div>
+          </div>
+        }
+
+      }
+
+      <div #msgEnd></div>
+    </div>
+
+    <!-- Suggestions -->
+    @if (activeConv().messages.length <= 3) {
+      <div class="suggestions-strip">
+        <p class="suggestions-label">Quick suggestions</p>
+        <div class="suggestions-grid">
+          @for (s of suggestions; track s.label) {
+            <button class="suggestion-card"
+                    [style.border-top-color]="s.color"
+                    (click)="send(s.text)">
+              <span class="suggestion-cat"
+                    [style.color]="s.color">{{ s.category }}</span>
+              <span class="suggestion-label">{{ s.label }}</span>
+            </button>
+          }
+        </div>
+      </div>
+    }
+
+    <!-- Input area -->
+    <div class="input-area">
+      <div class="input-wrap">
+        <textarea
+          class="chat-textarea"
+          rows="1"
+          placeholder="Ask your CoachAgent… (↵ Send, Shift+↵ New line)"
+          [value]="inputValue()"
+          (input)="onInput($event)"
+          (keydown)="onKey($event)">
+        </textarea>
+
+        <div class="input-actions">
+          <div class="input-hints">
+            <span class="input-hint">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"/>
+                <path d="M21 21l-4.35-4.35"/>
+              </svg>
+              RAG active
+            </span>
+            <span class="input-hint input-hint--teal">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" stroke-width="2">
+                <polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/>
+              </svg>
+              Live data
+            </span>
+          </div>
+
+          <button class="send-btn"
+                  [class.send-btn--active]="inputValue().trim()"
+                  [disabled]="!inputValue().trim() || isTyping()"
+                  (click)="send()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2">
+              <line x1="22" y1="2"  x2="11" y2="13"/>
+              <polygon points="22,2 15,22 11,13 2,9"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      
+    </div>
+
+  </div>
+
+</div>

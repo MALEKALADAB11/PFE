@@ -1,0 +1,123 @@
+.metric-card {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-sm);
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: var(--transition);
+  position: relative;
+  overflow: hidden;
+
+  // Accent bar top
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    background: transparent;
+    transition: var(--transition);
+  }
+
+  &:hover {
+    box-shadow: var(--shadow-md);
+    transform: translateY(-1px);
+  }
+
+  // ── Variants ──
+  &--purple::before { background: var(--color-purple); }
+  &--teal::before   { background: var(--color-teal); }
+  &--amber::before  { background: var(--color-amber); }
+  &--red::before    { background: var(--color-red); }
+
+  &--purple { border-color: rgba(108, 92, 231, 0.15); }
+  &--teal   { border-color: rgba(0, 184, 148, 0.15); }
+  &--amber  { border-color: rgba(249, 168, 37, 0.15); }
+  &--red    { border-color: rgba(231, 76, 60, 0.15); }
+
+  // ── Header ──
+  &__header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  &__label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-tertiary);
+    flex: 1;
+  }
+
+  // ── Trend ──
+  &__trend {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-tertiary);
+
+    &.trend--up   { color: var(--color-teal); }
+    &.trend--down { color: var(--color-red); }
+  }
+
+  // ── Value ──
+  &__value-row {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+    margin-top: 4px;
+  }
+
+  &__value {
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    color: var(--text-primary);
+    line-height: 1.1;
+  }
+
+  &__suffix {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-tertiary);
+  }
+
+  &__sub {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin: 0;
+    line-height: 1.4;
+  }
+
+  // ── Progress ──
+  &__progress {
+    margin-top: 2px;
+  }
+
+  &__progress-label {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 5px;
+    display: block;
+  }
+}
+
+// ── New tag ──
+.new-tag {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--color-teal);
+  color: white;
+}

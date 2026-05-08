@@ -1,0 +1,90 @@
+<div
+  class="flip-card"
+  [class.flipped]="flipped()"
+  [style.height.px]="height"
+  (click)="toggle()"
+  role="button"
+  [attr.aria-label]="'KPI ' + data.label + ', cliquer pour détails'">
+
+  <div class="flip-card-inner">
+
+    <!-- ══ FRONT ══ -->
+    <div class="flip-front">
+
+      <!-- Accent dot -->
+      <div class="accent-dot" [style.background]="accentVar"></div>
+
+      <!-- Label -->
+      <p class="flip-front__label">{{ data.label }}</p>
+
+      <!-- Value -->
+      <div class="flip-front__value-row">
+        <span class="flip-front__value">{{ data.value }}</span>
+        @if (data.suffix) {
+          <span class="flip-front__suffix">{{ data.suffix }}</span>
+        }
+      </div>
+
+      <!-- Trend -->
+      @if (data.trend) {
+        <div class="flip-front__trend"
+             [class.trend--up]="data.trendDir === 'up'"
+             [class.trend--down]="data.trendDir === 'down'">
+
+          @if (data.trendDir === 'up') {
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2.5">
+              <polyline points="18,15 12,9 6,15"/>
+            </svg>
+          } @else if (data.trendDir === 'down') {
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2.5">
+              <polyline points="6,9 12,15 18,9"/>
+            </svg>
+          }
+
+          {{ data.trend }}
+        </div>
+      }
+
+      <!-- Flip hint -->
+      <div class="flip-hint">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2">
+          <polyline points="15,3 21,3 21,9"/>
+          <polyline points="9,21 3,21 3,15"/>
+          <line x1="21" y1="3" x2="14" y2="10"/>
+          <line x1="3" y1="21" x2="10" y2="14"/>
+        </svg>
+        Détails
+      </div>
+
+    </div>
+
+    <!-- ══ BACK ══ -->
+    <div class="flip-back" [style.--accent]="accentVar">
+
+      <p class="flip-back__title">{{ data.backTitle }}</p>
+
+      <ul class="flip-back__lines">
+        @for (line of data.backLines; track $index) {
+          <li class="flip-back__line">
+            <span class="flip-back__dot"></span>
+            {{ line }}
+          </li>
+        }
+      </ul>
+
+      <!-- Back hint -->
+      <div class="flip-hint flip-hint--back">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2">
+          <polyline points="1,4 1,10 7,10"/>
+          <path d="M3.51 15a9 9 0 102.13-9.36L1 10"/>
+        </svg>
+        Retour
+      </div>
+
+    </div>
+  </div>
+</div>

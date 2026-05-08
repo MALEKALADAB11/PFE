@@ -4,10 +4,10 @@ import {
 } from '@angular/core';
 import { CommonModule }     from '@angular/common';
 import { RouterLink }       from '@angular/router';
-import { HttpClientModule } from '@angular/common/http';
+import { HttpClientModule } from '@angular/common/http';6
 import { Subject }          from 'rxjs';
 import { takeUntil }        from 'rxjs/operators';
-
+ 
 import { Advisor }        from '../../core/models/advisor';
 import { StoreMetrics }   from '../../core/models/store';
 import { MockDataService } from '../../core/services/mock-data';
@@ -17,7 +17,6 @@ import {
   FlipKpiCardComponent,
   FlipCardData
 } from '../../shared/components/flip-kpi-card/flip-kpi-card';
-import { MetricCardComponent } from '../../shared/components/metric-card/metric-card';
 import {
   InventoryApiService,
   InventoryApiItem,
@@ -41,7 +40,7 @@ interface RiskHour {
 @Component({
   selector:    'app-dashboard',
   standalone:  true,
-  imports:     [CommonModule, RouterLink, MetricCardComponent, FlipKpiCardComponent, HttpClientModule],
+  imports:     [CommonModule, FlipKpiCardComponent, HttpClientModule],
   templateUrl: './dashboard.html',
   styleUrl:    './dashboard.scss'
 })

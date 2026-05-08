@@ -5,10 +5,13 @@ import { timeout } from 'rxjs/operators';
 
 @Injectable({ providedIn: 'root' })
 export class ApiService {
-  private base = 'http://localhost:8000/api/v1';
-  private requestTimeout = 10000; // 10 seconds
+  private base            = 'http://localhost:8000/api/v1';
+  private inventoryBase   = 'http://localhost:8000/api/inventory';
+  private requestTimeout  = 10000;
 
   constructor(private http: HttpClient) {}
+
+  // ── Sales endpoints ───────────────────────────────────────────────────────
 
   getStoreMetrics(storeId: string): Observable<any> {
     return this.http.get(`${this.base}/stores/${storeId}/metrics`)
@@ -59,6 +62,7 @@ export class ApiService {
     return this.http.get(`${this.base}/cycle/status`)
       .pipe(timeout(this.requestTimeout));
   }
+
   coachChat(payload: {
     message:      string;
     advisor_name: string;
@@ -71,5 +75,37 @@ export class ApiService {
       timestamp: string;
     }>(`${this.base}/coach/chat`, payload)
       .pipe(timeout(this.requestTimeout));
-}
+  }
+
+  // ── Inventory endpoints (données réelles stock_centre.xls) ───────────────
+
+  /**
+   * Récupère le snapshot inventaire d'un store depuis le backend.
+   * Utilise les vraies données stock_centre.xls importées.
+   * storeId doit être le CD_DIST réel: 'STORE-001' pour I63.
+   */
+  getInventorySnapshot(
+    storeId: string,
+    objective: 'balanced' | 'aggressive' | 'conservative' = 'balanced'
+  ): Observable<any> {
+    return this.http.get(
+      `${this.inventoryBase}/store/${storeId}?business_objective=${objective}`
+    ).pipe(timeout(this.requestTimeout));
+  }
+
+  /**
+   * Récupère les alertes stock critiques pour un store.
+   */
+  getInventoryAlerts(storeId: string): Observable<any> {
+    return this.http.get(`${this.inventoryBase}/alerts/${storeId}`)
+      .pipe(timeout(this.requestTimeout));
+  }
+
+  /**
+   * Récupère le forecast de demande par SKU (TimesFM).
+   */
+  getInventoryForecast(storeId: string): Observable<any> {
+    return this.http.get(`${this.inventoryBase}/forecast/${storeId}`)
+      .pipe(timeout(this.requestTimeout));
+  }
 }

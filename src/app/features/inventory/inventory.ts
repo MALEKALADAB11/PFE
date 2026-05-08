@@ -68,6 +68,8 @@ export class InventoryComponent implements OnInit, OnDestroy {
   flashedSkus = signal<Set<string>>(new Set());
 
   private lastPayloadHash = '';
+  private _pollingTimer:  any = null;
+  private _refreshTimer:  any = null;
 
   // ── KPIs ──────────────────────────────────────────────────────────────────
   totalItems    = computed(() => this.items().length);
@@ -204,11 +206,11 @@ export class InventoryComponent implements OnInit, OnDestroy {
       this.ws.connectInventory('STORE-001', 'balanced');
     });
 
+    // ── Effect WS inventory ───────────────────────────────────────────────
     effect(() => {
       const payload = this.ws.liveInventory();
 
       if (!payload || payload.type !== 'inventory_update') return;
-
       if (!payload.items?.length) return;
 
       const hash = JSON.stringify(
@@ -216,6 +218,12 @@ export class InventoryComponent implements OnInit, OnDestroy {
       );
       if (hash === this.lastPayloadHash) return;
       this.lastPayloadHash = hash;
+
+      console.log(
+        '[Inventory] ✅ WS update —',
+        payload.items.length, 'items |',
+        new Date().toLocaleTimeString()
+      );
 
       this._applyAgentPayload(payload);
       this.lastUpdate.set(new Date());
@@ -246,12 +254,24 @@ export class InventoryComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    this.ws.disconnect();
+    // Nettoyer les timers
+    if (this._pollingTimer) {
+      clearInterval(this._pollingTimer);
+      this._pollingTimer = null;
+    }
+    if (this._refreshTimer) {
+      clearInterval(this._refreshTimer);
+      this._refreshTimer = null;
+    }
+    // ⚠️ NE PAS appeler ws.disconnect() — le service WS est singleton partagé
+    // avec Dashboard et Conseiller — les déconnecter ici couperait tout.
   }
 
   // ── Private helpers ───────────────────────────────────────────────────────
 
-  private _applyAgentPayload(payload: { items: InventoryApiItem[], alerts: InventoryAlert[] }): void {
+  private _applyAgentPayload(
+    payload: { items: InventoryApiItem[]; alerts: InventoryAlert[] }
+  ): void {
 
     if (!payload?.items?.length) return;
 
@@ -355,16 +375,24 @@ export class InventoryComponent implements OnInit, OnDestroy {
     );
   }
 
-  private loadAgentOverlay(storeId = 'STORE-001', objective = 'balanced'): void {
+  private loadAgentOverlay(
+    storeId   = 'STORE-001',
+    objective = 'balanced'
+  ): void {
     this.agentLoading.set(true);
     this.agentError.set(null);
 
     this.invApi.getStore(storeId, objective).subscribe({
       next: payload => {
+        console.log(
+          '[Inventory] 📦 HTTP load OK —',
+          payload.items?.length ?? 0, 'items'
+        );
         this._applyAgentPayload(payload);
+        this.lastUpdate.set(new Date());
       },
       error: err => {
-        console.warn('[Inventory] Agent unavailable:', err);
+        console.warn('[Inventory] ⚠️ Agent unavailable, using mock data:', err);
         this.agentError.set('Agent offline — showing demo data');
         this.agentLoading.set(false);
       },
@@ -373,10 +401,16 @@ export class InventoryComponent implements OnInit, OnDestroy {
 
   // ── UI helpers ─────────────────────────────────────────────────────────────
 
-  toggleFlip(id: string): void { this.flippedId.update(cur => cur === id ? null : id); }
-  isFlipped(id: string): boolean { return this.flippedId() === id; }
+  toggleFlip(id: string): void {
+    this.flippedId.update(cur => cur === id ? null : id);
+  }
+
+  isFlipped(id: string): boolean {
+    return this.flippedId() === id;
+  }
+
   setFilter(f: string): void { this.filterRisk.set(f as FilterRisk); }
-  setSort(s: string): void   { this.sortKey.set(s as SortKey); }
+  setSort(s: string):   void { this.sortKey.set(s as SortKey); }
 
   getFilterCount(key: string): number {
     return (this.filterCounts() as Record<string, number>)[key] ?? 0;
@@ -435,35 +469,43 @@ export class InventoryComponent implements OnInit, OnDestroy {
     this.alerts.update(list => list.filter(a => a.id !== id));
   }
 
+  // ── Style helpers ──────────────────────────────────────────────────────────
+
   riskColor(r: string): string {
     const m: Record<string, string> = {
-      critical: '#E74C3C', high: '#F9A825', medium: '#2D9CDB', ok: '#00B894', low: '#9CA3AF',
+      critical: '#E74C3C', high: '#F9A825',
+      medium:   '#2D9CDB', ok:   '#00B894', low: '#9CA3AF',
     };
     return m[r] ?? '#9CA3AF';
   }
 
   riskBg(r: string): string {
     const m: Record<string, string> = {
-      critical: '#FDEDEC', high: '#FFF8E1', medium: '#E8F4FD', ok: '#E0FAF4', low: '#F2F4F8',
+      critical: '#FDEDEC', high: '#FFF8E1',
+      medium:   '#E8F4FD', ok:   '#E0FAF4', low: '#F2F4F8',
     };
     return m[r] ?? '#F2F4F8';
   }
 
   riskLabel(r: string): string {
     const m: Record<string, string> = {
-      critical: 'CRITICAL', high: 'HIGH', medium: 'MEDIUM', ok: 'OK', low: 'LOW',
+      critical: 'CRITICAL', high: 'HIGH',
+      medium:   'MEDIUM',   ok:   'OK', low: 'LOW',
     };
     return m[r] ?? 'N/A';
   }
 
   riskBackColor(r: string): string {
     const m: Record<string, string> = {
-      critical: '#C0392B', high: '#B45309', medium: '#1A6FA8', ok: '#007A63', low: '#6B7280',
+      critical: '#C0392B', high: '#B45309',
+      medium:   '#1A6FA8', ok:   '#007A63', low: '#6B7280',
     };
     return m[r] ?? '#6B7280';
   }
 
-  coverageWidth(ratio: number): number { return Math.min(Math.round((ratio / 3) * 100), 100); }
+  coverageWidth(ratio: number): number {
+    return Math.min(Math.round((ratio / 3) * 100), 100);
+  }
 
   coverageColor(ratio: number): string {
     if (ratio < 0.5) return '#E74C3C';
@@ -472,11 +514,15 @@ export class InventoryComponent implements OnInit, OnDestroy {
   }
 
   trendIcon(t: string): string {
-    if (t === 'up') return '↑'; if (t === 'down') return '↓'; return '→';
+    if (t === 'up') return '↑';
+    if (t === 'down') return '↓';
+    return '→';
   }
 
   trendColor(t: string): string {
-    if (t === 'up') return '#00B894'; if (t === 'down') return '#E74C3C'; return '#9CA3AF';
+    if (t === 'up') return '#00B894';
+    if (t === 'down') return '#E74C3C';
+    return '#9CA3AF';
   }
 
   alertColor(u: string): string {
@@ -488,11 +534,13 @@ export class InventoryComponent implements OnInit, OnDestroy {
   }
 
   alertIcon(type: string): string {
-    if (type === 'rupture') return 'S'; if (type === 'redistribution') return 'T'; return 'O';
+    if (type === 'rupture')        return 'S';
+    if (type === 'redistribution') return 'T';
+    return 'O';
   }
 
   alertTypeLabel(type: string): string {
-    if (type === 'rupture') return 'Stockout';
+    if (type === 'rupture')        return 'Stockout';
     if (type === 'redistribution') return 'Transfer';
     return 'Overstock';
   }

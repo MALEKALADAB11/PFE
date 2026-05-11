@@ -1,6 +1,9 @@
 import { Component, signal, computed, ViewChild,
          ElementRef, AfterViewChecked } from '@angular/core';
 import { CommonModule } from '@angular/common';
+         ElementRef, AfterViewChecked, OnInit } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 
 import { Advisor } from '../../core/models/advisor';
 import { MockDataService } from '../../core/services/mock-data';
@@ -43,6 +46,11 @@ interface SuggestedPrompt {
   styleUrl:    './chat.scss'
 })
 export class ChatComponent implements AfterViewChecked {
+  imports:     [CommonModule, FormsModule],
+  templateUrl: './chat.html',
+  styleUrl:    './chat.scss'
+})
+export class ChatComponent implements OnInit, AfterViewChecked {
 
   @ViewChild('msgEnd') msgEnd!: ElementRef;
 
@@ -53,6 +61,7 @@ export class ChatComponent implements AfterViewChecked {
   activeConvId = signal('c1');
   searchQuery  = signal('');
   showSidebar  = signal(true);
+  prefillMeta  = signal<{ sku?: string; name?: string; mode?: string } | null>(null);
 
   // ── Conversations ──
   conversations = signal<Conversation[]>([
@@ -205,6 +214,35 @@ export class ChatComponent implements AfterViewChecked {
     this.advisors = this.data.getAdvisors();
   }
 
+  ngOnInit() {
+    try {
+      const raw = sessionStorage.getItem('chat_prefill');
+      if (raw) {
+        sessionStorage.removeItem('chat_prefill');
+        const parsed = JSON.parse(raw);
+        const text: string = parsed.text ?? '';
+        // Pre-fill the input so the user sees the message and can edit before sending
+        this.inputValue.set(text);
+        // Store metadata for display (which SKU / product this came from)
+        this.prefillMeta.set({
+          sku:  parsed.sku,
+          name: parsed.name,
+          mode: parsed.mode,
+        });
+        // If we came from inventory, switch to or create an inventory conversation
+        if (parsed.mode === 'inventory') {
+          const existing = this.conversations().find(c => c.mode === 'inventory');
+          if (existing) {
+            this.selectConv(existing.id);
+          } else {
+            this.newConvWithMode('inventory', parsed.name ?? 'Stock alert');
+          }
+        }
+        this.shouldScroll = true;
+      }
+    } catch { /* sessionStorage unavailable (private mode) */ }
+  }
+
   ngAfterViewChecked() {
     if (this.shouldScroll) {
       this.msgEnd?.nativeElement?.scrollIntoView({ behavior: 'smooth' });
@@ -258,6 +296,15 @@ export class ChatComponent implements AfterViewChecked {
       id,
       title:   'New session',
       mode:    'general',
+  newConv() { this.newConvWithMode('general', 'New session'); }
+
+  newConvWithMode(mode: ConvMode, title: string) {
+    const id = 'conv_' + Date.now();
+    const modeLabel = this.modeLabels[mode];
+    const conv: Conversation = {
+      id,
+      title,
+      mode,
       preview: 'Session started',
       time:    this.now(),
       unread:  0,
@@ -265,6 +312,7 @@ export class ChatComponent implements AfterViewChecked {
         {
           id:   'sys_' + Date.now(), role: 'system',
           text: `New session started · ${this.now()}`,
+          text: `${modeLabel} session started · ${this.now()}`,
           time: this.now()
         },
         {
@@ -272,6 +320,11 @@ export class ChatComponent implements AfterViewChecked {
           text: 'Hello! I\'m your AI CoachAgent. I\'m monitoring store performance, stock levels, weather signals, and local events in real time. How can I help you?',
           time: this.now(),
           sources:    ['Orchestrator', 'Data Agent'],
+          text: mode === 'inventory'
+            ? 'Hello! I\'m your Inventory CoachAgent. I have live stock levels, risk scores, and replenishment data ready. What would you like to know?'
+            : 'Hello! I\'m your AI CoachAgent. I\'m monitoring store performance, stock levels, weather signals, and local events in real time. How can I help you?',
+          time: this.now(),
+          sources:    mode === 'inventory' ? ['Inventory Agent', 'Stock API'] : ['Orchestrator', 'Data Agent'],
           confidence: 0.95
         }
       ]

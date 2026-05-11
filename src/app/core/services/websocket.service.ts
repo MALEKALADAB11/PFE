@@ -406,6 +406,52 @@ export class WebSocketService {
 
           if (data.type === 'heartbeat') return;
 
+          if (data.type === 'stock_delta') {
+            // ── Fast path: single-SKU stock change, fires instantly on every sale ──
+            // Patch the existing liveInventory signal so inventory.ts can react
+            // in < 100ms, well before the full re-analysis arrives (~10s later).
+            console.log('[WS] ⚡ stock_delta:', data.sku, '→', data.new_stock, 'units | risk:', data.risk_level);
+            const current = this.liveInventory();
+            if (current?.items?.length) {
+              const patchedItems = current.items.map((item: any) =>
+                item.sku === data.sku
+                  ? {
+                      ...item,
+                      stock:         data.new_stock,
+                      daysOfStock:   data.days_of_stock,
+                      coverageRatio: data.coverage_ratio,
+                      riskLevel:     data.risk_level,
+                      riskRationale: data.risk_rationale,
+                      riskScore: (
+                        data.risk_level === 'critical' ? 0.90 :
+                        data.risk_level === 'high'     ? 0.72 :
+                        data.risk_level === 'medium'   ? 0.45 : 0.10
+                      ),
+                    }
+                  : item
+              );
+              // Rebuild alerts from patched items
+              const patchedAlerts = patchedItems
+                .filter((i: any) => i.riskLevel === 'critical' || i.riskLevel === 'high')
+                .map((i: any) => ({
+                  id:      `alert-${i.riskLevel}-${i.sku}`,
+                  type:    'rupture',
+                  urgency: i.riskLevel,
+                  title:   `${i.riskLevel === 'critical' ? 'Stockout imminent' : 'Low stock'}: ${i.name}`,
+                  message: `${i.name} — ${i.stock} units left, ${i.daysOfStock}d coverage`,
+                  action:  null,
+                  time:    new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+                }));
+              this.liveInventory.set({
+                ...current,
+                type:   'inventory_update',  // keep type so effect() in inventory.ts fires
+                items:  patchedItems,
+                alerts: patchedAlerts,
+              });
+            }
+            return;
+          }
+
           if (data.type === 'inventory_update') {
             console.log('[WS] 📦 Inventory update:', data.items?.length, 'items');
             this.liveInventory.set(data);

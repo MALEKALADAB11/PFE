@@ -9,10 +9,6 @@ import { Subject }          from 'rxjs';
 import { takeUntil }        from 'rxjs/operators';
 
 import { Advisor }        from '../../core/models/advisor';
-import { HttpClientModule } from '@angular/common/http';
-import { Subject }          from 'rxjs';
-import { takeUntil }        from 'rxjs/operators';
- import { Advisor }        from '../../core/models/advisor';
 import { StoreMetrics }   from '../../core/models/store';
 import { MockDataService } from '../../core/services/mock-data';
 import { ApiService }      from '../../core/services/api';
@@ -50,7 +46,6 @@ interface RiskHour {
 @Component({
   selector:    'app-dashboard',
   standalone:  true,
-  imports:     [CommonModule, RouterLink, MetricCardComponent, FlipKpiCardComponent, HttpClientModule],
   imports:     [CommonModule, FlipKpiCardComponent, HttpClientModule],
   templateUrl: './dashboard.html',
   styleUrl:    './dashboard.scss'
@@ -58,7 +53,6 @@ interface RiskHour {
 export class Dashboard implements OnInit, OnDestroy {
 
   store!:   StoreMetrics;
-  storeId = 'store-lac2';
   storeId = REAL_STORE_ID;
 
   liveMetrics  = signal<any>(null);
@@ -148,11 +142,11 @@ export class Dashboard implements OnInit, OnDestroy {
   );
 
   caTarget = computed(() =>
-    this.ws.liveMetrics()?.ca_target
-    ?? this.liveMetrics()?.ca_target
-    ?? this.store?.caObjectif ?? 18000
-    ?? REAL_TARGET_DT
-  );
+  this.ws.liveMetrics()?.ca_target
+  ?? this.liveMetrics()?.ca_target
+  ?? this.store?.caObjectif
+  ?? REAL_TARGET_DT
+);
 
   attainment = computed(() =>
     this.ws.liveMetrics()?.attainment
@@ -308,20 +302,6 @@ export class Dashboard implements OnInit, OnDestroy {
   });
 
   // ── Hourly performance ────────────────────────────────
-  hourlyPerf = signal<HourlyPerf[]>([
-    { hour: '9AM',  actual: 1875, target: 1636, forecast: 1700, risk: false },
-    { hour: '10AM', actual: 2709, target: 1636, forecast: 1800, risk: false },
-    { hour: '11AM', actual: 830,  target: 1636, forecast: 1600, risk: true  },
-    { hour: '12PM', actual: 351,  target: 1636, forecast: 1900, risk: true  },
-    { hour: '1PM',  actual: 3054, target: 1636, forecast: 1700, risk: false },
-    { hour: '2PM',  actual: 132,  target: 1636, forecast: 1600, risk: true  },
-    { hour: '3PM',  actual: 2500, target: 1636, forecast: 1800, risk: false },
-    { hour: '4PM',  actual: 0,    target: 1636, forecast: 2000, risk: false },
-    { hour: '5PM',  actual: 0,    target: 1636, forecast: 2200, risk: false },
-    { hour: '6PM',  actual: 0,    target: 1636, forecast: 1800, risk: false },
-    { hour: '7PM',  actual: 0,    target: 1636, forecast: 1400, risk: false },
-    { hour: '8PM',  actual: 0,    target: 1636, forecast: 900,  risk: false },
-  ]);
   // Initialisation avec ratios réels I63 pour affichage immédiat
   hourlyPerf = signal<HourlyPerf[]>(
     this._buildDefaultHourlyPerf()
@@ -332,14 +312,12 @@ export class Dashboard implements OnInit, OnDestroy {
   perfMax = computed(() => {
     const arr = this.hourlyPerf();
     if (!arr.length) return 3000;
-    if (!arr.length) return 200;
     const vals = arr.flatMap(h => [
       isFinite(h.actual)   && h.actual   > 0 ? h.actual   : 0,
       isFinite(h.target)   && h.target   > 0 ? h.target   : 0,
       isFinite(h.forecast) && h.forecast > 0 ? h.forecast : 0,
     ]).filter(v => v > 0);
     return vals.length ? Math.max(...vals) * 1.15 : 3000;
-    return vals.length ? Math.max(...vals) * 1.15 : 200;
   });
 
   perfBarHeight(val: number): number {
@@ -522,7 +500,6 @@ export class Dashboard implements OnInit, OnDestroy {
     // Inventory agent overlay (APP08)
     this.invApi.getStore('STORE-001').subscribe({
       next:  payload => this._applyAgentData(payload.items, payload.summary),
-      error: err     => console.warn('Stock agent unavailable, using mock data:', err),
       error: err     => console.warn('Stock agent unavailable:', err),
     });
   }
@@ -567,15 +544,6 @@ export class Dashboard implements OnInit, OnDestroy {
           this.applyHeatmapFromWs(d);
           const hourly = this.mapHourlyPerfFromWs(d);
           if (hourly.length) this.hourlyPerf.set(hourly);
-          const hourly = this.mapHourlyPerfFromWs(d);
-          if (hourly.length) this.hourlyPerf.set([...hourly]);
-
-          const mix = this.mapProductMixFromWs(d);
-          if (mix.length) this.productMix.set([...mix]);
-
-          this.cards.set([...this.mapCardsFromWs(d)]);
-          this.riskHours.set([...this.mapRiskHoursFromWs(d)]);
-          this.applyHeatmapFromWs(d);
         },
         error: () => {},
       });
@@ -593,9 +561,6 @@ export class Dashboard implements OnInit, OnDestroy {
 
     if (live.advisors?.length) this.liveAdvisors.set(live.advisors);
 
-    const hourly = this.mapHourlyPerfFromWs(live);
-    if (hourly.length) this.hourlyPerf.set(hourly);
-    
     // ── Hourly perf — Always update (backend data OR default fallback) ──
     const hourly = live 
       ? this.mapHourlyPerfFromWs(live)
@@ -677,41 +642,6 @@ export class Dashboard implements OnInit, OnDestroy {
       status:          'pending',
       strateAction:    strateActions[i] ?? null,
     }));
-  }
-
-  private mapProductMixFromWs(data: any): any[] {
-    return (data?.product_mix ?? []).map((p: any, i: number) => ({
-      id:            p.product ?? `prod_${i}`,
-      name:          p.product ?? 'Produit',
-      color:         this.mixColor(i),
-      unitsSold:     0,
-      unitsForecast: 0,
-      salesActual:   Math.min(100, Math.max(0, p.attainment ?? 0)),
-      salesForecast: 100,
-      stockUnits:    p.stock_level === 'Low' ? 3 : 10,
-      stockMin:      3,
-      stockRisk:     p.stock_level === 'Low' ? 'high' : 'low',
-      revenue:       p.revenue ?? 0,
-      trend:         'up',
-      trendVal:      `${(p.revenue ?? 0).toLocaleString()} TND`,
-      alert:         p.stock_level === 'Low',
-    }));
-  }
-
-  private mapHourlyPerfFromWs(data: any): HourlyPerf[] {
-    const raw = data?.hourly_performance ?? [];
-    if (!raw.length) return [];
-    return raw
-      .map((h: any) => ({
-        hour:     this.normalizeHourLabel(h.hour || ''),
-        actual:   Math.max(0, Number(h.revenue  ?? h.actual   ?? 0) || 0),
-        target:   Math.max(0, Number(h.target   ?? 0) || 0),
-        forecast: Math.max(0, Number(h.forecast ?? 0) || 0),
-        risk:     !!h.risk,
-      }))
-      .filter((h: HourlyPerf) =>
-        h.hour && (h.target > 0 || h.forecast > 0 || h.actual > 0)
-      );
   }
 
   // ── FIX : Product Mix — mapping complet depuis payload backend ──
@@ -958,20 +888,6 @@ export class Dashboard implements OnInit, OnDestroy {
     });
   }
 
-  private normalizeHourLabel(hour: string): string {
-    if (!hour) return '';
-    const m = hour.match(/^(\d{1,2})h$/);
-    if (!m) return hour;
-    const n = Number(m[1]);
-    if (n === 12) return '12PM';
-    if (n < 12)   return `${n}AM`;
-    return `${n - 12}PM`;
-      this.heatData['traffic'][i] = Math.max(
-        this.heatData['traffic'][i], (riskMap[h] ?? 2) - 1
-      );
-    });
-  }
-
   // ── normalizeHourLabel ────────────────────────────────
   private normalizeHourLabel(hour: string): string {
     if (!hour) return '';
@@ -1025,7 +941,6 @@ export class Dashboard implements OnInit, OnDestroy {
   simulatePOS() {
     this.api.simulatePOS(this.storeId)
       .pipe(takeUntil(this.destroy$))
-      .subscribe({ next: () => setTimeout(() => this.loadData(), 1000), error: () => {} });
       .subscribe({
         next: () => setTimeout(() => this.loadData(), 1000),
         error: () => {},

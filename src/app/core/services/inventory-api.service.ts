@@ -89,7 +89,7 @@ export class InventoryApiService {
   }
 
   analyzeSku(sku: string, storeId = 'STORE-001', objective = 'balanced'): Observable<SingleAnalysisPayload> {
-  analyzeSku(sku: string, storeId = 'lac2', objective = 'balanced'): Observable<SingleAnalysisPayload> {
+   
     return this.http.post<SingleAnalysisPayload>(`${this.base}/analyze`, {
       sku,
       store_id:           storeId,

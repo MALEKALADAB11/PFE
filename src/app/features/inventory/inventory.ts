@@ -51,12 +51,6 @@ export class InventoryComponent implements OnInit, OnDestroy {
   wsConnected = computed(() => this.ws.connected());
   lastUpdate  = signal<Date | null>(null);
 
-  filterRisk = signal<FilterRisk>('all');
-  sortKey    = signal<SortKey>('risk');
-  flippedId  = signal<string | null>(null);
-  decisions  = signal<Record<string, Decision>>({});
-
-  private lastPayloadHash = '';
   // True once backend data has replaced mock (any item has a real safetyStock)
   isLiveData = computed(() =>
     this.items().some((i: any) => i.safetyStock > 0 || i.riskRationale)
@@ -94,32 +88,6 @@ export class InventoryComponent implements OnInit, OnDestroy {
   );
   rejectedCount = computed(() =>
     Object.values(this.decisions()).filter(d => d === 'rejected').length
-  );
-
-  // ── Quadrant ──────────────────────────────────────────────────────────────
-  quadrantStockMax = computed(() => {
-    const vals = this.items().map(p => p.stock >= 999 ? 0 : p.stock);
-    return Math.max(...vals, 1) * 1.1;
-  });
-
-  quadrantDemandMax = computed(() => {
-    const vals = this.items().map(p => p.demandForecast24h);
-    return Math.max(...vals, 1) * 1.1;
-  });
-
-  quadrantX(p: InventoryItem): number {
-    const stock = p.stock >= 999 ? this.quadrantStockMax() : p.stock;
-    return Math.min(Math.round((stock / this.quadrantStockMax()) * 90) + 2, 92);
-  }
-
-  quadrantY(p: InventoryItem): number {
-    return Math.min(Math.round((p.demandForecast24h / this.quadrantDemandMax()) * 90) + 2, 92);
-  
-  productApprovedCount = computed(() =>
-    Object.values(this.productDecisions()).filter(d => d === 'approved').length
-  );
-  productRejectedCount = computed(() =>
-    Object.values(this.productDecisions()).filter(d => d === 'rejected').length
   );
 
   // ── Quadrant ──────────────────────────────────────────────────────────────
@@ -161,7 +129,7 @@ export class InventoryComponent implements OnInit, OnDestroy {
   });
 
   quadrantX(p: InventoryItem): number {
-    if (p.stock >= 999) return 92;                               // services → far right
+    if (p.stock >= 999) return 92;
     const capped = Math.min(p.stock, this.quadrantStockMax());
     return Math.min(Math.round((capped / this.quadrantStockMax()) * 88) + 2, 92);
   }
@@ -173,13 +141,6 @@ export class InventoryComponent implements OnInit, OnDestroy {
 
   quadrantSize(p: InventoryItem): number { return Math.round(10 + p.riskScore * 18); }
 
-  quadrantZone(p: InventoryItem): 'star' | 'stockout' | 'ok' | 'overstock' {
-    const highStock  = this.quadrantX(p) >= 50;
-    const highDemand = this.quadrantY(p) >= 50;
-    if  (highStock && highDemand)  return 'star';
-    if (!highStock && highDemand)  return 'stockout';
-    if (!highStock && !highDemand) return 'ok';
-    return 'overstock';
   // Zone derived from visual position → footer counts always match the chart.
   quadrantZone(p: InventoryItem): 'star' | 'stockout' | 'ok' | 'overstock' {
     if (p.stock >= 999 || (p as any).overstockFlag) return 'overstock';
@@ -308,9 +269,7 @@ export class InventoryComponent implements OnInit, OnDestroy {
 
     // ── Capture stock BEFORE update so the diff log is accurate ──────────
     // If we read this.items() AFTER the update, we'd compare new vs new → always zero diff.
-  private _applyAgentPayload(
-    payload: { items: InventoryApiItem[]; alerts: InventoryAlert[] }
-  ): void {
+  
 
     if (!payload?.items?.length) return;
 
@@ -452,55 +411,48 @@ export class InventoryComponent implements OnInit, OnDestroy {
     }
   }
 
-  private loadAgentOverlay(storeId = 'STORE-001', objective = 'balanced'): void {
-    if (decreased.length) {
-      console.log('[Inventory] Stock sold:', decreased.join(' | '));
-      // Flash the affected dots on the quadrant chart
-      const skus = new Set(decreased.map(d => d.split(':')[0].trim()));
-      this.flashedSkus.set(skus);
-      setTimeout(() => this.flashedSkus.set(new Set()), 900);
+ 
+  private loadAgentOverlay(
+  storeId = 'STORE-001',
+  objective = 'balanced'
+): void {
+
+  this.agentLoading.set(true);
+  this.agentError.set(null);
+
+  this.invApi.getStore(storeId, objective).subscribe({
+
+    next: payload => {
+
+      console.log(
+        '[Inventory] 📦 HTTP load OK —',
+        payload.items?.length ?? 0,
+        'items'
+      );
+
+      this._applyAgentPayload(payload);
+
+      this.lastUpdate.set(new Date());
+
+      this.agentLoading.set(false);
+    },
+
+    error: err => {
+
+      console.warn(
+        '[Inventory] ⚠️ Agent unavailable, using mock data:',
+        err
+      );
+
+      this.agentError.set(
+        'Agent offline — showing demo data'
+      );
+
+      this.agentLoading.set(false);
     }
 
-    // ── Verify data source ─────────────────────────────────────────────────
-    const hasRealData = mapped.some(
-      (i: any) => (i.safetyStock > 0) || i.riskRationale || i.analystNote
-    );
-    console.log(
-      `[Inventory] ${hasRealData ? '✅ LIVE' : '⚠️ fallback'} | ` +
-      `${mapped.length} SKUs | ` +
-      `critical=${mapped.filter(i => i.riskLevel === 'critical').length} ` +
-      `high=${mapped.filter(i => i.riskLevel === 'high').length} ` +
-      `ok=${mapped.filter(i => i.riskLevel === 'ok').length}`
-    );
-  }
-
-  private loadAgentOverlay(
-    storeId   = 'STORE-001',
-    objective = 'balanced'
-  ): void {
-    this.agentLoading.set(true);
-    this.agentError.set(null);
-
-    this.invApi.getStore(storeId, objective).subscribe({
-      next: payload => {
-        this._applyAgentPayload(payload);
-      },
-      error: err => {
-        console.warn('[Inventory] Agent unavailable:', err);
-        console.log(
-          '[Inventory] 📦 HTTP load OK —',
-          payload.items?.length ?? 0, 'items'
-        );
-        this._applyAgentPayload(payload);
-        this.lastUpdate.set(new Date());
-      },
-      error: err => {
-        console.warn('[Inventory] ⚠️ Agent unavailable, using mock data:', err);
-        this.agentError.set('Agent offline — showing demo data');
-        this.agentLoading.set(false);
-      },
-    });
-  }
+  });
+}
 
   // ── UI helpers ─────────────────────────────────────────────────────────────
 
@@ -508,17 +460,7 @@ export class InventoryComponent implements OnInit, OnDestroy {
   isFlipped(id: string): boolean { return this.flippedId() === id; }
   setFilter(f: string): void { this.filterRisk.set(f as FilterRisk); }
   setSort(s: string): void   { this.sortKey.set(s as SortKey); }
-  toggleFlip(id: string): void {
-    this.flippedId.update(cur => cur === id ? null : id);
-  }
-
-  isFlipped(id: string): boolean {
-    return this.flippedId() === id;
-  }
-
-  setFilter(f: string): void { this.filterRisk.set(f as FilterRisk); }
-  setSort(s: string):   void { this.sortKey.set(s as SortKey); }
-
+ 
   getFilterCount(key: string): number {
     return (this.filterCounts() as Record<string, number>)[key] ?? 0;
   }
@@ -576,47 +518,52 @@ export class InventoryComponent implements OnInit, OnDestroy {
     this.alerts.update(list => list.filter(a => a.id !== id));
   }
 
-  riskColor(r: string): string {
-    const m: Record<string, string> = {
-      critical: '#E74C3C', high: '#F9A825', medium: '#2D9CDB', ok: '#00B894', low: '#9CA3AF',
   // ── Style helpers ──────────────────────────────────────────────────────────
 
   riskColor(r: string): string {
     const m: Record<string, string> = {
-      critical: '#E74C3C', high: '#F9A825',
-      medium:   '#2D9CDB', ok:   '#00B894', low: '#9CA3AF',
+      critical: '#E74C3C',
+      high: '#F9A825',
+      medium: '#2D9CDB',
+      ok: '#00B894',
+      low: '#9CA3AF',
     };
     return m[r] ?? '#9CA3AF';
   }
 
   riskBg(r: string): string {
     const m: Record<string, string> = {
-      critical: '#FDEDEC', high: '#FFF8E1', medium: '#E8F4FD', ok: '#E0FAF4', low: '#F2F4F8',
-      critical: '#FDEDEC', high: '#FFF8E1',
-      medium:   '#E8F4FD', ok:   '#E0FAF4', low: '#F2F4F8',
+      critical: '#FDEDEC',
+      high: '#FFF8E1',
+      medium: '#E8F4FD',
+      ok: '#E0FAF4',
+      low: '#F2F4F8',
     };
     return m[r] ?? '#F2F4F8';
   }
 
   riskLabel(r: string): string {
     const m: Record<string, string> = {
-      critical: 'CRITICAL', high: 'HIGH', medium: 'MEDIUM', ok: 'OK', low: 'LOW',
-      critical: 'CRITICAL', high: 'HIGH',
-      medium:   'MEDIUM',   ok:   'OK', low: 'LOW',
+      critical: 'CRITICAL',
+      high: 'HIGH',
+      medium: 'MEDIUM',
+      ok: 'OK',
+      low: 'LOW',
     };
     return m[r] ?? 'N/A';
   }
 
   riskBackColor(r: string): string {
     const m: Record<string, string> = {
-      critical: '#C0392B', high: '#B45309', medium: '#1A6FA8', ok: '#007A63', low: '#6B7280',
-      critical: '#C0392B', high: '#B45309',
-      medium:   '#1A6FA8', ok:   '#007A63', low: '#6B7280',
+      critical: '#C0392B',
+      high: '#B45309',
+      medium: '#1A6FA8',
+      ok: '#007A63',
+      low: '#6B7280',
     };
     return m[r] ?? '#6B7280';
   }
 
-  coverageWidth(ratio: number): number { return Math.min(Math.round((ratio / 3) * 100), 100); }
   coverageWidth(ratio: number): number {
     return Math.min(Math.round((ratio / 3) * 100), 100);
   }
@@ -628,11 +575,6 @@ export class InventoryComponent implements OnInit, OnDestroy {
   }
 
   trendIcon(t: string): string {
-    if (t === 'up') return '↑'; if (t === 'down') return '↓'; return '→';
-  }
-
-  trendColor(t: string): string {
-    if (t === 'up') return '#00B894'; if (t === 'down') return '#E74C3C'; return '#9CA3AF';
     if (t === 'up') return '↑';
     if (t === 'down') return '↓';
     return '→';
@@ -645,26 +587,25 @@ export class InventoryComponent implements OnInit, OnDestroy {
   }
 
   alertColor(u: string): string {
-    return u === 'critical' ? '#E74C3C' : u === 'high' ? '#F9A825' : '#2D9CDB';
+    if (u === 'critical') return '#E74C3C';
+    if (u === 'high') return '#F9A825';
+    return '#2D9CDB';
   }
 
   alertBg(u: string): string {
-    return u === 'critical' ? '#FDEDEC' : u === 'high' ? '#FFF8E1' : '#E8F4FD';
+    if (u === 'critical') return '#FDEDEC';
+    if (u === 'high') return '#FFF8E1';
+    return '#E8F4FD';
   }
 
   alertIcon(type: string): string {
-    if (type === 'rupture') return 'S'; if (type === 'redistribution') return 'T'; return 'O';
-  }
-
-  alertTypeLabel(type: string): string {
-    if (type === 'rupture') return 'Stockout';
-    if (type === 'rupture')        return 'S';
+    if (type === 'rupture') return 'S';
     if (type === 'redistribution') return 'T';
     return 'O';
   }
 
   alertTypeLabel(type: string): string {
-    if (type === 'rupture')        return 'Stockout';
+    if (type === 'rupture') return 'Stockout';
     if (type === 'redistribution') return 'Transfer';
     return 'Overstock';
   }
@@ -700,10 +641,10 @@ export class InventoryComponent implements OnInit, OnDestroy {
 
   hasDecision(item: InventoryItem): boolean {
     return !!(item as any).recommendation &&
-           !(item as any).recommendation?.startsWith('Order ');
+      !(item as any).recommendation?.startsWith('Order ');
   }
 
-  // ── "Ask Coach" — navigate to chat with inventory context pre-filled ──────
+  // ── Ask Coach ─────────────────────────────────────────────────────────────
 
   askChat(item: InventoryItem, e: Event): void {
     e.stopPropagation();
@@ -711,34 +652,53 @@ export class InventoryComponent implements OnInit, OnDestroy {
     const msg =
       `⚠️ ${item.riskLevel.toUpperCase()} stock alert: ${item.name} ` +
       `has ${item.stock} units left (${api.daysOfStock?.toFixed?.(1) ?? '?'}d coverage). ` +
-      (api.riskRationale ? api.riskRationale + ' ' : '') +
+      (api.riskRationale ? `${api.riskRationale} ` : '') +
       (api.formulaOrderQty ? `Suggested order: ${api.formulaOrderQty} units. ` : '') +
       `What should I do?`;
+
     try {
       sessionStorage.setItem('chat_prefill', JSON.stringify({
-        text: msg, mode: 'inventory', sku: item.sku, name: item.name,
+        text: msg,
+        mode: 'inventory',
+        sku: item.sku,
+        name: item.name,
       }));
-    } catch { /* private browsing */ }
+    } catch {
+      // ignore private browsing/sessionStorage errors
+    }
+
     window.location.href = '/chat';
   }
 
-  // Navigate to chat pre-filled from an alert panel item.
-  // Looks up the full item by SKU for richer context; falls back to alert fields.
   askChatFromAlert(alert: InventoryAlert, e: Event): void {
     e.stopPropagation();
-    const item = this.items().find(i => i.sku === alert.sku);
-    if (item) { this.askChat(item, e); return; }
+
+    const item = this.items().find((i: InventoryItem) => i.sku === alert.sku);
+    if (item) {
+      this.askChat(item, e);
+      return;
+    }
+
     const msg =
       `⚠️ ${(alert.urgency ?? 'HIGH').toUpperCase()} inventory alert for ${alert.sku}: ` +
       `${alert.message} ` +
       (alert.action ? `AI recommendation: ${alert.action}` : '');
+
     try {
       sessionStorage.setItem('chat_prefill', JSON.stringify({
-        text: msg, mode: 'inventory', sku: alert.sku,
+        text: msg,
+        mode: 'inventory',
+        sku: alert.sku,
       }));
-    } catch { /* private browsing */ }
+    } catch {
+      // ignore private browsing/sessionStorage errors
+    }
+
     window.location.href = '/chat';
   }
 
-  trackById(_: number, item: { id: string }): string { return item.id; }
+  trackById(_: number, item: { id: string }): string {
+    return item.id;
+  }
+
 }

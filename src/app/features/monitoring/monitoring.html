@@ -1,6 +1,5 @@
 <div class="monitoring">
-
-  <!-- ══ HEADER ══ -->
+  <!-- HEADER -->
   <div class="page-header">
     <div class="page-header__left">
       <h1 class="page-title">Agent Monitoring</h1>
@@ -9,71 +8,65 @@
         LangGraph Orchestration · Real-time · {{ agents().length }} agents
       </p>
     </div>
+
     <div class="page-header__right">
       <div class="cycle-info">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="12" cy="12" r="10" />
           <polyline points="12,6 12,12 16,14" />
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="10"/>
-          <polyline points="12,6 12,12 16,14"/>
         </svg>
         Last cycle: <strong>{{ lastCycle() }}</strong>
         &nbsp;·&nbsp;
         Next: <strong>{{ nextCycle() }}</strong>
       </div>
-      <button class="btn-outline">
+
+      <button class="btn-outline" type="button">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polyline points="1,4 1,10 7,10" />
-          <path d="M3.51 15a9 9 0 102.13-9.36L1 10" />
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2">
-          <polyline points="1,4 1,10 7,10"/>
-          <path d="M3.51 15a9 9 0 102.13-9.36L1 10"/>
+          <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
         </svg>
         Refresh
       </button>
     </div>
   </div>
 
-  <!-- ══ GLOBAL KPIs ══ -->
+  <!-- GLOBAL KPIs -->
   <div class="kpi-bar">
     <div class="kpi-item">
       <span class="kpi-item__val" style="color:#00B894">{{ liveCount() }}</span>
       <span class="kpi-item__label">LIVE</span>
     </div>
+
     <div class="kpi-item">
       <span class="kpi-item__val" style="color:#6C5CE7">{{ activeCount() }}</span>
       <span class="kpi-item__label">ACTIVE</span>
     </div>
+
     <div class="kpi-item">
       <span class="kpi-item__val" style="color:#E74C3C">{{ errorCount() }}</span>
       <span class="kpi-item__label">ERRORS</span>
     </div>
+
     <div class="kpi-item">
       <span class="kpi-item__val">{{ totalLatency() }}s</span>
       <span class="kpi-item__label">Total latency</span>
     </div>
+
     <div class="kpi-item">
       <span class="kpi-item__val">{{ cycleStep() }}/{{ totalSteps }}</span>
       <span class="kpi-item__label">Cycle step</span>
     </div>
+
     <div class="kpi-item kpi-item--wide">
       <div class="cycle-bar">
         <div class="cycle-bar__fill" [style.width.%]="(cycleStep() / totalSteps) * 100"></div>
-        <div class="cycle-bar__fill"
-             [style.width.%]="(cycleStep() / totalSteps) * 100">
-        </div>
       </div>
       <span class="kpi-item__label">Cycle progress</span>
     </div>
   </div>
 
+  <!-- CHARTS ROW -->
   <div class="charts-row">
-  <!-- ══ CHARTS ROW ══ -->
-  <div class="charts-row">
-
     <div class="chart-card">
       <div class="chart-card__header">
         <div>
@@ -81,7 +74,6 @@
           <p class="chart-card__sub">Decision confidence % per weekly batch</p>
         </div>
         <div class="chart-live-dot">
-          <span class="live-dot"></span> Live
           <span class="live-dot"></span>
           Live
         </div>
@@ -109,7 +101,7 @@
           <h2 class="chart-card__title">Santé Prédictive (BI)</h2>
           <p class="chart-card__sub">Analyse proactive des risques système</p>
         </div>
-        <div class="health-score" [style.color]="getHealthColor()" style="font-weight: bold; font-size: 1.2rem;">
+        <div class="health-score" [style.color]="getHealthColor()" style="font-weight:bold;font-size:1.2rem;">
           {{ healthScore() }}%
         </div>
       </div>
@@ -119,325 +111,95 @@
     </div>
   </div>
 
+  <!-- MAIN LAYOUT -->
   <div class="main-layout">
-
+    <!-- PIPELINE COLUMN -->
     <div class="pipeline-col">
+      <div class="conflict-chord-container" style="margin-bottom:25px;">
+        <h3 style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:15px;text-transform:uppercase;letter-spacing:0.5px;">
+          Radar de Tension des Agents
+        </h3>
 
-      <div class="conflict-chord-container" style="margin-bottom: 25px;">
-        <h3
-          style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 15px; text-transform: uppercase; letter-spacing: 0.5px;">
-          Radar de Tension des Agents</h3>
-        <div class="chord-visualizer" style="display: flex; flex-direction: column; gap: 12px;">
+        <div class="chord-visualizer" style="display:flex;flex-direction:column;gap:12px;">
           @for (conflict of conflicts(); track conflict.id) {
-          <div class="tension-line"
-            style="display: grid; grid-template-columns: 80px 1fr 80px; align-items: center; gap: 10px; background: rgba(0,0,0,0.02); padding: 8px; border-radius: 6px;">
-            <div class="chord-app-id" [style.background]="statusBg('LIVE')"
-              style="font-size: 0.7rem; font-weight: bold; text-align: center; padding: 4px; border-radius: 4px;">
-              {{ conflict.sourceAgentId.split('-')[0].toUpperCase() }}
-            </div>
-
-            <div class="chord-connection" style="position: relative; height: 2px; background: #dfe6e9;">
-              <div class="chord-pulse" [style.background]="getSeverityColor(conflict.severityLevel)"
-                style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 8px; height: 8px; border-radius: 50%;">
+            <div class="tension-line" style="display:grid;grid-template-columns:80px 1fr 80px;align-items:center;gap:10px;background:rgba(0,0,0,0.02);padding:8px;border-radius:6px;">
+              <div class="chord-app-id" [style.background]="statusBg('LIVE')" style="font-size:0.7rem;font-weight:bold;text-align:center;padding:4px;border-radius:4px;">
+                {{ conflict.sourceAgentId.split('-')[0].toUpperCase() }}
               </div>
-              <span class="chord-msg"
-                style="position: absolute; width: 100%; text-align: center; top: -18px; font-size: 0.65rem; font-weight: 600; color: #636e72;">{{
-                conflict.msg }}</span>
-            </div>
 
-            <div class="chord-app-id" [style.background]="statusBg('ACTIVE')"
-              style="font-size: 0.7rem; font-weight: bold; text-align: center; padding: 4px; border-radius: 4px;">
-              {{ conflict.targetAgentId.split('-')[0].toUpperCase() }}
+              <div class="chord-connection" style="position:relative;height:2px;background:#dfe6e9;">
+                <div class="chord-pulse" [style.background]="getSeverityColor(conflict.severityLevel)" style="position:absolute;left:50%;top:50%;transform:translate(-50%, -50%);width:8px;height:8px;border-radius:50%;"></div>
+                <span class="chord-msg" style="position:absolute;width:100%;text-align:center;top:-18px;font-size:0.65rem;font-weight:600;color:#636e72;">
+                  {{ conflict.msg }}
+                </span>
+              </div>
+
+              <div class="chord-app-id" [style.background]="statusBg('ACTIVE')" style="font-size:0.7rem;font-weight:bold;text-align:center;padding:4px;border-radius:4px;">
+                {{ conflict.targetAgentId.split('-')[0].toUpperCase() }}
+              </div>
             </div>
-          </div>
           } @empty {
-          <p
-            style="font-size: 0.8rem; color: #00B894; text-align: center; padding: 10px; border: 1px dashed #00B894; border-radius: 6px;">
-            ✓ Aucune tension détectée entre les agents
-          </p>
+            <p style="font-size:0.8rem;color:#00B894;text-align:center;padding:10px;border:1px dashed #00B894;border-radius:6px;">
+              ✓ Aucune tension détectée entre les agents
+            </p>
           }
         </div>
       </div>
 
-      @for (layer of layers; track layer.key) {
-      @if (agentsByLayer()[layer.key].length > 0) {
-      <div class="layer-section">
-        <div class="layer-header">
-          <div class="layer-dot" [style.background]="layer.color"></div>
-          <span class="layer-label">{{ layer.label }}</span>
-          <span class="layer-count">{{ agentsByLayer()[layer.key].length }}</span>
-        </div>
-
-        <div class="agent-cards">
-          @for (agent of agentsByLayer()[layer.key]; track agent.id) {
-          <div class="agent-card" [class.is-selected]="selectedAgentId() === agent.id"
-            [class.agent-card--error]="agent.status === 'ERROR'" (click)="selectAgent(agent.id)">
-            <div class="agent-card__strip" [style.background]="statusColor(agent.status)"></div>
-            <div class="agent-card__body">
-              <div class="agent-card__top">
-                <div class="agent-id-badge" [style.background]="layerBg(agent.layer)"
-                  [style.color]="layerColor(agent.layer)">
-                  {{ agent.appId }}
-                </div>
-                <span class="agent-name">{{ agent.name }}</span>
-                <div class="agent-status-pill" [style.background]="statusBg(agent.status)"
-                  [style.color]="statusColor(agent.status)">
-                  <span class="agent-status-dot" [style.background]="statusColor(agent.status)"></span>
-                  {{ agent.status }}
-                </div>
-              </div>
-              <div class="agent-metrics">
-                @for (m of agent.metrics.slice(0,3); track m.label) {
-                <div class="agent-metric">
-                  <span class="agent-metric__label">{{ m.label }}</span>
-                  <span class="agent-metric__val" [style.color]="m.color ?? 'var(--text-primary)'">{{ m.value }}</span>
-                </div>
-                }
-                <div class="agent-metric">
-                  <span class="agent-metric__label">Latency</span>
-                  <span class="agent-metric__val mono">{{ agent.latency }}s</span>
-                </div>
-              </div>
-              <div class="agent-last-log" [style.background]="logBg(agent.logs[0].level)"
-                [style.border-left-color]="logColor(agent.logs[0].level)">
-                <span class="log-time mono">{{ agent.logs[0].time }}</span>
-                <span class="log-msg">{{ agent.logs[0].message }}</span>
-              </div>
-            </div>
-          </div>
-          }
-        </div>
-
-        @if (layer.key !== 'support') {
-        <div class="layer-arrow">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="2">
-            <line x1="12" y1="5" x2="12" y2="19" />
-            <polyline points="6,13 12,19 18,13" />
-          </svg>
-        </div>
-        }
-      </div>
-      }
-      }
-    </div>
-
-    <div class="detail-col">
-      @if (selectedAgent()) {
-      <div class="detail-panel">
-        <div class="detail-panel__header">
-          <div class="detail-app-id" [style.background]="layerBg(selectedAgent()!.layer)"
-            [style.color]="layerColor(selectedAgent()!.layer)">
-            {{ selectedAgent()!.appId }}
-          </div>
-          <div>
-            <h2 class="detail-name">{{ selectedAgent()!.name }}</h2>
-            <p class="detail-last-run mono">Last run: {{ selectedAgent()!.lastRun }}</p>
-          </div>
-          <button class="detail-close" (click)="selectedAgentId.set(null)">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-        </div>
-
-        <p class="detail-desc">{{ selectedAgent()!.description }}</p>
-
-        <div class="advanced-metrics-grid"
-          style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; padding: 12px; background: #f8f9fa; border-radius: 8px; border: 1px dashed #ddd;">
-          <div class="adv-metric">
-            <span class="adv-label"
-              style="display: block; font-size: 0.7rem; color: #666; text-transform: uppercase;">Latence
-              Décisionnelle</span>
-            <span class="adv-val"
-              style="font-family: 'JetBrains Mono', monospace; font-weight: bold; color: #6C5CE7;">{{
-              selectedAgent()!.decisionLatency }}ms</span>
-          </div>
-          <div class="adv-metric">
-            <span class="adv-label"
-              style="display: block; font-size: 0.7rem; color: #666; text-transform: uppercase;">Data Validation</span>
-            @if(selectedAgent()!.isValidated) {
-            <span class="status-pill--valid" style="color: #00B894; font-size: 0.8rem; font-weight: bold;">✓
-              Vérifié</span>
-            } @else {
-            <span style="color: #E74C3C; font-size: 0.8rem;">⚠ Pending</span>
-            }
-          </div>
-        </div>
-
-        <div class="detail-metrics">
-          @for (m of selectedAgent()!.metrics; track m.label) {
-          <div class="detail-metric">
-            <span class="detail-metric__label">{{ m.label }}</span>
-            <span class="detail-metric__val" [style.color]="m.color ?? 'var(--text-primary)'">{{ m.value }}</span>
-          </div>
-          }
-        </div>
-
-        <div class="detail-io">
-          <div class="io-col">
-            <p class="io-title">Inputs</p>
-            @for (inp of selectedAgent()!.inputs; track inp) {
-            <div class="io-tag io-tag--in">{{ inp }}</div>
-            }
-          </div>
-          <div class="io-col">
-            <p class="io-title">Outputs</p>
-            @for (out of selectedAgent()!.outputs; track out) {
-            <div class="io-tag io-tag--out">{{ out }}</div>
-            }
-          </div>
-        </div>
-
-        @if (selectedAgent()!.stateFields && selectedAgent()!.stateFields.length > 0) {
-        <div class="detail-state">
-          <p class="detail-state__title">LangGraph State fields</p>
-          <div class="state-tags">
-            @for (f of selectedAgent()!.stateFields; track f) {
-            <span class="state-tag">{{ f }}</span>
-            }
-          </div>
-        </div>
-        }
-
-        <div class="detail-logs">
-          <p class="detail-logs__title">Recent logs</p>
-          @for (log of selectedAgent()!.logs; track log.time) {
-          <div class="log-row" [style.border-left-color]="logColor(log.level)" [style.background]="logBg(log.level)">
-            <span class="log-level" [style.color]="logColor(log.level)">{{ log.level.toUpperCase() }}</span>
-            <span class="log-time mono">{{ log.time }}</span>
-            <span class="log-text">{{ log.message }}</span>
-          </div>
-          }
-        </div>
-      </div>
-      } @else {
-      <div class="detail-empty">
-        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="1.5">
-          <circle cx="12" cy="12" r="10" />
-          <line x1="12" y1="8" x2="12" y2="12" />
-          <line x1="12" y1="16" x2="12.01" y2="16" />
-        </svg>
-        <p>Select an agent to view details</p>
-      </div>
-      }
-
-      <div class="state-panel">
-        <div class="state-panel__header">
-          <h2 class="state-panel__title">LangGraph State</h2>
-          <span class="state-panel__sub">TypedDict shared across all agents</span>
-        </div>
-        <div class="state-fields">
-          @for (f of stateFields; track f.key) {
-          <div class="state-field" [class.state-field--new]="f.sprint === 2"
-            style="display: flex; align-items: center; gap: 10px;">
-            <div class="state-field__key mono" style="flex: 1;">{{ f.key }}</div>
-
-            <div class="data-validation-shield" [style.color]="f.validated ? '#00B894' : '#ccc'"
-              [title]="f.validated ? 'Donnée validée' : 'Non vérifiée'">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                <path
-                  d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z" />
-              </svg>
-            </div>
-
-            <div class="state-field__val mono" style="flex: 1; text-align: right;">{{ f.value }}</div>
-            @if (f.sprint === 2) {
-            <span class="sprint-badge">Sprint 2</span>
-            }
-          </div>
-          }
-        </div>
-      </div>
-          <h2 class="chart-card__title">Cycle duration</h2>
-          <p class="chart-card__sub">Last 8 cycles · target &lt; 18s</p>
-        </div>
-        <div class="chart-legend-inline">
-          <span class="cleg cleg--ok">OK</span>
-          <span class="cleg cleg--warn">Slow</span>
-          <span class="cleg cleg--crit">Critical</span>
-        </div>
-      </div>
-      <div class="chart-wrap">
-        <canvas #cycleChart></canvas>
-      </div>
-    </div>
-
-  </div>
-
-  <!-- ══ MAIN LAYOUT ══ -->
-  <div class="main-layout">
-
-    <!-- ── Pipeline col ── -->
-    <div class="pipeline-col">
       @for (layer of layers; track layer.key) {
         @if (agentsByLayer()[layer.key].length > 0) {
           <div class="layer-section">
-
             <div class="layer-header">
               <div class="layer-dot" [style.background]="layer.color"></div>
               <span class="layer-label">{{ layer.label }}</span>
-              <span class="layer-count">
-                {{ agentsByLayer()[layer.key].length }}
-              </span>
+              <span class="layer-count">{{ agentsByLayer()[layer.key].length }}</span>
             </div>
 
             <div class="agent-cards">
-              @for (agent of agentsByLayer()[layer.key];
-                    track trackById($index, agent)) {
+              @for (agent of agentsByLayer()[layer.key]; track agent.id) {
                 <div class="agent-card"
                      [class.is-selected]="selectedAgentId() === agent.id"
                      [class.agent-card--error]="agent.status === 'ERROR'"
                      (click)="selectAgent(agent.id)">
 
-                  <div class="agent-card__strip"
-                       [style.background]="statusColor(agent.status)">
-                  </div>
+                  <div class="agent-card__strip" [style.background]="statusColor(agent.status)"></div>
 
                   <div class="agent-card__body">
-
                     <div class="agent-card__top">
-                      <div class="agent-id-badge"
-                           [style.background]="layerBg(agent.layer)"
-                           [style.color]="layerColor(agent.layer)">
+                      <div class="agent-id-badge" [style.background]="layerBg(agent.layer)" [style.color]="layerColor(agent.layer)">
                         {{ agent.appId }}
                       </div>
+
                       <span class="agent-name">{{ agent.name }}</span>
-                      <div class="agent-status-pill"
-                           [style.background]="statusBg(agent.status)"
-                           [style.color]="statusColor(agent.status)">
-                        <span class="agent-status-dot"
-                              [style.background]="statusColor(agent.status)">
-                        </span>
+
+                      <div class="agent-status-pill" [style.background]="statusBg(agent.status)" [style.color]="statusColor(agent.status)">
+                        <span class="agent-status-dot" [style.background]="statusColor(agent.status)"></span>
                         {{ agent.status }}
                       </div>
                     </div>
 
                     <div class="agent-metrics">
-                      @for (m of agent.metrics.slice(0,3); track m.label) {
+                      @for (m of agent.metrics.slice(0, 3); track m.label) {
                         <div class="agent-metric">
                           <span class="agent-metric__label">{{ m.label }}</span>
-                          <span class="agent-metric__val"
-                                [style.color]="m.color ?? 'var(--text-primary)'">
+                          <span class="agent-metric__val" [style.color]="m.color ?? 'var(--text-primary)'">
                             {{ m.value }}
                           </span>
                         </div>
                       }
+
                       <div class="agent-metric">
                         <span class="agent-metric__label">Latency</span>
-                        <span class="agent-metric__val mono">
-                          {{ agent.latency }}s
-                        </span>
+                        <span class="agent-metric__val mono">{{ agent.latency }}s</span>
                       </div>
                     </div>
 
-                    <div class="agent-last-log"
-                         [style.background]="logBg(agent.logs[0].level)"
-                         [style.border-left-color]="logColor(agent.logs[0].level)">
-                      <span class="log-time mono">{{ agent.logs[0].time }}</span>
-                      <span class="log-msg">{{ agent.logs[0].message }}</span>
-                    </div>
-
+                    @if (agent.logs.length > 0) {
+                      <div class="agent-last-log" [style.background]="logBg(agent.logs[0].level)" [style.border-left-color]="logColor(agent.logs[0].level)">
+                        <span class="log-time mono">{{ agent.logs[0].time }}</span>
+                        <span class="log-msg">{{ agent.logs[0].message }}</span>
+                      </div>
+                    }
                   </div>
                 </div>
               }
@@ -445,55 +207,64 @@
 
             @if (layer.key !== 'support') {
               <div class="layer-arrow">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-                     stroke="var(--text-tertiary)" stroke-width="2">
-                  <line x1="12" y1="5" x2="12" y2="19"/>
-                  <polyline points="6,13 12,19 18,13"/>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="2">
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <polyline points="6,13 12,19 18,13" />
                 </svg>
               </div>
             }
-
           </div>
         }
       }
     </div>
 
-    <!-- ── Detail col ── -->
+    <!-- DETAIL COLUMN -->
     <div class="detail-col">
-
       @if (selectedAgent()) {
         <div class="detail-panel">
-
           <div class="detail-panel__header">
-            <div class="detail-app-id"
-                 [style.background]="layerBg(selectedAgent()!.layer)"
-                 [style.color]="layerColor(selectedAgent()!.layer)">
+            <div class="detail-app-id" [style.background]="layerBg(selectedAgent()!.layer)" [style.color]="layerColor(selectedAgent()!.layer)">
               {{ selectedAgent()!.appId }}
             </div>
+
             <div>
               <h2 class="detail-name">{{ selectedAgent()!.name }}</h2>
-              <p class="detail-last-run mono">
-                Last run: {{ selectedAgent()!.lastRun }}
-              </p>
+              <p class="detail-last-run mono">Last run: {{ selectedAgent()!.lastRun }}</p>
             </div>
-            <button class="detail-close"
-                    (click)="selectedAgentId.set(null)">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                   stroke="currentColor" stroke-width="2.5">
-                <line x1="18" y1="6"  x2="6"  y2="18"/>
-                <line x1="6"  y1="6"  x2="18" y2="18"/>
+
+            <button class="detail-close" type="button" (click)="selectedAgentId.set(null)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
               </svg>
             </button>
           </div>
 
           <p class="detail-desc">{{ selectedAgent()!.description }}</p>
 
+          <div class="advanced-metrics-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px;padding:12px;background:#f8f9fa;border-radius:8px;border:1px dashed #ddd;">
+            <div class="adv-metric">
+              <span class="adv-label" style="display:block;font-size:0.7rem;color:#666;text-transform:uppercase;">Latence Décisionnelle</span>
+              <span class="adv-val" style="font-family:'JetBrains Mono', monospace;font-weight:bold;color:#6C5CE7;">
+                {{ selectedAgent()!.decisionLatency }}ms
+              </span>
+            </div>
+
+            <div class="adv-metric">
+              <span class="adv-label" style="display:block;font-size:0.7rem;color:#666;text-transform:uppercase;">Data Validation</span>
+              @if (selectedAgent()!.isValidated) {
+                <span class="status-pill--valid" style="color:#00B894;font-size:0.8rem;font-weight:bold;">✓ Vérifié</span>
+              } @else {
+                <span style="color:#E74C3C;font-size:0.8rem;">⚠ Pending</span>
+              }
+            </div>
+          </div>
+
           <div class="detail-metrics">
             @for (m of selectedAgent()!.metrics; track m.label) {
               <div class="detail-metric">
                 <span class="detail-metric__label">{{ m.label }}</span>
-                <span class="detail-metric__val"
-                      [style.color]="m.color ?? 'var(--text-primary)'">
+                <span class="detail-metric__val" [style.color]="m.color ?? 'var(--text-primary)'">
                   {{ m.value }}
                 </span>
               </div>
@@ -507,6 +278,7 @@
                 <div class="io-tag io-tag--in">{{ inp }}</div>
               }
             </div>
+
             <div class="io-col">
               <p class="io-title">Outputs</p>
               @for (out of selectedAgent()!.outputs; track out) {
@@ -529,47 +301,46 @@
           <div class="detail-logs">
             <p class="detail-logs__title">Recent logs</p>
             @for (log of selectedAgent()!.logs; track log.time) {
-              <div class="log-row"
-                   [style.border-left-color]="logColor(log.level)"
-                   [style.background]="logBg(log.level)">
-                <span class="log-level"
-                      [style.color]="logColor(log.level)">
-                  {{ log.level.toUpperCase() }}
-                </span>
+              <div class="log-row" [style.border-left-color]="logColor(log.level)" [style.background]="logBg(log.level)">
+                <span class="log-level" [style.color]="logColor(log.level)">{{ log.level.toUpperCase() }}</span>
                 <span class="log-time mono">{{ log.time }}</span>
                 <span class="log-text">{{ log.message }}</span>
               </div>
             }
           </div>
-
         </div>
       } @else {
         <div class="detail-empty">
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none"
-               stroke="var(--text-tertiary)" stroke-width="1.5">
-            <circle cx="12" cy="12" r="10"/>
-            <line x1="12" y1="8"  x2="12"    y2="12"/>
-            <line x1="12" y1="16" x2="12.01" y2="16"/>
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="1.5">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="8" x2="12" y2="12" />
+            <line x1="12" y1="16" x2="12.01" y2="16" />
           </svg>
           <p>Select an agent to view details</p>
         </div>
       }
 
-      <!-- LangGraph State -->
+      <!-- LANGGRAPH STATE -->
       <div class="state-panel">
         <div class="state-panel__header">
           <h2 class="state-panel__title">LangGraph State</h2>
-          <span class="state-panel__sub">
-            TypedDict shared across all agents
-          </span>
+          <span class="state-panel__sub">TypedDict shared across all agents</span>
         </div>
+
         <div class="state-fields">
           @for (f of stateFields; track f.key) {
-            <div class="state-field"
-                 [class.state-field--new]="f.sprint === 2">
-              <div class="state-field__key mono">{{ f.key }}</div>
+            <div class="state-field" [class.state-field--new]="f.sprint === 2" style="display:flex;align-items:center;gap:10px;">
+              <div class="state-field__key mono" style="flex:1;">{{ f.key }}</div>
+
+              <div class="data-validation-shield" [style.color]="f.validated ? '#00B894' : '#ccc'" [title]="f.validated ? 'Donnée validée' : 'Non vérifiée'">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4Zm-2 16-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8Z" />
+                </svg>
+              </div>
+
               <div class="state-field__owner">{{ f.owner }}</div>
-              <div class="state-field__val mono">{{ f.value }}</div>
+              <div class="state-field__val mono" style="flex:1;text-align:right;">{{ f.value }}</div>
+
               @if (f.sprint === 2) {
                 <span class="sprint-badge">Sprint 2</span>
               }
@@ -578,6 +349,25 @@
         </div>
       </div>
 
+      <!-- CYCLE DURATION -->
+      <div class="chart-card">
+        <div class="chart-card__header">
+          <div>
+            <h2 class="chart-card__title">Cycle duration</h2>
+            <p class="chart-card__sub">Last 8 cycles · target &lt; 18s</p>
+          </div>
+
+          <div class="chart-legend-inline">
+            <span class="cleg cleg--ok">OK</span>
+            <span class="cleg cleg--warn">Slow</span>
+            <span class="cleg cleg--crit">Critical</span>
+          </div>
+        </div>
+
+        <div class="chart-wrap">
+          <canvas #cycleChart></canvas>
+        </div>
+      </div>
     </div>
   </div>
 </div>

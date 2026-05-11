@@ -2,8 +2,7 @@ import {
   Component, signal, computed, AfterViewInit,
   ViewChild, ElementRef, OnDestroy, OnInit
 } from '@angular/core';
-import { Component, signal, computed, AfterViewInit,
-         ViewChild, ElementRef, OnDestroy } from '@angular/core';
+
 import { CommonModule } from '@angular/common';
 import Chart from 'chart.js/auto';
 

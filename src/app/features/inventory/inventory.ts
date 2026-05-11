@@ -51,6 +51,12 @@ export class InventoryComponent implements OnInit, OnDestroy {
   wsConnected = computed(() => this.ws.connected());
   lastUpdate  = signal<Date | null>(null);
 
+  filterRisk = signal<FilterRisk>('all');
+  sortKey    = signal<SortKey>('risk');
+  flippedId  = signal<string | null>(null);
+  decisions  = signal<Record<string, Decision>>({});
+
+  private lastPayloadHash = '';
   // True once backend data has replaced mock (any item has a real safetyStock)
   isLiveData = computed(() =>
     this.items().some((i: any) => i.safetyStock > 0 || i.riskRationale)
@@ -89,6 +95,25 @@ export class InventoryComponent implements OnInit, OnDestroy {
   rejectedCount = computed(() =>
     Object.values(this.decisions()).filter(d => d === 'rejected').length
   );
+
+  // ── Quadrant ──────────────────────────────────────────────────────────────
+  quadrantStockMax = computed(() => {
+    const vals = this.items().map(p => p.stock >= 999 ? 0 : p.stock);
+    return Math.max(...vals, 1) * 1.1;
+  });
+
+  quadrantDemandMax = computed(() => {
+    const vals = this.items().map(p => p.demandForecast24h);
+    return Math.max(...vals, 1) * 1.1;
+  });
+
+  quadrantX(p: InventoryItem): number {
+    const stock = p.stock >= 999 ? this.quadrantStockMax() : p.stock;
+    return Math.min(Math.round((stock / this.quadrantStockMax()) * 90) + 2, 92);
+  }
+
+  quadrantY(p: InventoryItem): number {
+    return Math.min(Math.round((p.demandForecast24h / this.quadrantDemandMax()) * 90) + 2, 92);
   
   productApprovedCount = computed(() =>
     Object.values(this.productDecisions()).filter(d => d === 'approved').length
@@ -148,6 +173,13 @@ export class InventoryComponent implements OnInit, OnDestroy {
 
   quadrantSize(p: InventoryItem): number { return Math.round(10 + p.riskScore * 18); }
 
+  quadrantZone(p: InventoryItem): 'star' | 'stockout' | 'ok' | 'overstock' {
+    const highStock  = this.quadrantX(p) >= 50;
+    const highDemand = this.quadrantY(p) >= 50;
+    if  (highStock && highDemand)  return 'star';
+    if (!highStock && highDemand)  return 'stockout';
+    if (!highStock && !highDemand) return 'ok';
+    return 'overstock';
   // Zone derived from visual position → footer counts always match the chart.
   quadrantZone(p: InventoryItem): 'star' | 'stockout' | 'ok' | 'overstock' {
     if (p.stock >= 999 || (p as any).overstockFlag) return 'overstock';
@@ -211,6 +243,7 @@ export class InventoryComponent implements OnInit, OnDestroy {
       const payload = this.ws.liveInventory();
 
       if (!payload || payload.type !== 'inventory_update') return;
+
       if (!payload.items?.length) return;
 
       const hash = JSON.stringify(
@@ -240,6 +273,7 @@ export class InventoryComponent implements OnInit, OnDestroy {
     this.alerts.set(this.mock.getInventoryAlerts());
 
     if (isPlatformBrowser(this.platformId)) {
+      this.loadAgentOverlay();
       // HTTP fallback fires after 25s if WS hasn't delivered real data yet.
       // 25s > pipeline duration (~15-20s) so cache is warm by the time this fires.
       // If WS already delivered data, items() will have real data and we skip.
@@ -254,6 +288,7 @@ export class InventoryComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.ws.disconnect();
     // Nettoyer les timers
     if (this._pollingTimer) {
       clearInterval(this._pollingTimer);
@@ -269,6 +304,10 @@ export class InventoryComponent implements OnInit, OnDestroy {
 
   // ── Private helpers ───────────────────────────────────────────────────────
 
+  private _applyAgentPayload(payload: { items: InventoryApiItem[], alerts: InventoryAlert[] }): void {
+
+    // ── Capture stock BEFORE update so the diff log is accurate ──────────
+    // If we read this.items() AFTER the update, we'd compare new vs new → always zero diff.
   private _applyAgentPayload(
     payload: { items: InventoryApiItem[]; alerts: InventoryAlert[] }
   ): void {
@@ -280,6 +319,59 @@ export class InventoryComponent implements OnInit, OnDestroy {
       this.items().map(i => [i.sku, i.stock])
     );
 
+    this.items.update(list =>
+      list.map(mockItem => {
+        const agentItem = payload.items.find(a => a.sku === mockItem.sku);
+        if (!agentItem) return mockItem;
+
+        const patch: Partial<InventoryItem> = {};
+
+        // ── Copy all known agent fields directly ─────────────────────────
+        for (const field of AGENT_ANALYSIS_FIELDS) {
+          if (agentItem[field] !== undefined && agentItem[field] !== null) {
+            (patch as Record<string, unknown>)[field] = agentItem[field];
+          }
+        }
+
+        // ── FIX 1: Normalize riskLevel — backend sends lowercase already ─
+        // InventoryItem only accepts 'critical' | 'high' | 'ok'
+        if (agentItem.riskLevel) {
+          const raw = (agentItem.riskLevel as string).toLowerCase();
+          patch.riskLevel = (
+            raw === 'critical' ? 'critical' :
+            raw === 'high'     ? 'high'     :
+            raw === 'medium'   ? 'high'     : // medium maps to high (no medium in UI type)
+            'ok'
+          ) as 'critical' | 'high' | 'ok';
+        }
+
+        // ── FIX 2: Derive coverageRatio from daysOfStock + leadTimeDays ──
+        if (agentItem.daysOfStock !== undefined) {
+          if (agentItem.leadTimeDays && agentItem.leadTimeDays > 0) {
+            patch.coverageRatio = Math.min(agentItem.daysOfStock / agentItem.leadTimeDays, 5);
+          } else {
+            patch.coverageRatio = Math.min(agentItem.daysOfStock / 7, 5);
+          }
+        }
+
+        // ── FIX 3: Map analystNote → recommendationDetail ────────────────
+        if (agentItem.analystNote) {
+          patch.recommendationDetail = agentItem.analystNote;
+        }
+
+        // ── FIX 4: Map formulaOrderQty → recommendation string ───────────
+        if (agentItem.formulaOrderQty != null) {
+          patch.recommendation = `Order ${agentItem.formulaOrderQty} units`;
+        }
+
+        return { ...mockItem, ...patch };
+      })
+    );
+
+    this.alerts.set(payload.alerts as InventoryAlert[]);
+    this.agentLoading.set(false);
+
+    // ── Log what actually changed (compare payload vs pre-update snapshot) 
     // ── Build a mock fallback map for display fields (name, category, id) ──
     // We full-replace from backend data but fall back to mock for any field
     // the backend doesn't supply (e.g. name when product_master lookup fails).
@@ -354,6 +446,13 @@ export class InventoryComponent implements OnInit, OnDestroy {
         return prev !== undefined && i.stock < prev;
       })
       .map(i => `${i.sku}: ${oldStock.get(i.sku)} → ${i.stock}`);
+
+    if (decreased.length) {
+      console.log('[Inventory] Stock sold:', decreased.join(' | '));
+    }
+  }
+
+  private loadAgentOverlay(storeId = 'STORE-001', objective = 'balanced'): void {
     if (decreased.length) {
       console.log('[Inventory] Stock sold:', decreased.join(' | '));
       // Flash the affected dots on the quadrant chart
@@ -384,6 +483,10 @@ export class InventoryComponent implements OnInit, OnDestroy {
 
     this.invApi.getStore(storeId, objective).subscribe({
       next: payload => {
+        this._applyAgentPayload(payload);
+      },
+      error: err => {
+        console.warn('[Inventory] Agent unavailable:', err);
         console.log(
           '[Inventory] 📦 HTTP load OK —',
           payload.items?.length ?? 0, 'items'
@@ -401,6 +504,10 @@ export class InventoryComponent implements OnInit, OnDestroy {
 
   // ── UI helpers ─────────────────────────────────────────────────────────────
 
+  toggleFlip(id: string): void { this.flippedId.update(cur => cur === id ? null : id); }
+  isFlipped(id: string): boolean { return this.flippedId() === id; }
+  setFilter(f: string): void { this.filterRisk.set(f as FilterRisk); }
+  setSort(s: string): void   { this.sortKey.set(s as SortKey); }
   toggleFlip(id: string): void {
     this.flippedId.update(cur => cur === id ? null : id);
   }
@@ -469,6 +576,9 @@ export class InventoryComponent implements OnInit, OnDestroy {
     this.alerts.update(list => list.filter(a => a.id !== id));
   }
 
+  riskColor(r: string): string {
+    const m: Record<string, string> = {
+      critical: '#E74C3C', high: '#F9A825', medium: '#2D9CDB', ok: '#00B894', low: '#9CA3AF',
   // ── Style helpers ──────────────────────────────────────────────────────────
 
   riskColor(r: string): string {
@@ -481,6 +591,7 @@ export class InventoryComponent implements OnInit, OnDestroy {
 
   riskBg(r: string): string {
     const m: Record<string, string> = {
+      critical: '#FDEDEC', high: '#FFF8E1', medium: '#E8F4FD', ok: '#E0FAF4', low: '#F2F4F8',
       critical: '#FDEDEC', high: '#FFF8E1',
       medium:   '#E8F4FD', ok:   '#E0FAF4', low: '#F2F4F8',
     };
@@ -489,6 +600,7 @@ export class InventoryComponent implements OnInit, OnDestroy {
 
   riskLabel(r: string): string {
     const m: Record<string, string> = {
+      critical: 'CRITICAL', high: 'HIGH', medium: 'MEDIUM', ok: 'OK', low: 'LOW',
       critical: 'CRITICAL', high: 'HIGH',
       medium:   'MEDIUM',   ok:   'OK', low: 'LOW',
     };
@@ -497,12 +609,14 @@ export class InventoryComponent implements OnInit, OnDestroy {
 
   riskBackColor(r: string): string {
     const m: Record<string, string> = {
+      critical: '#C0392B', high: '#B45309', medium: '#1A6FA8', ok: '#007A63', low: '#6B7280',
       critical: '#C0392B', high: '#B45309',
       medium:   '#1A6FA8', ok:   '#007A63', low: '#6B7280',
     };
     return m[r] ?? '#6B7280';
   }
 
+  coverageWidth(ratio: number): number { return Math.min(Math.round((ratio / 3) * 100), 100); }
   coverageWidth(ratio: number): number {
     return Math.min(Math.round((ratio / 3) * 100), 100);
   }
@@ -514,6 +628,11 @@ export class InventoryComponent implements OnInit, OnDestroy {
   }
 
   trendIcon(t: string): string {
+    if (t === 'up') return '↑'; if (t === 'down') return '↓'; return '→';
+  }
+
+  trendColor(t: string): string {
+    if (t === 'up') return '#00B894'; if (t === 'down') return '#E74C3C'; return '#9CA3AF';
     if (t === 'up') return '↑';
     if (t === 'down') return '↓';
     return '→';
@@ -534,6 +653,11 @@ export class InventoryComponent implements OnInit, OnDestroy {
   }
 
   alertIcon(type: string): string {
+    if (type === 'rupture') return 'S'; if (type === 'redistribution') return 'T'; return 'O';
+  }
+
+  alertTypeLabel(type: string): string {
+    if (type === 'rupture') return 'Stockout';
     if (type === 'rupture')        return 'S';
     if (type === 'redistribution') return 'T';
     return 'O';

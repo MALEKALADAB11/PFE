@@ -167,6 +167,7 @@
               <span class="inv-q-bg__label">★ Best combo</span>
             </div>
             <div class="inv-q-bg inv-q-bg--bl"
+                 title="Low demand, low stock → OK / slow">
                  title="Low demand, low stock → OK / slow mover">
               <span class="inv-q-bg__label">✓ OK / slow</span>
             </div>
@@ -190,6 +191,7 @@
                    [style.height.px]="quadrantSize(p)"
                    [style.background]="riskColor(p.riskLevel)"
                    [style.border-color]="riskColor(p.riskLevel)"
+                   [title]="p.name + ' — Stock: ' + p.stock + ' · Demand: ' + p.demandForecast24h"
                    [title]="p.name + ' — Stock: ' + p.stock + ' · Demand: ' + p.demandForecast24h + '/day'"
                    (click)="toggleFlip(p.id)">
                 <span class="inv-q-dot__label">
@@ -253,6 +255,20 @@
           }
         </div>
 
+        <div class="sort-group">
+          <span class="sort-label">Sort by</span>
+          @for (s of ([
+            { key: 'risk',     label: 'Risk'     },
+            { key: 'stock',    label: 'Stock'    },
+            { key: 'coverage', label: 'Coverage' },
+            { key: 'name',     label: 'Name'     }
+          ]); track s.key) {
+            <button class="sort-btn"
+                    [class.is-active]="sortKey() === s.key"
+                    (click)="setSort(s.key)">
+              {{ s.label }}
+            </button>
+          }
         <div class="toolbar-right">
           <div class="search-box">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
@@ -375,6 +391,7 @@
                     <line x1="21" y1="3" x2="14" y2="10"/>
                     <line x1="3"  y1="21" x2="10" y2="14"/>
                   </svg>
+                  View AI recommendation
                 </div>
               </div>
 
@@ -386,6 +403,10 @@
                     <p class="back-label">Inventory Agent Recommendation</p>
                     <h3 class="back-name">{{ item.name }}</h3>
                   </div>
+                  <div class="confidence-ring">
+                    <span class="confidence-val">
+                      {{ (item.confidence * 100).toFixed(0) }}%
+                    </span>
                   <div style="display: flex; align-items: center; gap: 8px;">
                     <button class="btn-view-analysis-corner"
                             (click)="viewFullAnalysis(item, $event)"
@@ -412,6 +433,7 @@
                   </svg>
                   <p class="reco-text">{{ item.recommendation }}</p>
                 </div>
+                <p class="reco-detail">{{ item.recommendationDetail }}</p>
                 <div class="back-stats">
                   <div class="back-stat">
                     <span class="back-stat__val">{{ item.stock }}</span>

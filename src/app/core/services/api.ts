@@ -5,6 +5,11 @@ import { timeout } from 'rxjs/operators';
 
 @Injectable({ providedIn: 'root' })
 export class ApiService {
+  private base = 'http://localhost:8000/api/v1';
+  private requestTimeout = 10000; // 10 seconds
+
+  constructor(private http: HttpClient) {}
+
   private base            = 'http://localhost:8000/api/v1';
   private inventoryBase   = 'http://localhost:8000/api/inventory';
   private requestTimeout  = 10000;
@@ -75,6 +80,7 @@ export class ApiService {
       timestamp: string;
     }>(`${this.base}/coach/chat`, payload)
       .pipe(timeout(this.requestTimeout));
+}
   }
 
   // ── Inventory endpoints (données réelles stock_centre.xls) ───────────────

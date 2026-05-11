@@ -1,4 +1,6 @@
 import { Component, signal, computed, ViewChild,
+         ElementRef, AfterViewChecked } from '@angular/core';
+import { CommonModule } from '@angular/common';
          ElementRef, AfterViewChecked, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -39,6 +41,11 @@ interface SuggestedPrompt {
 @Component({
   selector:    'app-chat',
   standalone:  true,
+  imports:     [CommonModule],
+  templateUrl: './chat.html',
+  styleUrl:    './chat.scss'
+})
+export class ChatComponent implements AfterViewChecked {
   imports:     [CommonModule, FormsModule],
   templateUrl: './chat.html',
   styleUrl:    './chat.scss'
@@ -283,6 +290,12 @@ export class ChatComponent implements OnInit, AfterViewChecked {
   }
 
   // ── New conversation ──
+  newConv() {
+    const id = 'conv_' + Date.now();
+    const conv: Conversation = {
+      id,
+      title:   'New session',
+      mode:    'general',
   newConv() { this.newConvWithMode('general', 'New session'); }
 
   newConvWithMode(mode: ConvMode, title: string) {
@@ -298,11 +311,15 @@ export class ChatComponent implements OnInit, AfterViewChecked {
       messages: [
         {
           id:   'sys_' + Date.now(), role: 'system',
+          text: `New session started · ${this.now()}`,
           text: `${modeLabel} session started · ${this.now()}`,
           time: this.now()
         },
         {
           id:   'greet_' + Date.now(), role: 'coach',
+          text: 'Hello! I\'m your AI CoachAgent. I\'m monitoring store performance, stock levels, weather signals, and local events in real time. How can I help you?',
+          time: this.now(),
+          sources:    ['Orchestrator', 'Data Agent'],
           text: mode === 'inventory'
             ? 'Hello! I\'m your Inventory CoachAgent. I have live stock levels, risk scores, and replenishment data ready. What would you like to know?'
             : 'Hello! I\'m your AI CoachAgent. I\'m monitoring store performance, stock levels, weather signals, and local events in real time. How can I help you?',

@@ -8,8 +8,7 @@
       <div>
         <h1 class="page-title">Advisor</h1>
         <p class="page-sub">
-          <span class="status-dot"
-                [class.status-dot--live]="ws.connected()"></span>
+          <span class="status-dot" [class.status-dot--live]="ws.connected()"></span>
           {{ ws.connected() ? 'Connecté' : 'Polling' }} · Lac 2 ·
           Analysé {{ ws.lastUpdated() || '--:--' }}
         </p>
@@ -27,31 +26,24 @@
     @if (selected()) {
       <div class="profile-card">
         <div class="profile-card__left">
-          <div class="profile-avatar"
-               [style.background]="selected()!.avatarColor">
+          <div class="profile-avatar" [style.background]="selected()!.avatarColor">
             {{ selected()!.initials }}
           </div>
           <div class="profile-info">
             <h2 class="profile-name">{{ selected()!.name }}</h2>
             <p class="profile-role">{{ selected()!.role }}</p>
-            <span class="profile-status"
-                  [class]="statusClass(selected()!.status)">
+            <span class="profile-status" [class]="statusClass(selected()!.status)">
               {{ statusText(selected()!.status) }}
             </span>
           </div>
         </div>
-
         <div class="profile-kpis">
           <div class="profile-kpi">
-            <span class="profile-kpi__val">
-              {{ selected()!.caRealized | number:'1.0-0' }} DT
-            </span>
+            <span class="profile-kpi__val">{{ selected()!.caRealized | number:'1.0-0' }} DT</span>
             <span class="profile-kpi__label">CA actuel</span>
           </div>
           <div class="profile-kpi">
-            <span class="profile-kpi__val">
-              {{ selected()!.caObjectif | number:'1.0-0' }} DT
-            </span>
+            <span class="profile-kpi__val">{{ selected()!.caObjectif | number:'1.0-0' }} DT</span>
             <span class="profile-kpi__label">Objectif</span>
           </div>
           <div class="profile-kpi">
@@ -71,7 +63,6 @@
             <span class="profile-kpi__label">Ventes</span>
           </div>
         </div>
-
         <div class="profile-progress">
           <div class="profile-progress__track">
             <div class="profile-progress__fill"
@@ -94,7 +85,6 @@
           <span class="live-dot-small">● LIVE</span>
         }
       </h2>
-
       <div class="team-table">
         <div class="team-table__header">
           <span>#</span>
@@ -104,14 +94,11 @@
           <span>Prévision EOD</span>
           <span>Statut</span>
         </div>
-
         @for (adv of advisors(); track adv.id; let i = $index) {
           <div class="team-row"
                [class.team-row--selected]="adv.id === selectedId()"
                (click)="selectAdvisor(adv.id)">
-
             <span class="rank" [class.rank--gold]="i === 0">{{ i + 1 }}</span>
-
             <div class="team-advisor">
               <div class="adv-avatar" [style.background]="adv.avatarColor">
                 {{ adv.initials }}
@@ -119,16 +106,12 @@
               <div class="adv-info">
                 <span class="adv-name">
                   {{ adv.name }}
-                  @if (i === 0) {
-                    <span class="me-tag">Top</span>
-                  }
+                  @if (i === 0) { <span class="me-tag">Top</span> }
                 </span>
                 <span class="adv-role">{{ adv.role }}</span>
               </div>
             </div>
-
             <span class="team-ca">{{ adv.caRealized | number:'1.0-0' }} DT</span>
-
             <div class="team-perf-col">
               <div class="mini-bar">
                 <div class="mini-bar__fill"
@@ -140,100 +123,43 @@
                 {{ adv.performance }}%
               </span>
             </div>
-
             <span class="team-eod">{{ adv.previsionEod | number:'1.0-0' }} DT</span>
-
             <span class="status-badge" [class]="statusClass(adv.status)">
               {{ statusText(adv.status) }}
             </span>
           </div>
         }
-
         @if (advisors().length === 0) {
-          <p class="no-data" style="padding:20px;text-align:center;
-             color:var(--text-tertiary);font-size:12px">
+          <p style="padding:20px;text-align:center;color:var(--text-tertiary);font-size:12px">
             Chargement des conseillers...
           </p>
         }
       </div>
     </div>
 
-    <!-- ══ ACTIONS STRATÈGE ══ -->
-    
-    <!-- @if (strateActions().length > 0) {
-      <div class="section">
-        
-
-        @if (causeRacine()) {
-          <p class="cause-racine-label">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-                 stroke="#F9A825" stroke-width="2">
-              <circle cx="12" cy="12" r="10"/>
-              <line x1="12" y1="8" x2="12" y2="12"/>
-              <line x1="12" y1="16" x2="12.01" y2="16"/>
-            </svg>
-            {{ causeRacine() }}
-          </p>
-        }
-
-        <div class="strate-actions-grid">
-          @for (action of strateActions(); track action.priorite) {
-            <div class="strate-action-card"
-                 [class.strate-action-card--p1]="action.priorite === 1"
-                 [class.strate-action-card--p2]="action.priorite === 2"
-                 [class.strate-action-card--p3]="action.priorite === 3">
-              <div class="strate-action-card__header">
-                <span class="strate-priority-num">P{{ action.priorite }}</span>
-                <span class="strate-produit">{{ action.produit_cible }}</span>
-              </div>
-              <p class="strate-action-text">{{ action.action }}</p>
-              @if (action.argument_vente) {
-                <p class="strate-argument">"{{ action.argument_vente }}"</p>
-              }
-              @if (action.impact_estime) {
-                <span class="strate-impact">📈 {{ action.impact_estime }}</span>
-              }
-              <button class="strate-ask-btn"
-                      (click)="sendQuick('Comment exécuter : ' + action.action)">
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
-                     stroke="currentColor" stroke-width="2">
-                  <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
-                </svg>
-                Demander au coach
-              </button>
-            </div>
-          }
-        </div>
-      </div>
-    }
-      </div> -->
-    
-
     <!-- ══ RECOMMENDED PRODUCTS ══ -->
     <div class="section">
       <div class="section-header">
         <h2 class="section-title">
           Produits Recommandés
-          @if (contextTag()) {
+          @if (ws.weatherIcon()) {
             <span class="context-tag">
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
                    stroke="currentColor" stroke-width="2">
                 <path d="M20 17.58A5 5 0 0018 8h-1.26A8 8 0 104 16.25"/>
               </svg>
-              {{ contextTag() }}
+              {{ ws.weatherIcon() }} {{ ws.weatherLabel() }}
             </span>
           }
         </h2>
         <p class="section-sub">Cliquez sur une carte pour révéler le script IA</p>
       </div>
-
       <div class="products-grid">
-        @for (product of products(); track product.id) {
+        @for (product of products; track product.id) {
           <div class="product-flip"
                [class.flipped]="isFlipped(product.id)"
                (click)="toggleFlip(product.id)">
             <div class="product-inner">
-
               <!-- FRONT -->
               <div class="product-front">
                 @if (product.hot) {
@@ -264,7 +190,6 @@
                   </svg>
                 </div>
               </div>
-
               <!-- BACK -->
               <div class="product-back" [style.--accent]="product.accentColor">
                 <div class="back-script-header">
@@ -288,14 +213,13 @@
                   Retour
                 </div>
               </div>
-
             </div>
           </div>
         }
       </div>
     </div>
 
-</div>
+  </div><!-- fin conseiller__main -->
 
   <!-- ══ CHAT SIDEBAR ══ -->
   <aside class="chat-sidebar" [class.is-open]="chatOpen()">
@@ -325,7 +249,6 @@
           }
         </button>
       </div>
-
       <button class="chat-close" (click)="chatOpen.set(false)">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
              stroke="currentColor" stroke-width="2.5">
@@ -335,25 +258,25 @@
       </button>
     </div>
 
-    <!-- Context pills dynamiques -->
+    <!-- Context pills dynamiques depuis WS -->
     <div class="chat-context">
-      @if (weatherIcon()) {
-        <span class="ctx-pill ctx-pill--blue">
-          {{ weatherIcon() }} {{ weatherLabel() }}
-        </span>
-      } @else {
-        <span class="ctx-pill ctx-pill--blue">⛅ Météo</span>
-      }
+      <span class="ctx-pill ctx-pill--blue">
+        {{ ws.weatherIcon() || '⛅' }} {{ ws.weatherLabel() || 'Tunis' }}
+      </span>
       <span class="ctx-pill ctx-pill--gray">
-        {{ hoursRemaining() }}h restantes
+        {{ hoursLeft() }}h restantes
       </span>
       @if (selected()) {
-        <span class="ctx-pill ctx-pill--purple">
+        <span class="ctx-pill"
+              [style.background]="perfColor() + '22'"
+              [style.color]="perfColor()">
           {{ selected()!.performance }}% obj.
         </span>
       }
-      @if (nextHolidayLabel()) {
-        <span class="ctx-pill ctx-pill--amber">{{ nextHolidayLabel() }}</span>
+      @if (ws.urgencyLevel() !== 'LOW') {
+        <span class="ctx-pill ctx-pill--urgent">
+          ⚡ {{ ws.urgencyLevel() }}
+        </span>
       }
     </div>
 
@@ -361,24 +284,53 @@
     @if (chatTab() === 'coach') {
 
       <div class="chat-messages">
-
         @for (msg of messages(); track msg.id) {
           <div class="chat-msg" [class.chat-msg--user]="msg.role === 'user'">
 
             @if (msg.role === 'coach') {
-              <div class="msg-avatar msg-avatar--coach">IA</div>
+              <div class="msg-avatar msg-avatar--coach"
+                   [class.msg-avatar--urgent]="msg.urgency === 'high'"
+                   [class.msg-avatar--medium]="msg.urgency === 'medium'">
+                IA
+              </div>
             }
 
-            <!-- Dans la liste des messages, remplacer le bloc msg-bubble par : -->
             <div class="msg-bubble"
-                [class.msg-bubble--user]="msg.role === 'user'"
-                [class.msg-bubble--typing]="msg.text === '...'">
-              @if (msg.text === '...') {
+                 [class.msg-bubble--user]="msg.role === 'user'"
+                 [class.msg-bubble--urgent]="msg.urgency === 'high'"
+                 [class.msg-bubble--medium]="msg.urgency === 'medium'">
+
+              @if (msg.typing) {
                 <div class="typing-dots">
                   <span></span><span></span><span></span>
                 </div>
               } @else {
+
+                <!-- Badge urgence -->
+                @if (msg.urgency === 'high' && msg.role === 'coach') {
+                  <div class="msg-urgency-badge">🚨 Urgence haute</div>
+                } @else if (msg.urgency === 'medium' && msg.role === 'coach') {
+                  <div class="msg-urgency-badge msg-urgency-badge--med">⚡ Action requise</div>
+                }
+
                 <p class="msg-text" style="white-space:pre-line">{{ msg.text }}</p>
+
+                <!-- Sources RAG -->
+                @if (msg.sources?.length && msg.role === 'coach') {
+                  <div class="msg-sources-row">
+                    @for (src of msg.sources; track src) {
+                      <span class="msg-src-tag"
+                            [class.msg-src-tag--rag]="src === 'RAG Milvus'"
+                            [class.msg-src-tag--agent]="src.includes('Agent')">
+                        {{ src }}
+                      </span>
+                    }
+                    @if (msg.rag_used) {
+                      <span class="msg-src-tag msg-src-tag--rag">⚡ RAG</span>
+                    }
+                  </div>
+                }
+
                 @if (msg.time) {
                   <span class="msg-time mono">{{ msg.time }}</span>
                 }
@@ -393,18 +345,11 @@
           </div>
         }
 
-        <!-- Message de bienvenue si pas encore initialisé -->
         @if (messages().length === 0) {
           <div class="chat-msg">
             <div class="msg-avatar msg-avatar--coach">IA</div>
             <div class="msg-bubble">
-              <p class="msg-text">
-                Coach IA actif.
-                @if (urgencyLevel() !== 'LOW') {
-                  Urgence {{ urgencyLevel() }} — Gap {{ gapPct().toFixed(0) }}%.
-                }
-                Sur quoi voulez-vous travailler ?
-              </p>
+              <p class="msg-text">Coach IA actif · Sélectionnez un conseiller pour démarrer le coaching personnalisé.</p>
               <span class="msg-time mono">{{ ws.lastUpdated() || '--:--' }}</span>
             </div>
           </div>
@@ -425,13 +370,13 @@
         <textarea
           class="chat-input"
           rows="2"
-          placeholder="Posez votre question… (↵ Envoyer, Shift+↵ Nouvelle ligne)"
+          placeholder="Posez votre question… (↵ Envoyer)"
           [value]="chatInput()"
           (input)="updateInput($event)"
           (keydown)="onKey($event)">
         </textarea>
         <button class="send-btn"
-                [disabled]="!chatInput().trim()"
+                [disabled]="!chatInput().trim() || isTyping()"
                 (click)="sendMessage()">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
                stroke="currentColor" stroke-width="2">
@@ -445,9 +390,7 @@
 
     <!-- ── TAB: ALERTS ── -->
     @if (chatTab() === 'alertes') {
-
       <div class="alerts-panel">
-
         @if (alerts().length === 0) {
           <div class="no-alerts">
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none"
@@ -457,15 +400,12 @@
             <p>Aucune alerte active</p>
           </div>
         }
-
         @for (alert of alerts(); track alert.id) {
           <div class="alert-card"
                [style.border-left-color]="alert.color"
                [style.background]="alert.bg">
             <div class="alert-card__body">
-              <p class="alert-card__label" [style.color]="alert.color">
-                {{ alert.label }}
-              </p>
+              <p class="alert-card__label" [style.color]="alert.color">{{ alert.label }}</p>
               <p class="alert-card__detail">{{ alert.detail }}</p>
             </div>
             <div class="alert-card__actions">
@@ -476,21 +416,12 @@
                      fill="none" stroke="white" stroke-width="2">
                   <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
                 </svg>
-                Ask the coach
-              </button>
-              <button class="alert-dismiss-btn" (click)="dismissAlert(alert.id)">
-                <svg width="11" height="11" viewBox="0 0 24 24"
-                     fill="none" stroke="currentColor" stroke-width="2.5">
-                  <line x1="18" y1="6" x2="6" y2="18"/>
-                  <line x1="6" y1="6" x2="18" y2="18"/>
-                </svg>
+                Demander au coach
               </button>
             </div>
           </div>
         }
-
       </div>
-
     }
 
   </aside>

@@ -86,7 +86,7 @@ export class ApiService {
    */
   getInventorySnapshot(
     storeId: string,
-    objective: 'balanced' | 'aggressive' | 'conservative' = 'balanced'
+    objective: 'balanced' | 'aggressive' | 'conservative' = 'balanced' 
   ): Observable<any> {
     return this.http.get(
       `${this.inventoryBase}/store/${storeId}?business_objective=${objective}`

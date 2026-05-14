@@ -193,7 +193,7 @@
                    [title]="p.name + ' — Stock: ' + p.stock + ' · Demand: ' + p.demandForecast24h + '/day'"
                    (click)="toggleFlip(p.id)">
                 <span class="inv-q-dot__label">
-                  {{ p.name.split(' ')[0] }}
+                  {{ (p.name || p.sku || '?').toString().split(' ')[0] }}
                 </span>
               </div>
             }
@@ -364,7 +364,7 @@
                   </div>
                   <span class="risk-score__val mono"
                         [style.color]="riskColor(item.riskLevel)">
-                    {{ (item.riskScore * 100).toFixed(0) }}%
+                    {{ ($any(item.riskScore) * 100 || 0).toFixed(0) }}%
                   </span>
                 </div>
                 <div class="flip-hint">
@@ -398,7 +398,7 @@
                     </button>
                     <div class="confidence-ring">
                       <span class="confidence-val">
-                        {{ (item.confidence * 100).toFixed(0) }}%
+                        {{ ($any(item.confidence) * 100 || 0).toFixed(0) }}%
                       </span>
                     </div>
                   </div>
@@ -768,7 +768,7 @@
               </div>
               <div class="analysis-metric">
                 <span class="analysis-metric-label">Coverage Ratio</span>
-                <span class="analysis-metric-value">{{ analysisModal()!.coverageRatio.toFixed(2) }}x</span>
+                <span class="analysis-metric-value">{{ ($any(analysisModal()!.coverageRatio) || 0).toFixed(2) }}x</span>
               </div>
               <div class="analysis-metric">
                 <span class="analysis-metric-label">Category</span>

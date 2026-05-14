@@ -8,11 +8,9 @@ export interface InventoryApiItem extends InventoryItem {
   business_objective:     string;
   unitCost:               number;
   moq:                    number;
-  // Coverage / timing
   daysOfStock:            number;
   leadTimeDays:           number;
   coverageRatio:          number;
-  // APICS metrics
   reorderPoint:           number;
   safetyStock:            number;
   safetyStockCostDt:      number;
@@ -22,17 +20,13 @@ export interface InventoryApiItem extends InventoryItem {
   holdingCostPerCycleDt:  number;
   effectiveServiceLevel:  number;
   zScore:                 number;
-  // Risk
   overstockFlag:          boolean;
   riskRationale:          string;
-  // Constraints
   moqIsBinding:           boolean;
   moqBindingNote:         string;
   highCostFlag:           boolean;
   highHoldingFlag:        boolean;
-  // LLM note
   analystNote:            string;
-  // Decision Agent placeholders (null until that agent is wired)
   recommendation:         string | null;
   recommendationDetail:   string | null;
   finalOrderQty:          number | null;
@@ -55,6 +49,11 @@ export interface StorePayload {
   items:              InventoryApiItem[];
   alerts:             InventoryAlert[];
   summary:            InventorySummary;
+  // pagination (present when page_size > 0)
+  page?:              number;
+  page_size?:         number;
+  total_pages?:       number;
+  total_skus?:        number;
 }
 
 export interface SingleAnalysisPayload {
@@ -68,9 +67,9 @@ export class InventoryApiService {
   private readonly http = inject(HttpClient);
   private readonly base = 'http://localhost:8000/api/inventory';
 
-  getStores(): Observable<string[]> {
-    return this.http.get<{ stores: string[] }>(`${this.base}/stores`)
-      .pipe(map(r => r.stores));
+  getStores(): Observable<{ id: string; name: string }[]> {
+    return this.http.get<{ stores: { id: string; name: string }[] }>(`${this.base}/stores`)
+      .pipe(map(r => r.stores ?? []));
   }
 
   getSkus(storeId?: string): Observable<string[]> {
@@ -79,16 +78,29 @@ export class InventoryApiService {
       .pipe(map(r => r.skus));
   }
 
-  getStore(storeId: string, objective = 'balanced'): Observable<StorePayload> {
-    const params = new HttpParams().set('business_objective', objective);
+  /**
+   * Fetch the full store payload.
+   * Uses page_size=0 by default so ALL items are returned (no pagination cap).
+   * Pass page_size > 0 only if you intentionally want a subset.
+   */
+  getStore(
+    storeId: string,
+    objective = 'balanced',
+    pageSize  = 0,          // 0 = all items
+  ): Observable<StorePayload> {
+    const params = new HttpParams()
+      .set('business_objective', objective)
+      .set('page_size', String(pageSize));
     return this.http.get<StorePayload>(`${this.base}/store/${storeId}`, { params });
   }
 
   getSummary(storeId: string, objective = 'balanced'): Observable<InventorySummary> {
-    return this.getStore(storeId, objective).pipe(map(r => r.summary));
+    return this.http.get<InventorySummary>(`${this.base}/summary/${storeId}`, {
+      params: new HttpParams().set('business_objective', objective),
+    });
   }
 
-  analyzeSku(sku: string, storeId = 'lac2', objective = 'balanced'): Observable<SingleAnalysisPayload> {
+  analyzeSku(sku: string, storeId = 'I63', objective = 'balanced'): Observable<SingleAnalysisPayload> {
     return this.http.post<SingleAnalysisPayload>(`${this.base}/analyze`, {
       sku,
       store_id:           storeId,

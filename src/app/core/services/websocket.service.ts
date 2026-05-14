@@ -35,6 +35,9 @@ export class WebSocketService {
   liveInventory = signal<any>(null);
   connected     = signal(false);
 
+  // Emits true while the backend pipeline is running (inventory_loading received)
+  inventoryLoading = signal(false);
+
   // ── Agent Analyste ────────────────────────────────────
   analystNodes   = signal<AnalystNodes | null>(null);
   urgencyLevel   = signal<'HIGH' | 'MEDIUM' | 'LOW'>('LOW');
@@ -72,10 +75,12 @@ export class WebSocketService {
   private isBrowser                = false;
   private _isConnecting            = false;
 
-  // ── Délais de reconnexion (ms) ────────────────────────
-  // Le cycle backend prend ~2min → on attend 30s avant retry
+  // How many real items we've received from the backend.
+  // stock_delta patches are only applied AFTER a full snapshot has been received.
+  private _inventoryItemCount      = 0;
+
   private readonly RECONNECT_DELAY_NORMAL = 30000;
-  private readonly RECONNECT_DELAY_BLOCK  = 60000; // code 1008 = double connexion bloquée
+  private readonly RECONNECT_DELAY_BLOCK  = 60000;
   private readonly CONNECT_TIMEOUT        = 15000;
 
   constructor() {
@@ -88,7 +93,6 @@ export class WebSocketService {
   connectStore(storeId: string) {
     if (!this.isBrowser) return;
 
-    // Déjà connecté au même store → skip
     if (
       this.storeWs &&
       (this.storeWs.readyState === WebSocket.OPEN ||
@@ -99,7 +103,6 @@ export class WebSocketService {
       return;
     }
 
-    // Connexion déjà en cours → skip
     if (this._isConnecting) {
       console.log('[WS] Connexion en cours, skip');
       return;
@@ -107,13 +110,11 @@ export class WebSocketService {
 
     this.storeId = storeId;
 
-    // Annuler le timer de reconnexion en cours
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
 
-    // Fermer proprement l'ancien socket
     if (this.storeWs) {
       this.storeWs.onopen    = null;
       this.storeWs.onmessage = null;
@@ -141,7 +142,6 @@ export class WebSocketService {
       const ws = new WebSocket(`ws://localhost:8000/ws/store/${storeId}`);
       this.storeWs = ws;
 
-      // Timeout si la connexion ne s'ouvre pas
       const timeout = setTimeout(() => {
         if (ws.readyState !== WebSocket.OPEN) {
           console.warn('[WS] Timeout connexion → retry dans 30s');
@@ -173,7 +173,6 @@ export class WebSocketService {
           if (data.type === 'metrics_update') {
             this._handleMetricsUpdate(data);
           }
-          // Ignorer les pings
         } catch (e) {
           console.warn('[WS] Parse error', e);
         }
@@ -191,14 +190,11 @@ export class WebSocketService {
         this._isConnecting = false;
         this.connected.set(false);
 
-        // Fermeture volontaire → pas de reconnexion
         if (event.code === 1000) {
           console.log('[WS] Fermeture volontaire');
           return;
         }
 
-        // Code 1008 = double connexion bloquée côté backend
-        // → attendre plus longtemps avant de réessayer
         const delay = event.code === 1008
           ? this.RECONNECT_DELAY_BLOCK
           : this.RECONNECT_DELAY_NORMAL;
@@ -234,60 +230,30 @@ export class WebSocketService {
       niveau_urgence:         data.niveau_urgence,
       ecart_objectif:         data.ecart_objectif,
       forecast_eod:           data.forecast_eod,
-      forecast_ci_low:        data.forecast_ci_low,
-      forecast_ci_high:       data.forecast_ci_high,
-      forecast_mape:          data.forecast_mape,
-      last_cycle_id:          data.last_cycle_id,
-      risk_hours:             data.risk_hours             ?? [],
-      context_signals:        data.context_signals        ?? [],
-      advisor_priorities:     data.advisor_priorities     ?? [],
-      product_opportunities:  data.product_opportunities  ?? [],
-      product_mix:            data.product_mix            ?? [],
-      recommended_focus:      data.recommended_focus      ?? '',
-      coach_opening_message:  data.coach_opening_message  ?? '',
-      hourly_performance:     data.hourly_performance     ?? [],
-      ca_yesterday_same_hour: data.ca_yesterday_same_hour,
-      analyst_summary:        data.analyst_summary        ?? '',
-      advisors:               data.advisors               ?? [],
-      strategie:              data.strategie              ?? '',
-      strategie_actions:      data.strategie_actions      ?? [],
-      cause_racine:           data.cause_racine           ?? '',
-      focus_produits:         data.focus_produits         ?? [],
-      message_manager:        data.message_manager        ?? '',
-      coaching_cards:         data.coaching_cards         ?? [],
-      context_heatmap:        data.context_heatmap        ?? {},
-      timestamp:              data.timestamp,
+      analyst_summary:        data.analyst_summary,
+      analyst_nodes:          data.analyst_nodes,
+      advisors:               data.advisors              ?? [],
+      strategie:              data.strategie,
+      strategie_actions:      data.strategie_actions     ?? [],
+      cause_racine:           data.cause_racine,
+      focus_produits:         data.focus_produits        ?? [],
+      message_manager:        data.message_manager,
+      context_signals:        data.context_signals       ?? [],
+      context_heatmap:        data.context_heatmap       ?? {},
+      product_mix:            data.product_mix           ?? [],
+      hourly_performance:     data.hourly_performance    ?? [],
+      risk_hours:             data.risk_hours            ?? [],
     });
 
-    if (data.advisors?.length) {
-      this.liveAdvisors.set(data.advisors);
-    }
+    if (data.analyst_nodes)          this.analystNodes.set(data.analyst_nodes);
+    if (data.niveau_urgence)         this.urgencyLevel.set(data.niveau_urgence);
+    if (data.urgency_score != null)  this.urgencyScore.set(data.urgency_score);
+    if (data.ecart_objectif != null) this.gapPct.set(data.ecart_objectif);
+    if (data.gap_amount != null)     this.gapAmount.set(data.gap_amount);
+    if (data.analyst_summary)        this.analystSummary.set(data.analyst_summary);
+    if (data.forecast_eod != null)   this.forecastEod.set(data.forecast_eod);
+    if (data.timestamp)              this.lastUpdated.set(data.timestamp);
 
-    // ── Analyste signals ──────────────────────────────────
-    this.urgencyLevel.set(data.niveau_urgence    ?? 'LOW');
-    this.urgencyScore.set(data.urgency_score     ?? 0);
-    this.gapPct.set(data.ecart_objectif          ?? 0);
-    this.gapAmount.set(data.gap_amount           ?? 0);
-    this.forecastEod.set(data.forecast_eod       ?? 0);
-    this.analystSummary.set(data.analyst_summary ?? '');
-
-    if (data.timestamp) {
-      try {
-        this.lastUpdated.set(
-          new Date(data.timestamp).toLocaleTimeString('fr-FR', {
-            hour: '2-digit', minute: '2-digit',
-          })
-        );
-      } catch {
-        this.lastUpdated.set('--:--');
-      }
-    }
-
-    if (data.analyst_nodes) {
-      this.analystNodes.set(data.analyst_nodes);
-    }
-
-    // ── Stratège signals ──────────────────────────────────
     if (data.strategie)               this.strategie.set(data.strategie);
     if (data.strategie_actions?.length) this.strateActions.set(data.strategie_actions);
     if (data.cause_racine)            this.causeRacine.set(data.cause_racine);
@@ -298,7 +264,6 @@ export class WebSocketService {
       this.contextHeatmap.set(data.context_heatmap);
     }
 
-    // ── Météo ─────────────────────────────────────────────
     const ctx = data.store_context ?? {};
     if (ctx.weather) {
       const parts = ctx.weather.split(' ');
@@ -306,7 +271,6 @@ export class WebSocketService {
       this.weatherLabel.set(parts.slice(1).join(' ') ?? '');
     }
 
-    // ── Jours fériés ──────────────────────────────────────
     const holidaySignal = (data.context_signals ?? []).find(
       (s: any) => s.type === 'holiday'
     );
@@ -356,7 +320,6 @@ export class WebSocketService {
         }
       };
 
-      // Reconnexion lente pour éviter la surcharge
       ws.onclose = () => {
         setTimeout(() => this.connectAdvisor(this.advisorId), 30000);
       };
@@ -372,6 +335,13 @@ export class WebSocketService {
 
   connectInventory(storeId: string, objective = 'balanced') {
     if (!this.isBrowser) return;
+
+    // If reconnecting to a different store, reset the item count so
+    // stock_delta patches don't fire until the new snapshot arrives.
+    if (storeId !== this.inventoryStore) {
+      this._inventoryItemCount = 0;
+      this.liveInventory.set(null);
+    }
 
     if (this.inventoryReconnectTimer) {
       clearTimeout(this.inventoryReconnectTimer);
@@ -389,7 +359,6 @@ export class WebSocketService {
     this.inventoryObjective = objective;
 
     try {
-      // const url = `ws://localhost:11434/api/inventory/ws/${storeId}?business_objective=${objective}`;
       const url = `ws://localhost:8000/api/inventory/ws/${storeId}?business_objective=${objective}`;
       console.log('[WS] Connecting to inventory WebSocket:', url);
 
@@ -404,58 +373,78 @@ export class WebSocketService {
         try {
           const data = JSON.parse(event.data);
 
+          // ── heartbeat ────────────────────────────────────────────────────
           if (data.type === 'heartbeat') return;
 
-          if (data.type === 'stock_delta') {
-            // ── Fast path: single-SKU stock change, fires instantly on every sale ──
-            // Patch the existing liveInventory signal so inventory.ts can react
-            // in < 100ms, well before the full re-analysis arrives (~10s later).
-            console.log('[WS] ⚡ stock_delta:', data.sku, '→', data.new_stock, 'units | risk:', data.risk_level);
-            const current = this.liveInventory();
-            if (current?.items?.length) {
-              const patchedItems = current.items.map((item: any) =>
-                item.sku === data.sku
-                  ? {
-                      ...item,
-                      stock:         data.new_stock,
-                      daysOfStock:   data.days_of_stock,
-                      coverageRatio: data.coverage_ratio,
-                      riskLevel:     data.risk_level,
-                      riskRationale: data.risk_rationale,
-                      riskScore: (
-                        data.risk_level === 'critical' ? 0.90 :
-                        data.risk_level === 'high'     ? 0.72 :
-                        data.risk_level === 'medium'   ? 0.45 : 0.10
-                      ),
-                    }
-                  : item
-              );
-              // Rebuild alerts from patched items
-              const patchedAlerts = patchedItems
-                .filter((i: any) => i.riskLevel === 'critical' || i.riskLevel === 'high')
-                .map((i: any) => ({
-                  id:      `alert-${i.riskLevel}-${i.sku}`,
-                  type:    'rupture',
-                  urgency: i.riskLevel,
-                  title:   `${i.riskLevel === 'critical' ? 'Stockout imminent' : 'Low stock'}: ${i.name}`,
-                  message: `${i.name} — ${i.stock} units left, ${i.daysOfStock}d coverage`,
-                  action:  null,
-                  time:    new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-                }));
-              this.liveInventory.set({
-                ...current,
-                type:   'inventory_update',  // keep type so effect() in inventory.ts fires
-                items:  patchedItems,
-                alerts: patchedAlerts,
-              });
-            }
+          // ── pipeline still running — don't touch liveInventory ──────────
+          if (data.type === 'inventory_loading') {
+            console.log('[WS] ⏳ Backend pipeline running for', storeId, '— HTTP polling will pick it up');
+            this.inventoryLoading.set(true);
             return;
           }
 
+          // ── stock_delta — ONLY apply if we already have a real snapshot ──
+          // If _inventoryItemCount is 0 the snapshot hasn't arrived yet.
+          // Applying the patch now would set liveInventory with 7 mock items
+          // (from current = null fallback) and poison the first-load path.
+          if (data.type === 'stock_delta') {
+            console.log('[WS] ⚡ stock_delta:', data.sku, '→', data.new_stock, 'units | risk:', data.risk_level);
+
+            const current = this.liveInventory();
+            // Guard: only patch if we have a real snapshot (> 7 items)
+            if (!current?.items?.length || current.items.length <= 7) {
+              console.log('[WS] stock_delta skipped — no real snapshot yet');
+              return;
+            }
+
+            const patchedItems = current.items.map((item: any) =>
+              item.sku === data.sku
+                ? {
+                    ...item,
+                    stock:         data.new_stock,
+                    daysOfStock:   data.days_of_stock,
+                    coverageRatio: data.coverage_ratio,
+                    riskLevel:     data.risk_level,
+                    riskRationale: data.risk_rationale,
+                    riskScore: (
+                      data.risk_level === 'critical' ? 0.90 :
+                      data.risk_level === 'high'     ? 0.72 :
+                      data.risk_level === 'medium'   ? 0.45 : 0.10
+                    ),
+                  }
+                : item
+            );
+
+            const patchedAlerts = patchedItems
+              .filter((i: any) => i.riskLevel === 'critical' || i.riskLevel === 'high')
+              .map((i: any) => ({
+                id:      `alert-${i.riskLevel}-${i.sku}`,
+                type:    'rupture',
+                urgency: i.riskLevel,
+                title:   `${i.riskLevel === 'critical' ? 'Stockout imminent' : 'Low stock'}: ${i.name}`,
+                message: `${i.name} — ${i.stock} units left, ${i.daysOfStock}d coverage`,
+                action:  null,
+                time:    new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+              }));
+
+            this.liveInventory.set({
+              ...current,
+              type:   'inventory_update',
+              items:  patchedItems,
+              alerts: patchedAlerts,
+            });
+            return;
+          }
+
+          // ── full snapshot ────────────────────────────────────────────────
           if (data.type === 'inventory_update') {
-            console.log('[WS] 📦 Inventory update:', data.items?.length, 'items');
+            const count = data.items?.length ?? 0;
+            console.log('[WS] 📦 Inventory snapshot:', count, 'items for', storeId);
+            this._inventoryItemCount = count;
+            this.inventoryLoading.set(false);
             this.liveInventory.set(data);
           }
+
         } catch (e) {
           console.error('[WS] Parse error:', e);
         }
@@ -471,7 +460,6 @@ export class WebSocketService {
         if (this.inventoryWs !== ws && this.inventoryWs !== null) return;
         if (this.inventoryWs === null) return;
 
-        // Reconnexion lente pour éviter la surcharge
         this.inventoryReconnectTimer = setTimeout(
           () => this.connectInventory(this.inventoryStore, this.inventoryObjective),
           15000,
@@ -518,6 +506,7 @@ export class WebSocketService {
     inv?.close(1000, 'disconnect');
 
     this.connected.set(false);
+    this._inventoryItemCount = 0;
     console.log('[WS] Déconnexion volontaire');
   }
 }

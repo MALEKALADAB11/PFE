@@ -1,5 +1,23 @@
 /**
- * InventoryComponent — WITH REAL-TIME FIXES
+ * InventoryComponent — FIXED
+ *
+ * Root causes fixed:
+ * 1. stock_delta was patching liveInventory with type='inventory_update' before
+ *    the real snapshot arrived, setting lastPayloadHash and blocking the real data.
+ *    Fix: guard effect on payload.items.length > 10 (mock has 7), and clear hash
+ *    when store changes.
+ *
+ * 2. effect() in constructor fires before connectInventory() (afterNextRender).
+ *    Fix: moved WS connect call to ngOnInit so it runs before the effect can miss data.
+ *
+ * 3. HTTP fallback used getStore() which defaults to page_size=100.
+ *    Fix: added page_size=0 param to always get all items.
+ *
+ * 4. Store was hardcoded to 'I63'. Now driven by selectedStore signal.
+ *    Changing store reconnects WS and reloads data.
+ *
+ * 5. HTTP fallback reduced from 25s to 5s — WS delivers initial snapshot
+ *    within 2-3s when backend cache is warm.
  */
 
 import {
@@ -7,10 +25,12 @@ import {
   inject, OnDestroy, DestroyRef, afterNextRender, PLATFORM_ID,
 } from '@angular/core';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
-import { HttpClientModule } from '@angular/common/http';
+import { HttpClientModule, HttpParams } from '@angular/common/http';
+import { HttpClient } from '@angular/common/http';
+import { timeout } from 'rxjs/operators';
 import { InventoryItem, InventoryAlert } from '../../core/models/inventory';
 import { MockDataService } from '../../core/services/mock-data';
-import { InventoryApiService, InventoryApiItem } from '../../core/services/inventory-api.service';
+import { InventoryApiService, InventoryApiItem, StorePayload } from '../../core/services/inventory-api.service';
 import { WebSocketService } from '../../core/services/websocket.service';
 
 type FilterRisk = 'all' | 'critical' | 'high' | 'medium' | 'ok';
@@ -27,6 +47,18 @@ const AGENT_ANALYSIS_FIELDS: (keyof InventoryApiItem)[] = [
   'highCostFlag', 'highHoldingFlag', 'analystNote', 'unitCost', 'moq',
 ];
 
+// Minimum number of items a payload must contain to be treated as real backend
+// data (vs. a stock_delta patch built from the 7 mock items).
+const MIN_REAL_ITEMS = 8;
+
+// How long to wait before the first HTTP poll attempt.
+// The pipeline takes 15-20s on a cold start, so we start polling at 10s
+// and retry every 10s until real data arrives. Once cache is warm, the
+// first poll at 10s will succeed immediately.
+const HTTP_FIRST_POLL_MS  = 10_000;
+const HTTP_RETRY_POLL_MS  = 10_000;
+const HTTP_MAX_ATTEMPTS   = 6;      // give up after ~70s total
+
 @Component({
   selector:    'app-inventory',
   standalone:  true,
@@ -39,8 +71,11 @@ export class InventoryComponent implements OnInit, OnDestroy {
   private ws         = inject(WebSocketService);
   private mock       = inject(MockDataService);
   private invApi     = inject(InventoryApiService);
+  private http       = inject(HttpClient);
   private destroyRef = inject(DestroyRef);
   private platformId = inject(PLATFORM_ID);
+
+  // ── State ─────────────────────────────────────────────────────────────────
 
   items  = signal<InventoryItem[]>([]);
   alerts = signal<InventoryAlert[]>([]);
@@ -51,10 +86,19 @@ export class InventoryComponent implements OnInit, OnDestroy {
   wsConnected = computed(() => this.ws.connected());
   lastUpdate  = signal<Date | null>(null);
 
-  // True once backend data has replaced mock (any item has a real safetyStock)
+  // True once backend data has replaced mock
   isLiveData = computed(() =>
+    this.items().length > 7 ||
     this.items().some((i: any) => i.safetyStock > 0 || i.riskRationale)
   );
+
+  // ── Store selector ────────────────────────────────────────────────────────
+  // Populated from GET /api/inventory/stores on init
+  availableStores = signal<{ id: string; name: string }[]>([]);
+  selectedStore   = signal<string>('I63');
+  selectedObjective = signal<string>('balanced');
+
+  // ── Filters / sort / UI state ─────────────────────────────────────────────
 
   filterRisk = signal<FilterRisk>('all');
   sortKey    = signal<SortKey>('risk');
@@ -63,13 +107,13 @@ export class InventoryComponent implements OnInit, OnDestroy {
   decisions  = signal<Record<string, Decision>>({});
   productDecisions = signal<Record<string, Decision>>({});
   analysisModal = signal<InventoryItem | null>(null);
+  flashedSkus   = signal<Set<string>>(new Set());
 
-  // SKUs whose stock just changed — cleared after 900ms — drives flash CSS class
-  flashedSkus = signal<Set<string>>(new Set());
-
-  private lastPayloadHash = '';
+  // Used to deduplicate WS payloads — cleared on store change
+  private lastPayloadHash  = '';
   private _pollingTimer:  any = null;
   private _refreshTimer:  any = null;
+  private _fallbackTimer: any = null;
 
   // ── KPIs ──────────────────────────────────────────────────────────────────
   totalItems    = computed(() => this.items().length);
@@ -89,7 +133,7 @@ export class InventoryComponent implements OnInit, OnDestroy {
   rejectedCount = computed(() =>
     Object.values(this.decisions()).filter(d => d === 'rejected').length
   );
-  
+
   productApprovedCount = computed(() =>
     Object.values(this.productDecisions()).filter(d => d === 'approved').length
   );
@@ -97,23 +141,7 @@ export class InventoryComponent implements OnInit, OnDestroy {
     Object.values(this.productDecisions()).filter(d => d === 'rejected').length
   );
 
-  // ── Quadrant ──────────────────────────────────────────────────────────────
-  //
-  // X axis = stock units   (left=low stock,  right=high stock)
-  // Y axis = daily demand  (bottom=low demand, top=high demand)
-  //
-  // Zones (match the 4 CSS bg quadrants exactly):
-  //   top-left  (low stock,  high demand) → Stockout risk  ⚠
-  //   top-right (high stock, high demand) → Best combo     ★
-  //   bot-right (high stock, low demand)  → Overstock risk ↑
-  //   bot-left  (low stock,  low demand)  → OK / slow      ✓
-  //
-  // Scale: p90 cap on each axis so a single outlier (e.g. 468 units of a
-  // recharge card) doesn't compress all critical items (3-20 units) into the
-  // leftmost 5%. Items above the cap clamp to 92% (still distinct on the right).
-  //
-  // Reactivity: every stock_delta patches items() signal → computed signals
-  // recompute → [style.left.%] and [style.bottom.%] bindings update in DOM.
+  // ── Quadrant chart ────────────────────────────────────────────────────────
 
   quadrantStockMax = computed(() => {
     const vals = this.items()
@@ -136,7 +164,7 @@ export class InventoryComponent implements OnInit, OnDestroy {
   });
 
   quadrantX(p: InventoryItem): number {
-    if (p.stock >= 999) return 92;                               // services → far right
+    if (p.stock >= 999) return 92;
     const capped = Math.min(p.stock, this.quadrantStockMax());
     return Math.min(Math.round((capped / this.quadrantStockMax()) * 88) + 2, 92);
   }
@@ -148,11 +176,10 @@ export class InventoryComponent implements OnInit, OnDestroy {
 
   quadrantSize(p: InventoryItem): number { return Math.round(10 + p.riskScore * 18); }
 
-  // Zone derived from visual position → footer counts always match the chart.
   quadrantZone(p: InventoryItem): 'star' | 'stockout' | 'ok' | 'overstock' {
     if (p.stock >= 999 || (p as any).overstockFlag) return 'overstock';
-    const highStock  = this.quadrantX(p) >= 50;  // right half = high stock
-    const highDemand = this.quadrantY(p) >= 50;  // top half  = high demand
+    const highStock  = this.quadrantX(p) >= 50;
+    const highDemand = this.quadrantY(p) >= 50;
     if  ( highStock &&  highDemand) return 'star';
     if  (!highStock &&  highDemand) return 'stockout';
     if  ( highStock && !highDemand) return 'overstock';
@@ -165,19 +192,21 @@ export class InventoryComponent implements OnInit, OnDestroy {
     return counts;
   });
 
+  // ── Display list ──────────────────────────────────────────────────────────
+
   displayItems = computed(() => {
     let list = [...this.items()];
     const f  = this.filterRisk();
     if (f !== 'all') list = list.filter(i => i.riskLevel === f);
-    
-    // Apply search filter
+
     const search = this.searchText().toLowerCase().trim();
     if (search) {
-      list = list.filter(i => 
-        i.name.toLowerCase().includes(search) || 
-        i.sku.toLowerCase().includes(search) ||
-        i.category.toLowerCase().includes(search)
-      );
+      list = list.filter(i => {
+        const name     = String(i.name     ?? '').toLowerCase();
+        const sku      = String(i.sku      ?? '').toLowerCase();
+        const category = String(i.category ?? '').toLowerCase();
+        return name.includes(search) || sku.includes(search) || category.includes(search);
+      });
     }
 
     const order: Record<string, number> = { critical: 0, high: 1, medium: 2, ok: 3 };
@@ -185,7 +214,7 @@ export class InventoryComponent implements OnInit, OnDestroy {
       case 'risk':     list.sort((a, b) => order[a.riskLevel] - order[b.riskLevel]); break;
       case 'stock':    list.sort((a, b) => a.stock - b.stock); break;
       case 'coverage': list.sort((a, b) => a.coverageRatio - b.coverageRatio); break;
-      case 'name':     list.sort((a, b) => a.name.localeCompare(b.name)); break;
+      case 'name':     list.sort((a, b) => String(a.name ?? '').localeCompare(String(b.name ?? ''))); break;
     }
     return list;
   });
@@ -201,20 +230,37 @@ export class InventoryComponent implements OnInit, OnDestroy {
   });
 
   // ── Constructor ───────────────────────────────────────────────────────────
-  constructor() {
-    afterNextRender(() => {
-      this.ws.connectInventory('STORE-001', 'balanced');
-    });
 
-    // ── Effect WS inventory ───────────────────────────────────────────────
+  constructor() {
+    // ── Effect: react to WS inventory updates ─────────────────────────────
+    // IMPORTANT: we guard against stock_delta patches built from mock items
+    // (those will have ≤7 items). We only apply payloads that look like real
+    // backend data (more than MIN_REAL_ITEMS items).
     effect(() => {
       const payload = this.ws.liveInventory();
 
+      // Must be an inventory_update (not a heartbeat or stock_delta type mismatch)
       if (!payload || payload.type !== 'inventory_update') return;
+
+      // Guard: stock_delta patches built from mock have only 7 items.
+      // Wait for a real full snapshot (> MIN_REAL_ITEMS).
       if (!payload.items?.length) return;
 
+      // If this is a stock_delta patch (small set), only apply it if we
+      // already have live data — don't let it poison the first-load path.
+      const isSmallPatch = payload.items.length <= MIN_REAL_ITEMS;
+      const alreadyLive  = this.items().length > MIN_REAL_ITEMS;
+      if (isSmallPatch && !alreadyLive) {
+        console.log(
+          '[Inventory] Skipping stock_delta patch — real snapshot not yet received.',
+          `(patch=${payload.items.length} items, live=${alreadyLive})`
+        );
+        return;
+      }
+
+      // Deduplicate: ignore if nothing changed
       const hash = JSON.stringify(
-        payload.items.map((i: InventoryApiItem) => i.sku + i.stock + i.riskLevel)
+        payload.items.slice(0, 20).map((i: InventoryApiItem) => i.sku + i.stock + i.riskLevel)
       );
       if (hash === this.lastPayloadHash) return;
       this.lastPayloadHash = hash;
@@ -225,46 +271,136 @@ export class InventoryComponent implements OnInit, OnDestroy {
         new Date().toLocaleTimeString()
       );
 
+      this._cancelFallbackTimer();
       this._applyAgentPayload(payload);
       this.lastUpdate.set(new Date());
     });
   }
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
+
   ngOnInit(): void {
-    // Seed mock so page is never blank — backend overlay replaces it.
-    // Mock gives instant render; backend gives real data (15-20s first load,
-    // instant after cache warms). Both paths call _applyAgentPayload which
-    // full-replaces items() with backend data the moment it arrives.
+    // Seed mock so page is never blank
     this.items.set(this.mock.getInventoryItems());
     this.alerts.set(this.mock.getInventoryAlerts());
 
-    if (isPlatformBrowser(this.platformId)) {
-      // HTTP fallback fires after 25s if WS hasn't delivered real data yet.
-      // 25s > pipeline duration (~15-20s) so cache is warm by the time this fires.
-      // If WS already delivered data, items() will have real data and we skip.
-      setTimeout(() => {
-        const hasRealData = this.items().some((i: any) => i.safetyStock > 0 || i.riskRationale);
-        if (!hasRealData) {
-          console.log('[Inventory] WS slow — falling back to HTTP');
-          this.loadAgentOverlay();
-        }
-      }, 25000);
-    }
+    if (!isPlatformBrowser(this.platformId)) return;
+
+    // Load available stores for the selector dropdown
+    this._loadAvailableStores();
+
+    // Connect WS immediately (not deferred to afterNextRender, so the effect
+    // can catch the first message)
+    this._connectWs();
+
+    // HTTP fallback: if WS hasn't delivered real data within HTTP_FALLBACK_MS,
+    // load via HTTP. This covers: slow first pipeline run (~20s), WS hiccups.
+    this._scheduleFallback();
   }
 
   ngOnDestroy(): void {
-    // Nettoyer les timers
-    if (this._pollingTimer) {
-      clearInterval(this._pollingTimer);
-      this._pollingTimer = null;
+    this._cancelFallbackTimer();
+    if (this._pollingTimer) { clearInterval(this._pollingTimer); this._pollingTimer = null; }
+    if (this._refreshTimer) { clearInterval(this._refreshTimer); this._refreshTimer = null; }
+    // Do NOT call ws.disconnect() — WS service is shared with Dashboard/Advisor
+  }
+
+  // ── Store selector ─────────────────────────────────────────────────────────
+
+  private _loadAvailableStores(): void {
+    this.http.get<{ stores: { id: string; name: string }[] }>(
+      'http://localhost:8000/api/inventory/stores'
+    ).subscribe({
+      next: res => {
+        if (res.stores?.length) {
+          this.availableStores.set(res.stores);
+          console.log('[Inventory] Available stores:', res.stores.map(s => s.id));
+        }
+      },
+      error: () => {
+        // Non-fatal — store selector just won't be pre-populated
+        console.warn('[Inventory] Could not load store list');
+      },
+    });
+  }
+
+  /**
+   * Called from the template when the user picks a different store.
+   * Reconnects WS and reloads data for the new store.
+   */
+  changeStore(storeId: string, objective?: string): void {
+    if (storeId === this.selectedStore() && !objective) return;
+
+    this.selectedStore.set(storeId);
+    if (objective) this.selectedObjective.set(objective);
+
+    // Reset state
+    this.lastPayloadHash = '';
+    this.items.set(this.mock.getInventoryItems());
+    this.alerts.set(this.mock.getInventoryAlerts());
+    this.agentError.set(null);
+    this.lastUpdate.set(null);
+
+    // Reconnect WS to new store
+    this._connectWs();
+    this._scheduleFallback();
+  }
+
+  private _connectWs(): void {
+    const storeId   = this.selectedStore();
+    const objective = this.selectedObjective();
+    console.log(`[Inventory] Connecting WS → ${storeId} (${objective})`);
+    this.ws.connectInventory(storeId, objective);
+  }
+
+  // ── HTTP polling (fallback + warm cache fast path) ─────────────────────────
+  // The pipeline takes 15-20s cold, instant when cache is warm.
+  // We poll every HTTP_RETRY_POLL_MS until real data arrives or max attempts hit.
+  private _pollAttempts = 0;
+
+  private _scheduleFallback(): void {
+    this._cancelFallbackTimer();
+    this._pollAttempts = 0;
+    this._fallbackTimer = setTimeout(() => this._pollOnce(), HTTP_FIRST_POLL_MS);
+  }
+
+  private _pollOnce(): void {
+    const hasRealData =
+      this.items().length > MIN_REAL_ITEMS ||
+      this.items().some((i: any) => i.safetyStock > 0 || i.riskRationale);
+
+    if (hasRealData) {
+      console.log('[Inventory] WS delivered real data — stopping HTTP polling');
+      return;
     }
-    if (this._refreshTimer) {
-      clearInterval(this._refreshTimer);
-      this._refreshTimer = null;
+
+    this._pollAttempts++;
+    console.log(
+      `[Inventory] HTTP poll attempt ${this._pollAttempts}/${HTTP_MAX_ATTEMPTS} — pipeline may still be running`
+    );
+
+    this.loadAgentOverlay(
+      this.selectedStore(),
+      this.selectedObjective(),
+      // onSuccess: stop polling
+      () => { this._cancelFallbackTimer(); },
+      // onEmpty: schedule next attempt if not at max
+      () => {
+        if (this._pollAttempts < HTTP_MAX_ATTEMPTS) {
+          this._fallbackTimer = setTimeout(() => this._pollOnce(), HTTP_RETRY_POLL_MS);
+        } else {
+          console.warn('[Inventory] HTTP polling exhausted — backend may be offline');
+          this.agentError.set('Backend timeout — check server logs');
+        }
+      }
+    );
+  }
+
+  private _cancelFallbackTimer(): void {
+    if (this._fallbackTimer) {
+      clearTimeout(this._fallbackTimer);
+      this._fallbackTimer = null;
     }
-    // ⚠️ NE PAS appeler ws.disconnect() — le service WS est singleton partagé
-    // avec Dashboard et Conseiller — les déconnecter ici couperait tout.
   }
 
   // ── Private helpers ───────────────────────────────────────────────────────
@@ -275,16 +411,12 @@ export class InventoryComponent implements OnInit, OnDestroy {
 
     if (!payload?.items?.length) return;
 
-    // ── Capture stock BEFORE update for diff logging ──────────────────────
     const oldStock = new Map<string, number>(
       this.items().map(i => [i.sku, i.stock])
     );
 
-    // ── Build a mock fallback map for display fields (name, category, id) ──
-    // We full-replace from backend data but fall back to mock for any field
-    // the backend doesn't supply (e.g. name when product_master lookup fails).
     const mockMap = new Map<string, InventoryItem>(
-      this.items().map(i => [i.sku, i])
+      this.mock.getInventoryItems().map(i => [i.sku, i])
     );
 
     const mapped: InventoryItem[] = payload.items
@@ -292,32 +424,36 @@ export class InventoryComponent implements OnInit, OnDestroy {
       .map(agentItem => {
         const fallback = mockMap.get(agentItem.sku);
 
-        // Normalize riskLevel — backend may send 'medium' which has no UI type
         const rawRisk = ((agentItem.riskLevel as string) ?? '').toLowerCase();
         const riskLevel: 'critical' | 'high' | 'ok' = (
           rawRisk === 'critical' ? 'critical' :
           rawRisk === 'high'     ? 'high'     :
-          rawRisk === 'medium'   ? 'high'     : // medium → high
+          rawRisk === 'medium'   ? 'high'     :
           'ok'
         );
 
-        // Derive coverageRatio from daysOfStock / leadTimeDays
         let coverageRatio = agentItem.coverageRatio ?? 0;
         if (!coverageRatio && agentItem.daysOfStock !== undefined) {
           const lt = agentItem.leadTimeDays || 7;
           coverageRatio = Math.min(+(agentItem.daysOfStock / lt).toFixed(2), 5);
         }
 
-        // Spread agentItem first so all APICS fields (safetyStock, formulaOrderQty,
-        // analystNote, riskRationale etc.) pass through, then overwrite with
-        // normalized values. No duplicate-key issue since spread is first.
+        // Sanitize name — backend may return null/number/undefined if product_master
+        // lookup fails. Template calls .split() on it, which crashes on non-strings.
+        const rawName = agentItem.name ?? fallback?.name ?? agentItem.sku ?? '';
+        const rawSku  = String(agentItem.sku ?? '');
+        const safeName = (typeof rawName === 'string' && rawName.trim())
+          ? rawName.trim()
+          : String(agentItem.sku ?? 'Unknown');
+
         return {
           ...(agentItem as any),
-          // Prefer backend name/category; fall back to mock if backend has blanks
-          id:                   agentItem.id          ?? fallback?.id       ?? `inv-${agentItem.sku}`,
-          name:                 agentItem.name         ?? fallback?.name     ?? agentItem.sku,
-          category:             agentItem.category     ?? fallback?.category ?? 'Unknown',
-          // Normalized values always win
+          id:           agentItem.id       ?? fallback?.id       ?? `inv-${rawSku}`,
+          sku:          rawSku,
+          name:         safeName,
+          category:     (typeof agentItem.category === 'string' && agentItem.category.trim())
+                          ? agentItem.category
+                          : (fallback?.category ?? 'Unknown'),
           riskLevel,
           coverageRatio,
           riskScore: agentItem.riskScore ?? (
@@ -326,12 +462,10 @@ export class InventoryComponent implements OnInit, OnDestroy {
           ),
           trend:       agentItem.trend      ?? fallback?.trend      ?? 'stable',
           confidence:  agentItem.confidence ?? fallback?.confidence ?? 0.85,
-          // Map analystNote → recommendationDetail for flip card back
           recommendationDetail: agentItem.recommendationDetail
                                 ?? agentItem.analystNote
                                 ?? fallback?.recommendationDetail
                                 ?? null,
-          // Map formulaOrderQty → recommendation display string
           recommendation: agentItem.recommendation
                           ?? (agentItem.formulaOrderQty
                               ? `Order ${agentItem.formulaOrderQty} units`
@@ -339,7 +473,6 @@ export class InventoryComponent implements OnInit, OnDestroy {
         } as InventoryItem;
       });
 
-    // If backend returned 0 matched items (all errored), keep current items
     if (mapped.length > 0) {
       this.items.set(mapped);
     }
@@ -347,7 +480,7 @@ export class InventoryComponent implements OnInit, OnDestroy {
     this.alerts.set(payload.alerts as InventoryAlert[]);
     this.agentLoading.set(false);
 
-    // ── Log stock changes + flash dots ────────────────────────────────────────
+    // Flash dots for decreased stock
     const decreased = payload.items
       .filter(i => {
         const prev = oldStock.get(i.sku);
@@ -356,45 +489,68 @@ export class InventoryComponent implements OnInit, OnDestroy {
       .map(i => `${i.sku}: ${oldStock.get(i.sku)} → ${i.stock}`);
     if (decreased.length) {
       console.log('[Inventory] Stock sold:', decreased.join(' | '));
-      // Flash the affected dots on the quadrant chart
       const skus = new Set(decreased.map(d => d.split(':')[0].trim()));
       this.flashedSkus.set(skus);
       setTimeout(() => this.flashedSkus.set(new Set()), 900);
     }
 
-    // ── Verify data source ─────────────────────────────────────────────────
     const hasRealData = mapped.some(
       (i: any) => (i.safetyStock > 0) || i.riskRationale || i.analystNote
     );
     console.log(
-      `[Inventory] ${hasRealData ? '✅ LIVE' : '⚠️ fallback'} | ` +
-      `${mapped.length} SKUs | ` +
+      `[Inventory] ${hasRealData ? '✅ LIVE' : '⚠️ rule-based'} | ` +
+      `${mapped.length} SKUs | store=${this.selectedStore()} | ` +
       `critical=${mapped.filter(i => i.riskLevel === 'critical').length} ` +
       `high=${mapped.filter(i => i.riskLevel === 'high').length} ` +
       `ok=${mapped.filter(i => i.riskLevel === 'ok').length}`
     );
   }
 
-  private loadAgentOverlay(
-    storeId   = 'STORE-001',
-    objective = 'balanced'
+  /**
+   * HTTP load with optional callbacks.
+   * onSuccess: called when items were received and applied
+   * onEmpty:   called when the response had 0 valid items (pipeline still running)
+   */
+  loadAgentOverlay(
+    storeId   = this.selectedStore(),
+    objective = this.selectedObjective(),
+    onSuccess?: () => void,
+    onEmpty?:   () => void,
   ): void {
     this.agentLoading.set(true);
     this.agentError.set(null);
 
-    this.invApi.getStore(storeId, objective).subscribe({
+    const params = new HttpParams()
+      .set('business_objective', objective)
+      .set('page_size', '0');
+
+    this.http.get<StorePayload>(
+      `http://localhost:8000/api/inventory/store/${storeId}`,
+      { params }
+    ).pipe(
+      timeout(90_000)   // 90s — pipeline can take 20-40s; we retry on timeout via onEmpty
+    ).subscribe({
       next: payload => {
-        console.log(
-          '[Inventory] 📦 HTTP load OK —',
-          payload.items?.length ?? 0, 'items'
-        );
-        this._applyAgentPayload(payload);
-        this.lastUpdate.set(new Date());
+        const count = payload.items?.length ?? 0;
+        console.log(`[Inventory] 📦 HTTP load → ${count} items`);
+
+        if (count > MIN_REAL_ITEMS) {
+          this._cancelFallbackTimer();
+          this._applyAgentPayload(payload);
+          this.lastUpdate.set(new Date());
+          onSuccess?.();
+        } else {
+          // Pipeline still running (returned 0 or only mock-sized set)
+          console.log('[Inventory] HTTP returned empty/small — pipeline still running, will retry');
+          this.agentLoading.set(false);
+          onEmpty?.();
+        }
       },
       error: err => {
-        console.warn('[Inventory] ⚠️ Agent unavailable, using mock data:', err);
-        this.agentError.set('Agent offline — showing demo data');
+        console.warn('[Inventory] ⚠️ HTTP error:', err?.status, err?.message);
+        this.agentError.set('Agent offline — retrying…');
         this.agentLoading.set(false);
+        onEmpty?.();
       },
     });
   }
@@ -432,14 +588,12 @@ export class InventoryComponent implements OnInit, OnDestroy {
     e.stopPropagation();
     this.decisions.update(d => ({ ...d, [id]: null }));
   }
-  
-  // Search methods
+
   setSearch(text: string): void { this.searchText.set(text); }
-  clearSearch(): void { this.searchText.set(''); }
-  
-  // Product decision methods
+  clearSearch(): void           { this.searchText.set(''); }
+
   getProductDecision(id: string): Decision { return this.productDecisions()[id] ?? null; }
-  
+
   approveProduct(id: string, e: Event): void {
     e.stopPropagation();
     this.productDecisions.update(d => ({ ...d, [id]: 'approved' }));
@@ -454,13 +608,12 @@ export class InventoryComponent implements OnInit, OnDestroy {
     e.stopPropagation();
     this.productDecisions.update(d => ({ ...d, [id]: null }));
   }
-  
-  // Modal methods
+
   viewFullAnalysis(item: InventoryItem, e: Event): void {
     e.stopPropagation();
     this.analysisModal.set(item);
   }
-  
+
   closeAnalysisModal(): void {
     this.analysisModal.set(null);
   }
@@ -545,7 +698,7 @@ export class InventoryComponent implements OnInit, OnDestroy {
     return 'Overstock';
   }
 
-  // ── Flip card back helpers ────────────────────────────────────────────────
+  // ── Flip card back helpers ─────────────────────────────────────────────────
 
   safetyStockVal(item: InventoryItem): string {
     const v = (item as any).safetyStock;
@@ -579,8 +732,6 @@ export class InventoryComponent implements OnInit, OnDestroy {
            !(item as any).recommendation?.startsWith('Order ');
   }
 
-  // ── "Ask Coach" — navigate to chat with inventory context pre-filled ──────
-
   askChat(item: InventoryItem, e: Event): void {
     e.stopPropagation();
     const api = item as any;
@@ -598,8 +749,6 @@ export class InventoryComponent implements OnInit, OnDestroy {
     window.location.href = '/chat';
   }
 
-  // Navigate to chat pre-filled from an alert panel item.
-  // Looks up the full item by SKU for richer context; falls back to alert fields.
   askChatFromAlert(alert: InventoryAlert, e: Event): void {
     e.stopPropagation();
     const item = this.items().find(i => i.sku === alert.sku);

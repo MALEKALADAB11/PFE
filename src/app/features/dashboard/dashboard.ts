@@ -212,10 +212,10 @@ export class Dashboard implements OnInit, OnDestroy {
   nextHoliday  = computed(() => this.ws.nextHoliday()  ?? '');
 
   // ── Stock KPI ─────────────────────────────────────────
-  stockKpi = {
+  stockKpi = signal({
     critical: 2, total: 6, okCount: 3,
     allOk: false, avgCoverage: 1.8,
-  };
+  });
 
   stockBackLines = signal<string[]>([
     'iPhone 16 Pro: 3 units — risk 91%',
@@ -284,11 +284,11 @@ export class Dashboard implements OnInit, OnDestroy {
       },
       {
         label:       'Stock health',
-        value:       String(this.stockKpi.critical),
+        value:       String(this.stockKpi().critical),
         suffix:      'critical',
-        trend:       `${this.stockKpi.okCount} / ${this.stockKpi.total} SKUs optimal`,
-        trendDir:    (this.stockKpi.critical === 0 ? 'up' : 'down') as 'up' | 'down',
-        accentColor: this.stockKpi.critical > 0 ? 'red' : 'teal',
+        trend:       `${this.stockKpi().okCount} / ${this.stockKpi().total} SKUs optimal`,
+        trendDir:    (this.stockKpi().critical === 0 ? 'up' : 'down') as 'up' | 'down',
+        accentColor: this.stockKpi().critical > 0 ? 'red' : 'teal',
         backTitle:   'Inventory status',
         backLines:   this.stockBackLines(),
       },
@@ -492,7 +492,7 @@ export class Dashboard implements OnInit, OnDestroy {
     this.refreshTimer = setInterval(() => this.loadData(), 120000);
 
     // Inventory agent overlay (APP08)
-    this.invApi.getStore('STORE-001').subscribe({
+    this.invApi.getStore('I63').subscribe({
       next:  payload => this._applyAgentData(payload.items, payload.summary),
       error: err     => console.warn('Stock agent unavailable:', err),
     });
@@ -576,13 +576,13 @@ export class Dashboard implements OnInit, OnDestroy {
 
   // ── Inventory agent overlay ───────────────────────────
   private _applyAgentData(items: InventoryApiItem[], summary: InventorySummary): void {
-    this.stockKpi = {
+    this.stockKpi.set({
       critical:    summary.criticalCount,
       total:       summary.totalSkus,
       okCount:     summary.okCount,
       allOk:       summary.allOk,
       avgCoverage: summary.avgCoverageRatio,
-    };
+    });
 
     this.stockBackLines.set([
       ...summary.backLines,

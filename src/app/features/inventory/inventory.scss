@@ -163,21 +163,22 @@
 
 // ══ MAIN LAYOUT ══
 .inv-main-layout {
-  display: grid;
-  grid-template-columns: 1fr 340px;
-  gap: 16px;
-  align-items: start;
+  // display: grid;
+  // grid-template-columns: 1fr 340px;
+  // gap: 16px;
+  // align-items: start;
+  display: flex;
 }
 
 .inv-main-left {
+  max-width: 73%;
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
 .inv-main-right {
-  position: sticky;
-  top: 80px;
+ width: 30%;
 }
 
 // ══ CARD BASE ══
@@ -667,6 +668,8 @@
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 16px;
+  max-height: 10%;
+  overflow-y: auto;
 }
 
 // ══ FLIP CARD ══

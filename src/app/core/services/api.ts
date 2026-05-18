@@ -5,11 +5,11 @@ import { timeout } from 'rxjs/operators';
 
 @Injectable({ providedIn: 'root' })
 export class ApiService {
-  private base            = 'http://localhost:8000/api/v1';
-  private inventoryBase   = 'http://localhost:8000/api/inventory';
-  private requestTimeout  = 10000;
+  private base = 'http://localhost:8000/api/v1';
+  private inventoryBase = 'http://localhost:8000/api/inventory';
+  private requestTimeout = 10000;
 
-  constructor(private http: HttpClient) {}
+  constructor(private http: HttpClient) { }
 
   // ── Sales endpoints ───────────────────────────────────────────────────────
 
@@ -64,14 +64,14 @@ export class ApiService {
   }
 
   coachChat(payload: {
-    message:      string;
+    message: string;
     advisor_name: string;
-    store_id:     string;
-    context:      any;
+    store_id: string;
+    context: any;
   }) {
     return this.http.post<{
-      reply:     string;
-      source:    string;
+      reply: string;
+      source: string;
       timestamp: string;
     }>(`${this.base}/coach/chat`, payload)
       .pipe(timeout(this.requestTimeout));

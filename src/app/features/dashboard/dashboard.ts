@@ -3,10 +3,12 @@ import {
   OnInit, OnDestroy
 } from '@angular/core';
 import { CommonModule }     from '@angular/common';
+import { RouterLink }       from '@angular/router';
 import { HttpClientModule } from '@angular/common/http';
 import { Subject }          from 'rxjs';
 import { takeUntil }        from 'rxjs/operators';
- import { Advisor }        from '../../core/models/advisor';
+
+import { Advisor }        from '../../core/models/advisor';
 import { StoreMetrics }   from '../../core/models/store';
 import { MockDataService } from '../../core/services/mock-data';
 import { ApiService }      from '../../core/services/api';
@@ -15,6 +17,7 @@ import {
   FlipKpiCardComponent,
   FlipCardData
 } from '../../shared/components/flip-kpi-card/flip-kpi-card';
+import { MetricCardComponent } from '../../shared/components/metric-card/metric-card';
 import {
   InventoryApiService,
   InventoryApiItem,
@@ -139,10 +142,11 @@ export class Dashboard implements OnInit, OnDestroy {
   );
 
   caTarget = computed(() =>
-    this.ws.liveMetrics()?.ca_target
-    ?? this.liveMetrics()?.ca_target
-    ?? REAL_TARGET_DT
-  );
+  this.ws.liveMetrics()?.ca_target
+  ?? this.liveMetrics()?.ca_target
+  ?? this.store?.caObjectif
+  ?? REAL_TARGET_DT
+);
 
   attainment = computed(() =>
     this.ws.liveMetrics()?.attainment
@@ -211,6 +215,7 @@ export class Dashboard implements OnInit, OnDestroy {
   isHoliday    = computed(() => this.ws.isHolidayToday());
   nextHoliday  = computed(() => this.ws.nextHoliday()  ?? '');
 
+  // ── Stock KPI — mock seeds, agent overwrites via ngOnInit ─────────────────
   // ── Stock KPI ─────────────────────────────────────────
   stockKpi = signal({
     critical: 2, total: 6, okCount: 3,
@@ -282,6 +287,7 @@ export class Dashboard implements OnInit, OnDestroy {
           `Forecast : ${Math.round(eod).toLocaleString()} DT`,
         ]
       },
+      // ── Card 4: Stock health — driven by live inventory agent ─────────────
       {
         label:       'Stock health',
         value:       String(this.stockKpi().critical),
@@ -305,13 +311,13 @@ export class Dashboard implements OnInit, OnDestroy {
 
   perfMax = computed(() => {
     const arr = this.hourlyPerf();
-    if (!arr.length) return 200;
+    if (!arr.length) return 3000;
     const vals = arr.flatMap(h => [
       isFinite(h.actual)   && h.actual   > 0 ? h.actual   : 0,
       isFinite(h.target)   && h.target   > 0 ? h.target   : 0,
       isFinite(h.forecast) && h.forecast > 0 ? h.forecast : 0,
     ]).filter(v => v > 0);
-    return vals.length ? Math.max(...vals) * 1.15 : 200;
+    return vals.length ? Math.max(...vals) * 1.15 : 3000;
   });
 
   perfBarHeight(val: number): number {
@@ -532,15 +538,12 @@ export class Dashboard implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (d: any) => {
-          const hourly = this.mapHourlyPerfFromWs(d);
-          if (hourly.length) this.hourlyPerf.set([...hourly]);
-
-          const mix = this.mapProductMixFromWs(d);
-          if (mix.length) this.productMix.set([...mix]);
-
-          this.cards.set([...this.mapCardsFromWs(d)]);
-          this.riskHours.set([...this.mapRiskHoursFromWs(d)]);
+          this.cards.set(this.mapCardsFromWs(d));
+          this.productMix.set(this.mapProductMixFromWs(d));
+          this.riskHours.set(this.mapRiskHoursFromWs(d));
           this.applyHeatmapFromWs(d);
+          const hourly = this.mapHourlyPerfFromWs(d);
+          if (hourly.length) this.hourlyPerf.set(hourly);
         },
         error: () => {},
       });
@@ -549,7 +552,15 @@ export class Dashboard implements OnInit, OnDestroy {
   // ── WS sync every 3s ─────────────────────────────────
   private syncFromWs() {
     const live = this.ws.liveMetrics();
-    
+    if (!live) return;
+
+    this.cards.set(this.mapCardsFromWs(live));
+    this.productMix.set(this.mapProductMixFromWs(live));
+    this.riskHours.set(this.mapRiskHoursFromWs(live));
+    this.applyHeatmapFromWs(live);
+
+    if (live.advisors?.length) this.liveAdvisors.set(live.advisors);
+
     // ── Hourly perf — Always update (backend data OR default fallback) ──
     const hourly = live 
       ? this.mapHourlyPerfFromWs(live)
@@ -873,9 +884,7 @@ export class Dashboard implements OnInit, OnDestroy {
     });
     this.heatHours.forEach((h, i) => {
       this.heatData['risk'][i]    = riskMap[h] ?? 2;
-      this.heatData['traffic'][i] = Math.max(
-        this.heatData['traffic'][i], (riskMap[h] ?? 2) - 1
-      );
+      this.heatData['traffic'][i] = Math.max(this.heatData['traffic'][i], (riskMap[h] ?? 2) - 1);
     });
   }
 

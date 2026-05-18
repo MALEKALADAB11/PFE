@@ -107,4 +107,25 @@ export class InventoryApiService {
       business_objective: objective,
     });
   }
+
+  // ── Business Objectives ────────────────────────────────────────────────────
+
+  getObjectives(): Observable<{ objectives: any[]; count: number }> {
+    return this.http.get<{ objectives: any[]; count: number }>(`${this.base}/objectives`);
+  }
+
+  setActiveObjective(label: string): Observable<any> {
+    return this.http.put(`${this.base}/objectives/active`, { label });
+  }
+
+  // ── Alerts ─────────────────────────────────────────────────────────────────
+
+  getAlerts(storeId: string, status = 'pending'): Observable<{ alerts: any[]; count: number }> {
+    const params = new HttpParams().set('status', status);
+    return this.http.get<{ alerts: any[]; count: number }>(`${this.base}/alerts/${storeId}`, { params });
+  }
+
+  acknowledgeAlert(alertId: string, status = 'acknowledged'): Observable<any> {
+    return this.http.patch(`${this.base}/alerts/${alertId}`, { status });
+  }
 }

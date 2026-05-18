@@ -98,6 +98,14 @@ export class InventoryComponent implements OnInit, OnDestroy {
   selectedStore   = signal<string>('I63');
   selectedObjective = signal<string>('balanced');
 
+  // ── Business Objectives ───────────────────────────────────────────────────
+  availableObjectives = signal<{ 
+    label: string; 
+    is_active: boolean; 
+    metadata?: any;
+    priority?: number;
+  }[]>([]);
+
   // ── Filters / sort / UI state ─────────────────────────────────────────────
 
   filterRisk = signal<FilterRisk>('all');
@@ -289,6 +297,9 @@ export class InventoryComponent implements OnInit, OnDestroy {
     // Load available stores for the selector dropdown
     this._loadAvailableStores();
 
+    // Load available business objectives
+    this._loadObjectives();
+
     // Connect WS immediately (not deferred to afterNextRender, so the effect
     // can catch the first message)
     this._connectWs();
@@ -320,6 +331,43 @@ export class InventoryComponent implements OnInit, OnDestroy {
       error: () => {
         // Non-fatal — store selector just won't be pre-populated
         console.warn('[Inventory] Could not load store list');
+      },
+    });
+  }
+
+  private _loadObjectives(): void {
+    this.invApi.getObjectives().subscribe({
+      next: res => {
+        this.availableObjectives.set(res.objectives ?? []);
+        const active = res.objectives?.find((o: any) => o.is_active);
+        if (active) {
+          this.selectedObjective.set(active.label);
+          console.log('[Inventory] Active objective:', active.label);
+        }
+      },
+      error: () => {
+        console.warn('[Inventory] Could not load objectives — using default');
+      },
+    });
+  }
+
+  /**
+   * Called when user selects a different business objective from dropdown.
+   * Switches the active objective in DB and reloads inventory with new thresholds.
+   */
+  changeObjective(label: string): void {
+    if (label === this.selectedObjective()) return;
+
+    console.log('[Inventory] Switching to objective:', label);
+    this.invApi.setActiveObjective(label).subscribe({
+      next: () => {
+        this.selectedObjective.set(label);
+        // Reload inventory with new objective
+        this.changeStore(this.selectedStore(), label);
+      },
+      error: err => {
+        console.warn('[Inventory] Could not set objective:', err);
+        // Optionally show error to user
       },
     });
   }
@@ -405,9 +453,11 @@ export class InventoryComponent implements OnInit, OnDestroy {
 
   // ── Private helpers ───────────────────────────────────────────────────────
 
-  private _applyAgentPayload(
-    payload: { items: InventoryApiItem[]; alerts: InventoryAlert[] }
-  ): void {
+  private _applyAgentPayload(payload: { items: InventoryApiItem[], alerts: InventoryAlert[] }): void {
+
+    // ── Capture stock BEFORE update so the diff log is accurate ──────────
+    // If we read this.items() AFTER the update, we'd compare new vs new → always zero diff.
+  
 
     if (!payload?.items?.length) return;
 
@@ -487,6 +537,7 @@ export class InventoryComponent implements OnInit, OnDestroy {
         return prev !== undefined && i.stock < prev;
       })
       .map(i => `${i.sku}: ${oldStock.get(i.sku)} → ${i.stock}`);
+
     if (decreased.length) {
       console.log('[Inventory] Stock sold:', decreased.join(' | '));
       const skus = new Set(decreased.map(d => d.split(':')[0].trim()));
@@ -557,17 +608,11 @@ export class InventoryComponent implements OnInit, OnDestroy {
 
   // ── UI helpers ─────────────────────────────────────────────────────────────
 
-  toggleFlip(id: string): void {
-    this.flippedId.update(cur => cur === id ? null : id);
-  }
-
-  isFlipped(id: string): boolean {
-    return this.flippedId() === id;
-  }
-
+  toggleFlip(id: string): void { this.flippedId.update(cur => cur === id ? null : id); }
+  isFlipped(id: string): boolean { return this.flippedId() === id; }
   setFilter(f: string): void { this.filterRisk.set(f as FilterRisk); }
-  setSort(s: string):   void { this.sortKey.set(s as SortKey); }
-
+  setSort(s: string): void   { this.sortKey.set(s as SortKey); }
+ 
   getFilterCount(key: string): number {
     return (this.filterCounts() as Record<string, number>)[key] ?? 0;
   }
@@ -577,11 +622,24 @@ export class InventoryComponent implements OnInit, OnDestroy {
   approveAlert(id: string, e: Event): void {
     e.stopPropagation();
     this.decisions.update(d => ({ ...d, [id]: 'approved' }));
+    // Always try — backend returns 404 for fake IDs, which we ignore
+    this.invApi.acknowledgeAlert(id, 'acknowledged').subscribe({
+      next: () => console.log('[Alert] ✅ DB status → acknowledged:', id),
+      error: err => {
+        if (err?.status !== 404) console.warn('[Alert] PATCH failed:', err?.status, id);
+      },
+    });
   }
 
   rejectAlert(id: string, e: Event): void {
     e.stopPropagation();
     this.decisions.update(d => ({ ...d, [id]: 'rejected' }));
+    this.invApi.acknowledgeAlert(id, 'dismissed').subscribe({
+      next: () => console.log('[Alert] ✅ DB status → dismissed:', id),
+      error: err => {
+        if (err?.status !== 404) console.warn('[Alert] PATCH failed:', err?.status, id);
+      },
+    });
   }
 
   undoDecision(id: string, e: Event): void {
@@ -620,38 +678,55 @@ export class InventoryComponent implements OnInit, OnDestroy {
 
   dismissAlert(id: string): void {
     this.alerts.update(list => list.filter(a => a.id !== id));
+    this.invApi.acknowledgeAlert(id, 'dismissed').subscribe({
+      error: err => {
+        if (err?.status !== 404) console.warn('[Alert] PATCH failed:', err?.status, id);
+      },
+    });
   }
 
   // ── Style helpers ──────────────────────────────────────────────────────────
 
   riskColor(r: string): string {
     const m: Record<string, string> = {
-      critical: '#E74C3C', high: '#F9A825',
-      medium:   '#2D9CDB', ok:   '#00B894', low: '#9CA3AF',
+      critical: '#E74C3C',
+      high: '#F9A825',
+      medium: '#2D9CDB',
+      ok: '#00B894',
+      low: '#9CA3AF',
     };
     return m[r] ?? '#9CA3AF';
   }
 
   riskBg(r: string): string {
     const m: Record<string, string> = {
-      critical: '#FDEDEC', high: '#FFF8E1',
-      medium:   '#E8F4FD', ok:   '#E0FAF4', low: '#F2F4F8',
+      critical: '#FDEDEC',
+      high: '#FFF8E1',
+      medium: '#E8F4FD',
+      ok: '#E0FAF4',
+      low: '#F2F4F8',
     };
     return m[r] ?? '#F2F4F8';
   }
 
   riskLabel(r: string): string {
     const m: Record<string, string> = {
-      critical: 'CRITICAL', high: 'HIGH',
-      medium:   'MEDIUM',   ok:   'OK', low: 'LOW',
+      critical: 'CRITICAL',
+      high: 'HIGH',
+      medium: 'MEDIUM',
+      ok: 'OK',
+      low: 'LOW',
     };
     return m[r] ?? 'N/A';
   }
 
   riskBackColor(r: string): string {
     const m: Record<string, string> = {
-      critical: '#C0392B', high: '#B45309',
-      medium:   '#1A6FA8', ok:   '#007A63', low: '#6B7280',
+      critical: '#C0392B',
+      high: '#B45309',
+      medium: '#1A6FA8',
+      ok: '#007A63',
+      low: '#6B7280',
     };
     return m[r] ?? '#6B7280';
   }
@@ -679,21 +754,25 @@ export class InventoryComponent implements OnInit, OnDestroy {
   }
 
   alertColor(u: string): string {
-    return u === 'critical' ? '#E74C3C' : u === 'high' ? '#F9A825' : '#2D9CDB';
+    if (u === 'critical') return '#E74C3C';
+    if (u === 'high') return '#F9A825';
+    return '#2D9CDB';
   }
 
   alertBg(u: string): string {
-    return u === 'critical' ? '#FDEDEC' : u === 'high' ? '#FFF8E1' : '#E8F4FD';
+    if (u === 'critical') return '#FDEDEC';
+    if (u === 'high') return '#FFF8E1';
+    return '#E8F4FD';
   }
 
   alertIcon(type: string): string {
-    if (type === 'rupture')        return 'S';
+    if (type === 'rupture') return 'S';
     if (type === 'redistribution') return 'T';
     return 'O';
   }
 
   alertTypeLabel(type: string): string {
-    if (type === 'rupture')        return 'Stockout';
+    if (type === 'rupture') return 'Stockout';
     if (type === 'redistribution') return 'Transfer';
     return 'Overstock';
   }
@@ -729,8 +808,10 @@ export class InventoryComponent implements OnInit, OnDestroy {
 
   hasDecision(item: InventoryItem): boolean {
     return !!(item as any).recommendation &&
-           !(item as any).recommendation?.startsWith('Order ');
+      !(item as any).recommendation?.startsWith('Order ');
   }
+
+  // ── Ask Coach ─────────────────────────────────────────────────────────────
 
   askChat(item: InventoryItem, e: Event): void {
     e.stopPropagation();
@@ -738,32 +819,53 @@ export class InventoryComponent implements OnInit, OnDestroy {
     const msg =
       `⚠️ ${item.riskLevel.toUpperCase()} stock alert: ${item.name} ` +
       `has ${item.stock} units left (${api.daysOfStock?.toFixed?.(1) ?? '?'}d coverage). ` +
-      (api.riskRationale ? api.riskRationale + ' ' : '') +
+      (api.riskRationale ? `${api.riskRationale} ` : '') +
       (api.formulaOrderQty ? `Suggested order: ${api.formulaOrderQty} units. ` : '') +
       `What should I do?`;
+
     try {
       sessionStorage.setItem('chat_prefill', JSON.stringify({
-        text: msg, mode: 'inventory', sku: item.sku, name: item.name,
+        text: msg,
+        mode: 'inventory',
+        sku: item.sku,
+        name: item.name,
       }));
-    } catch { /* private browsing */ }
+    } catch {
+      // ignore private browsing/sessionStorage errors
+    }
+
     window.location.href = '/chat';
   }
 
   askChatFromAlert(alert: InventoryAlert, e: Event): void {
     e.stopPropagation();
-    const item = this.items().find(i => i.sku === alert.sku);
-    if (item) { this.askChat(item, e); return; }
+
+    const item = this.items().find((i: InventoryItem) => i.sku === alert.sku);
+    if (item) {
+      this.askChat(item, e);
+      return;
+    }
+
     const msg =
       `⚠️ ${(alert.urgency ?? 'HIGH').toUpperCase()} inventory alert for ${alert.sku}: ` +
       `${alert.message} ` +
       (alert.action ? `AI recommendation: ${alert.action}` : '');
+
     try {
       sessionStorage.setItem('chat_prefill', JSON.stringify({
-        text: msg, mode: 'inventory', sku: alert.sku,
+        text: msg,
+        mode: 'inventory',
+        sku: alert.sku,
       }));
-    } catch { /* private browsing */ }
+    } catch {
+      // ignore private browsing/sessionStorage errors
+    }
+
     window.location.href = '/chat';
   }
 
-  trackById(_: number, item: { id: string }): string { return item.id; }
+  trackById(_: number, item: { id: string }): string {
+    return item.id;
+  }
+
 }

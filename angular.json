@@ -27,7 +27,13 @@
             "assets": [
               {
                 "glob": "**/*",
-                "input": "public"
+                "input": "src/assets",
+                "output": "/assets"
+              },
+              {
+                "glob": "**/*.svg",
+                "input": "src/app/features/auth/login/assets",
+                "output": "/assets"
               }
             ],
             "styles": [

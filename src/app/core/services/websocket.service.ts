@@ -1,6 +1,8 @@
 import { isPlatformBrowser } from '@angular/common';
-import { Injectable, signal, inject } from '@angular/core';
+import { Injectable, signal, computed, inject } from '@angular/core';
 import { PLATFORM_ID } from '@angular/core';
+
+// ── Interfaces ────────────────────────────────────────────────────────────────
 
 export interface AnalystNodes {
   receive_pos:    { status: string; transactions?: number };
@@ -25,12 +27,40 @@ export interface ContextSignal {
   value: number;
 }
 
+export interface CoachingCard {
+  id:       string;
+  advisor:  string;
+  initials: string;
+  gap:      number;
+  urgency:  'HIGH' | 'MEDIUM' | 'LOW';
+  context:  string;
+  advice:   string;
+  action:   string;
+  produit:  string;
+  status:   'pending' | 'approved' | 'done';
+  priority: number;
+}
+
+export interface LiveAdvisor {
+  id:         string;
+  name:       string;
+  revenue:    number;
+  target:     number;
+  attainment: number;
+  nb_ventes:  number;
+  status:     'Top' | 'OK' | 'Urgent';
+  trend:      'up' | 'down';
+  rank:       number;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+
 @Injectable({ providedIn: 'root' })
 export class WebSocketService {
 
-  // ── Core signals ──────────────────────────────────────
+  // ── Core ──────────────────────────────────────────────────────────────────
   liveMetrics   = signal<any>(null);
-  liveAdvisors  = signal<any[]>([]);
+  liveAdvisors  = signal<LiveAdvisor[]>([]);
   liveCoach     = signal<any>(null);
   liveInventory = signal<any>(null);
   connected     = signal(false);
@@ -38,7 +68,7 @@ export class WebSocketService {
   // Emits true while the backend pipeline is running (inventory_loading received)
   inventoryLoading = signal(false);
 
-  // ── Agent Analyste ────────────────────────────────────
+  // ── Agent Analyste ─────────────────────────────────────────────────────────
   analystNodes   = signal<AnalystNodes | null>(null);
   urgencyLevel   = signal<'HIGH' | 'MEDIUM' | 'LOW'>('LOW');
   urgencyScore   = signal<number>(0);
@@ -48,7 +78,7 @@ export class WebSocketService {
   forecastEod    = signal<number>(0);
   lastUpdated    = signal<string>('');
 
-  // ── Agent Stratège ────────────────────────────────────
+  // ── Agent Stratège ─────────────────────────────────────────────────────────
   strategie      = signal<string>('');
   strateActions  = signal<StrategeAction[]>([]);
   causeRacine    = signal<string>('');
@@ -56,13 +86,55 @@ export class WebSocketService {
   messageManager = signal<string>('');
   contextSignals = signal<ContextSignal[]>([]);
   contextHeatmap = signal<any>({});
+
+  // ── Météo ──────────────────────────────────────────────────────────────────
   weatherLabel   = signal<string>('');
   weatherIcon    = signal<string>('');
   weatherEffect  = signal<number>(0);
+  weatherTemp    = signal<string>('');
+
+  // ── Fériés ─────────────────────────────────────────────────────────────────
   isHolidayToday = signal<boolean>(false);
   nextHoliday    = signal<string>('');
 
-  // ── Private state ─────────────────────────────────────
+  // ── Agent Coach (NOUVEAU) ─────────────────────────────────────────────────
+  coachingCards  = signal<CoachingCard[]>([]);
+  ragUsed        = signal<boolean>(false);
+  nbRagScripts   = signal<number>(0);
+
+  // ── Computed ───────────────────────────────────────────────────────────────
+  urgencyColor = computed(() => {
+    const u = this.urgencyLevel();
+    return u === 'HIGH' ? '#E74C3C' : u === 'MEDIUM' ? '#F9A825' : '#00B894';
+  });
+
+  urgencyBg = computed(() => {
+    const u = this.urgencyLevel();
+    return u === 'HIGH' ? '#FDEDEC' : u === 'MEDIUM' ? '#FFF8E1' : '#E0FAF4';
+  });
+
+  weatherFull = computed(() =>
+    `${this.weatherIcon()} ${this.weatherLabel()} ${this.weatherTemp()}`.trim()
+  );
+
+  topAdvisor = computed(() => {
+    const advisors = this.liveAdvisors();
+    return advisors.length > 0 ? advisors[0] : null;
+  });
+
+  urgentAdvisors = computed(() =>
+    this.liveAdvisors().filter(a => a.status === 'Urgent')
+  );
+
+  pendingCards = computed(() =>
+    this.coachingCards().filter(c => c.status === 'pending')
+  );
+
+  highPriorityCards = computed(() =>
+    this.coachingCards().filter(c => c.urgency === 'HIGH')
+  );
+
+  // ── Private ────────────────────────────────────────────────────────────────
   private storeWs:                 WebSocket | null = null;
   private advisorWs:               WebSocket | null = null;
   private inventoryWs:             WebSocket | null = null;
@@ -88,7 +160,9 @@ export class WebSocketService {
     this.isBrowser   = isPlatformBrowser(platformId);
   }
 
-  // ── Store WebSocket ───────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════════════
+  // Store WebSocket
+  // ══════════════════════════════════════════════════════════════════════════
 
   connectStore(storeId: string) {
     if (!this.isBrowser) return;
@@ -98,10 +172,7 @@ export class WebSocketService {
       (this.storeWs.readyState === WebSocket.OPEN ||
        this.storeWs.readyState === WebSocket.CONNECTING) &&
       this.storeId === storeId
-    ) {
-      console.log('[WS] Déjà connecté →', storeId, 'skip');
-      return;
-    }
+    ) return;
 
     if (this._isConnecting) {
       console.log('[WS] Connexion en cours, skip');
@@ -120,10 +191,8 @@ export class WebSocketService {
       this.storeWs.onmessage = null;
       this.storeWs.onerror   = null;
       this.storeWs.onclose   = null;
-      if (
-        this.storeWs.readyState === WebSocket.OPEN ||
-        this.storeWs.readyState === WebSocket.CONNECTING
-      ) {
+      if (this.storeWs.readyState === WebSocket.OPEN ||
+          this.storeWs.readyState === WebSocket.CONNECTING) {
         this.storeWs.close(1000, 'new-connection');
       }
       this.storeWs = null;
@@ -144,11 +213,7 @@ export class WebSocketService {
 
       const timeout = setTimeout(() => {
         if (ws.readyState !== WebSocket.OPEN) {
-          console.warn('[WS] Timeout connexion → retry dans 30s');
-          ws.onopen    = null;
-          ws.onmessage = null;
-          ws.onerror   = null;
-          ws.onclose   = null;
+          ws.onopen = ws.onmessage = ws.onerror = ws.onclose = null;
           ws.close();
           this.storeWs       = null;
           this._isConnecting = false;
@@ -182,7 +247,6 @@ export class WebSocketService {
         clearTimeout(timeout);
         this._isConnecting = false;
         this.connected.set(false);
-        console.warn('[WS] Erreur connexion');
       };
 
       ws.onclose = (event) => {
@@ -199,18 +263,12 @@ export class WebSocketService {
           ? this.RECONNECT_DELAY_BLOCK
           : this.RECONNECT_DELAY_NORMAL;
 
-        console.log(
-          `[WS] Déconnecté (code=${event.code}) → retry dans ${delay / 1000}s`
-        );
-        this.reconnectTimer = setTimeout(
-          () => this._doConnect(storeId),
-          delay
-        );
+        console.log(`[WS] Déconnecté (code=${event.code}) → retry dans ${delay/1000}s`);
+        this.reconnectTimer = setTimeout(() => this._doConnect(storeId), delay);
       };
 
     } catch (e) {
       this._isConnecting = false;
-      console.warn('[WS] Connexion échouée', e);
       this.connected.set(false);
       this.reconnectTimer = setTimeout(
         () => this._doConnect(storeId),
@@ -219,7 +277,13 @@ export class WebSocketService {
     }
   }
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // Handler principal metrics_update
+  // ══════════════════════════════════════════════════════════════════════════
+
   private _handleMetricsUpdate(data: any) {
+
+    // ── liveMetrics complet ────────────────────────────────────────────────
     this.liveMetrics.set({
       ca_today:               data.ca_today,
       ca_target:              data.ca_target,
@@ -230,47 +294,90 @@ export class WebSocketService {
       niveau_urgence:         data.niveau_urgence,
       ecart_objectif:         data.ecart_objectif,
       forecast_eod:           data.forecast_eod,
-      analyst_summary:        data.analyst_summary,
-      analyst_nodes:          data.analyst_nodes,
-      advisors:               data.advisors              ?? [],
-      strategie:              data.strategie,
-      strategie_actions:      data.strategie_actions     ?? [],
-      cause_racine:           data.cause_racine,
-      focus_produits:         data.focus_produits        ?? [],
-      message_manager:        data.message_manager,
-      context_signals:        data.context_signals       ?? [],
-      context_heatmap:        data.context_heatmap       ?? {},
-      product_mix:            data.product_mix           ?? [],
-      hourly_performance:     data.hourly_performance    ?? [],
-      risk_hours:             data.risk_hours            ?? [],
+      forecast_ci_low:        data.forecast_ci_low,
+      forecast_ci_high:       data.forecast_ci_high,
+      forecast_mape:          data.forecast_mape,
+      last_cycle_id:          data.last_cycle_id,
+      risk_hours:             data.risk_hours             ?? [],
+      context_signals:        data.context_signals        ?? [],
+      advisor_priorities:     data.advisor_priorities     ?? [],
+      product_mix:            data.product_mix            ?? [],
+      hourly_performance:     data.hourly_performance     ?? [],
+      ca_yesterday_same_hour: data.ca_yesterday_same_hour,
+      analyst_summary:        data.analyst_summary        ?? '',
+      advisors:               data.advisors               ?? [],
+      strategie:              data.strategie              ?? '',
+      strategie_actions:      data.strategie_actions      ?? [],
+      cause_racine:           data.cause_racine           ?? '',
+      focus_produits:         data.focus_produits         ?? [],
+      message_manager:        data.message_manager        ?? '',
+      coaching_cards:         data.coaching_cards         ?? [],
+      context_heatmap:        data.context_heatmap        ?? {},
+      // Nouveaux champs Agent Coach + RAG
+      rag_used:               data.rag_used               ?? false,
+      nb_rag_scripts:         data.nb_rag_scripts         ?? 0,
+      timestamp:              data.timestamp,
     });
 
-    if (data.analyst_nodes)          this.analystNodes.set(data.analyst_nodes);
-    if (data.niveau_urgence)         this.urgencyLevel.set(data.niveau_urgence);
-    if (data.urgency_score != null)  this.urgencyScore.set(data.urgency_score);
-    if (data.ecart_objectif != null) this.gapPct.set(data.ecart_objectif);
-    if (data.gap_amount != null)     this.gapAmount.set(data.gap_amount);
-    if (data.analyst_summary)        this.analystSummary.set(data.analyst_summary);
-    if (data.forecast_eod != null)   this.forecastEod.set(data.forecast_eod);
-    if (data.timestamp)              this.lastUpdated.set(data.timestamp);
+    // ── Advisors ───────────────────────────────────────────────────────────
+    if (data.advisors?.length) {
+      this.liveAdvisors.set(data.advisors);
+    }
 
-    if (data.strategie)               this.strategie.set(data.strategie);
+    // ── Coaching Cards (Agent Coach) ───────────────────────────────────────
+    if (data.coaching_cards?.length) {
+      this.coachingCards.set(data.coaching_cards);
+    }
+
+    // ── RAG ───────────────────────────────────────────────────────────────
+    this.ragUsed.set(data.rag_used       ?? false);
+    this.nbRagScripts.set(data.nb_rag_scripts ?? 0);
+
+    // ── Analyste ───────────────────────────────────────────────────────────
+    this.urgencyLevel.set(data.niveau_urgence    ?? 'LOW');
+    this.urgencyScore.set(data.urgency_score     ?? 0);
+    this.gapPct.set(data.ecart_objectif          ?? 0);
+    this.gapAmount.set(data.gap_amount           ?? 0);
+    this.forecastEod.set(data.forecast_eod       ?? 0);
+    this.analystSummary.set(data.analyst_summary ?? '');
+
+    if (data.timestamp) {
+      try {
+        this.lastUpdated.set(
+          new Date(data.timestamp).toLocaleTimeString('fr-FR', {
+            hour: '2-digit', minute: '2-digit',
+          })
+        );
+      } catch { this.lastUpdated.set('--:--'); }
+    }
+
+    if (data.analyst_nodes) {
+      this.analystNodes.set(data.analyst_nodes);
+    }
+
+    // ── Stratège ───────────────────────────────────────────────────────────
+    if (data.strategie)                 this.strategie.set(data.strategie);
     if (data.strategie_actions?.length) this.strateActions.set(data.strategie_actions);
-    if (data.cause_racine)            this.causeRacine.set(data.cause_racine);
-    if (data.focus_produits?.length)  this.focusProduits.set(data.focus_produits);
-    if (data.message_manager)         this.messageManager.set(data.message_manager);
-    if (data.context_signals?.length) this.contextSignals.set(data.context_signals);
+    if (data.cause_racine)              this.causeRacine.set(data.cause_racine);
+    if (data.focus_produits?.length)    this.focusProduits.set(data.focus_produits);
+    if (data.message_manager)           this.messageManager.set(data.message_manager);
+    if (data.context_signals?.length)   this.contextSignals.set(data.context_signals);
     if (data.context_heatmap && Object.keys(data.context_heatmap).length) {
       this.contextHeatmap.set(data.context_heatmap);
     }
 
+    // ── Météo ──────────────────────────────────────────────────────────────
     const ctx = data.store_context ?? {};
     if (ctx.weather) {
       const parts = ctx.weather.split(' ');
-      this.weatherIcon.set(parts[0] ?? '');
+      this.weatherIcon.set(parts[0]  ?? '');
       this.weatherLabel.set(parts.slice(1).join(' ') ?? '');
     }
+    if (ctx.temperature) {
+      this.weatherTemp.set(ctx.temperature);
+    }
 
+    // ── Fériés ─────────────────────────────────────────────────────────────
     const holidaySignal = (data.context_signals ?? []).find(
       (s: any) => s.type === 'holiday'
     );
@@ -288,15 +395,19 @@ export class WebSocketService {
       `urgence=${data.niveau_urgence} | ` +
       `gap=${data.ecart_objectif}% | ` +
       `CA=${(data.ca_today ?? 0).toLocaleString()} TND | ` +
-      `strategie=${data.strategie ? 'OK' : 'none'}`
+      `RAG=${data.rag_used ? '✓' : '✗'}(${data.nb_rag_scripts ?? 0}) | ` +
+      `cards=${data.coaching_cards?.length ?? 0}`
     );
   }
 
-  // ── Advisor WebSocket ─────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════════════
+  // Advisor WebSocket
+  // ══════════════════════════════════════════════════════════════════════════
 
   connectAdvisor(advisorId: string) {
     if (!this.isBrowser) return;
-    if (this.advisorId === advisorId && this.advisorWs?.readyState === WebSocket.OPEN) return;
+    if (this.advisorId === advisorId &&
+        this.advisorWs?.readyState === WebSocket.OPEN) return;
 
     this.advisorId = advisorId;
 
@@ -315,23 +426,20 @@ export class WebSocketService {
         try {
           const data = JSON.parse(event.data);
           if (data.type === 'coach_update') this.liveCoach.set(data);
-        } catch (e) {
-          console.warn('[WS] Advisor parse error', e);
-        }
+        } catch { }
       };
 
       ws.onclose = () => {
         setTimeout(() => this.connectAdvisor(this.advisorId), 30000);
       };
-
       ws.onerror = () => {};
 
-    } catch (e) {
-      console.warn('[WS] Advisor connexion échouée', e);
-    }
+    } catch { }
   }
 
-  // ── Inventory WebSocket ───────────────────────────────
+  // ══════════════════════════════════════════════════════════════════════════
+  // Inventory WebSocket
+  // ══════════════════════════════════════════════════════════════════════════
 
   connectInventory(storeId: string, objective = 'balanced') {
     if (!this.isBrowser) return;
@@ -349,7 +457,6 @@ export class WebSocketService {
     }
 
     if (this.inventoryWs) {
-      console.log('[WS] Closing existing inventory WebSocket');
       const old = this.inventoryWs;
       this.inventoryWs = null;
       old.close();
@@ -360,14 +467,10 @@ export class WebSocketService {
 
     try {
       const url = `ws://localhost:8000/api/inventory/ws/${storeId}?business_objective=${objective}`;
-      console.log('[WS] Connecting to inventory WebSocket:', url);
-
-      const ws = new WebSocket(url);
+      const ws  = new WebSocket(url);
       this.inventoryWs = ws;
 
-      ws.onopen = () => {
-        console.log('[WS] ✅ Inventory WebSocket OPENED for:', storeId);
-      };
+      ws.onopen = () => console.log('[WS] ✅ Inventory WS ouvert:', storeId);
 
       ws.onmessage = (event) => {
         try {
@@ -450,13 +553,8 @@ export class WebSocketService {
         }
       };
 
-      ws.onerror = (error) => {
-        console.error('[WS] ❌ Inventory WebSocket error:', error);
-      };
-
-      ws.onclose = (event) => {
-        console.log('[WS] 🔌 Inventory closed, code:', event.code);
-
+      ws.onerror  = () => {};
+      ws.onclose  = (event) => {
         if (this.inventoryWs !== ws && this.inventoryWs !== null) return;
         if (this.inventoryWs === null) return;
 
@@ -466,37 +564,28 @@ export class WebSocketService {
         );
       };
 
-    } catch (e) {
-      console.error('[WS] Inventory connection failed:', e);
-    }
+    } catch { }
   }
 
-  // ── Disconnect ────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════════════
+  // Disconnect
+  // ══════════════════════════════════════════════════════════════════════════
 
   disconnect() {
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
-    }
-    if (this.inventoryReconnectTimer) {
-      clearTimeout(this.inventoryReconnectTimer);
-      this.inventoryReconnectTimer = null;
-    }
+    if (this.reconnectTimer) { clearTimeout(this.reconnectTimer); this.reconnectTimer = null; }
+    if (this.inventoryReconnectTimer) { clearTimeout(this.inventoryReconnectTimer); this.inventoryReconnectTimer = null; }
 
     this._isConnecting = false;
 
     if (this.storeWs) {
-      this.storeWs.onopen    = null;
-      this.storeWs.onmessage = null;
-      this.storeWs.onerror   = null;
-      this.storeWs.onclose   = null;
+      this.storeWs.onopen = this.storeWs.onmessage =
+      this.storeWs.onerror = this.storeWs.onclose = null;
       this.storeWs.close(1000, 'disconnect');
       this.storeWs = null;
     }
 
     if (this.advisorWs) {
-      this.advisorWs.onclose = null;
-      this.advisorWs.onerror = null;
+      this.advisorWs.onclose = this.advisorWs.onerror = null;
       this.advisorWs.close(1000, 'disconnect');
       this.advisorWs = null;
     }

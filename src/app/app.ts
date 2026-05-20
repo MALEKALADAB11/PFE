@@ -1,21 +1,25 @@
-import { Component } from '@angular/core';
-import { RouterOutlet } from '@angular/router';
+// 
+import { Component, inject } from '@angular/core';
+import { Router, RouterOutlet } from '@angular/router';
 import { NavbarComponent } from './layout/navbar/navbar';
 import { SidebarComponent } from './layout/sidebar/sidebar';
-
 
 @Component({
   selector: 'app-root',
   standalone: true,
   imports: [RouterOutlet, NavbarComponent, SidebarComponent],
   template: `
-    <app-navbar />
-    <div class="app-body">
-      <app-sidebar />
-      <main class="app-main">
-        <router-outlet />
-      </main>
-    </div>
+    @if (!isLoginPage()) {
+      <app-navbar />
+      <div class="app-body">
+        <app-sidebar />
+        <main class="app-main">
+          <router-outlet />
+        </main>
+      </div>
+    } @else {
+      <router-outlet />
+    }
   `,
   styles: [`
     .app-body {
@@ -31,6 +35,12 @@ import { SidebarComponent } from './layout/sidebar/sidebar';
     }
   `]
 })
-export class AppComponent {}
+export class AppComponent {
+  private router = inject(Router);
+
+  isLoginPage(): boolean {
+    return this.router.url.startsWith('/login');
+  }
+}
 
 export { AppComponent as App };

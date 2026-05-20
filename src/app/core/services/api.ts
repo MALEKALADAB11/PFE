@@ -1,111 +1,224 @@
-import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { Observable } from 'rxjs';
-import { timeout } from 'rxjs/operators';
+import { Injectable, inject } from '@angular/core';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { Observable, of } from 'rxjs';
+import { catchError } from 'rxjs/operators';
+
+const API = 'http://localhost:8000';
 
 @Injectable({ providedIn: 'root' })
 export class ApiService {
-  private base            = 'http://localhost:8000/api/v1';
-  private inventoryBase   = 'http://localhost:8000/api/inventory';
-  private requestTimeout  = 10000;
+  private http = inject(HttpClient);
 
-  constructor(private http: HttpClient) {}
+  // ── Auth headers ──────────────────────────────────────────────────────────
+  private _headers(): HttpHeaders {
+    const token = sessionStorage.getItem('ooredoo_token');
+    return token
+      ? new HttpHeaders({ Authorization: `Bearer ${token}` })
+      : new HttpHeaders();
+  }
 
-  // ── Sales endpoints ───────────────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════════════
+  // Store / Dashboard
+  // ══════════════════════════════════════════════════════════════════════════
 
   getStoreMetrics(storeId: string): Observable<any> {
-    return this.http.get(`${this.base}/stores/${storeId}/metrics`)
-      .pipe(timeout(this.requestTimeout));
+    return this.http
+      .get(`${API}/api/v1/stores/${storeId}/metrics`, { headers: this._headers() })
+      .pipe(catchError(() => of(null)));
   }
 
   getAdvisors(storeId: string): Observable<any> {
-    return this.http.get(`${this.base}/stores/${storeId}/advisors`)
-      .pipe(timeout(this.requestTimeout));
-  }
-
-  getContext(storeId: string): Observable<any> {
-    return this.http.get(`${this.base}/stores/${storeId}/context`)
-      .pipe(timeout(this.requestTimeout));
-  }
-
-  getLiveAnalysis(storeId: string): Observable<any> {
-    return this.http.get(`${this.base}/stores/${storeId}/live-analysis`)
-      .pipe(timeout(this.requestTimeout));
+    return this.http
+      .get(`${API}/api/v1/stores/${storeId}/advisors`, { headers: this._headers() })
+      .pipe(catchError(() => of({ advisors: [] })));
   }
 
   getForecastEOD(storeId: string): Observable<any> {
-    return this.http.get(`${this.base}/forecast/eod/${storeId}`)
-      .pipe(timeout(this.requestTimeout));
+    return this.http
+      .get(`${API}/api/v1/forecast/eod/${storeId}`, { headers: this._headers() })
+      .pipe(catchError(() => of(null)));
   }
 
-  getForecastHourly(storeId: string): Observable<any> {
-    return this.http.get(`${this.base}/forecast/hourly/${storeId}`)
-      .pipe(timeout(this.requestTimeout));
+  getLiveAnalysis(storeId: string): Observable<any> {
+    return this.http
+      .get(`${API}/api/v1/stores/${storeId}/live-analysis`, { headers: this._headers() })
+      .pipe(catchError(() => of(null)));
   }
 
   simulatePOS(storeId: string): Observable<any> {
-    return this.http.post(`${this.base}/stores/${storeId}/simulate`, {})
-      .pipe(timeout(this.requestTimeout));
-  }
-
-  resetDay(storeId: string): Observable<any> {
-    return this.http.post(`${this.base}/stores/${storeId}/reset`, {})
-      .pipe(timeout(this.requestTimeout));
+    return this.http
+      .post(`${API}/api/v1/stores/${storeId}/simulate-pos`, {}, { headers: this._headers() })
+      .pipe(catchError(() => of(null)));
   }
 
   triggerCycle(storeId: string): Observable<any> {
-    return this.http.post(`${this.base}/cycle/trigger?store_id=${storeId}`, {})
-      .pipe(timeout(this.requestTimeout));
+    return this.http
+      .post(`${API}/api/v1/cycle/trigger`, { store_id: storeId }, { headers: this._headers() })
+      .pipe(catchError(() => of(null)));
   }
 
-  getCycleStatus(): Observable<any> {
-    return this.http.get(`${this.base}/cycle/status`)
-      .pipe(timeout(this.requestTimeout));
-  }
+  // ══════════════════════════════════════════════════════════════════════════
+  // Agent Coach + RAG
+  // ══════════════════════════════════════════════════════════════════════════
 
-  coachChat(payload: {
+  /**
+   * Envoie un message au Coach Agent LangGraph.
+   * Utilise le contexte live (gap, urgence, stratège, météo).
+   */
+  sendCoachMessage(payload: {
     message:      string;
     advisor_name: string;
     store_id:     string;
-    context:      any;
-  }) {
-    return this.http.post<{
-      reply:     string;
-      source:    string;
-      timestamp: string;
-    }>(`${this.base}/coach/chat`, payload)
-      .pipe(timeout(this.requestTimeout));
+    context:      {
+      current_revenue?:   number;
+      daily_target?:      number;
+      gap_pct?:           number;
+      urgency?:           string;
+      analyst_summary?:   string;
+      strategie?:         string;
+      strategie_actions?: any[];
+      cause_racine?:      string;
+      focus_produits?:    string[];
+      weather?:           string;
+      forecast_eod?:      number;
+      nb_ventes?:         number;
+    };
+  }): Observable<{
+    reply:       string;
+    source:      string;
+    rag_used:    boolean;
+    confidence?: number;
+    nb_scripts?: number;
+    timestamp:   string;
+  }> {
+    return this.http
+      .post<any>(`${API}/api/v1/coach/chat`, payload, { headers: this._headers() })
+      .pipe(catchError(() => of({
+        reply:     'Coach temporairement indisponible. Réessayez dans un instant.',
+        source:    'fallback',
+        rag_used:  false,
+        timestamp: new Date().toISOString(),
+      })));
   }
 
-  // ── Inventory endpoints (données réelles stock_centre.xls) ───────────────
-
   /**
-   * Récupère le snapshot inventaire d'un store depuis le backend.
-   * Utilise les vraies données stock_centre.xls importées.
-   * storeId doit être le CD_DIST réel: 'STORE-001' pour I63.
+   * Historique des interactions d'un conseiller.
    */
-  getInventorySnapshot(
-    storeId: string,
-    objective: 'balanced' | 'aggressive' | 'conservative' = 'balanced' 
-  ): Observable<any> {
-    return this.http.get(
-      `${this.inventoryBase}/store/${storeId}?business_objective=${objective}`
-    ).pipe(timeout(this.requestTimeout));
+  getCoachHistory(advisorName: string, limit = 10): Observable<any> {
+    return this.http
+      .get(`${API}/api/v1/coach/history/${encodeURIComponent(advisorName)}?limit=${limit}`,
+           { headers: this._headers() })
+      .pipe(catchError(() => of({ history: [], total: 0 })));
   }
 
   /**
-   * Récupère les alertes stock critiques pour un store.
+   * Statistiques du Coach Agent.
    */
+  getCoachStats(): Observable<any> {
+    return this.http
+      .get(`${API}/api/v1/coach/stats`, { headers: this._headers() })
+      .pipe(catchError(() => of(null)));
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Monitoring Agent
+  // ══════════════════════════════════════════════════════════════════════════
+
+  getMonitoringHealth(): Observable<any> {
+    return this.http
+      .get(`${API}/api/monitoring/health`, { headers: this._headers() })
+      .pipe(catchError(() => of(null)));
+  }
+
+  getMonitoringCycles(limit = 20, storeId = 'I63'): Observable<any> {
+    return this.http
+      .get(`${API}/api/monitoring/cycles?limit=${limit}&store_id=${storeId}`,
+           { headers: this._headers() })
+      .pipe(catchError(() => of({ cycles: [] })));
+  }
+
+  getMonitoringErrors(limit = 50, storeId = 'I63'): Observable<any> {
+    return this.http
+      .get(`${API}/api/monitoring/errors?limit=${limit}&store_id=${storeId}`,
+           { headers: this._headers() })
+      .pipe(catchError(() => of({ errors: [] })));
+  }
+
+  getMonitoringStats(storeId = 'I63', hours = 24): Observable<any> {
+    return this.http
+      .get(`${API}/api/monitoring/stats?store_id=${storeId}&hours=${hours}`,
+           { headers: this._headers() })
+      .pipe(catchError(() => of(null)));
+  }
+
+  getMonitoringLogs(params: {
+    limit?:   number;
+    storeId?: string;
+    agent?:   string;
+    status?:  string;
+  } = {}): Observable<any> {
+    const { limit = 100, storeId = 'I63', agent = '', status = '' } = params;
+    let url = `${API}/api/monitoring/logs?limit=${limit}&store_id=${storeId}`;
+    if (agent)  url += `&agent=${agent}`;
+    if (status) url += `&status=${status}`;
+    return this.http
+      .get(url, { headers: this._headers() })
+      .pipe(catchError(() => of({ logs: [] })));
+  }
+
+  getRagStats(storeId = 'I63', limit = 50): Observable<any> {
+    return this.http
+      .get(`${API}/api/monitoring/rag-stats?store_id=${storeId}&limit=${limit}`,
+           { headers: this._headers() })
+      .pipe(catchError(() => of(null)));
+  }
+
+  resolveError(errorId: number): Observable<any> {
+    return this.http
+      .post(`${API}/api/monitoring/errors/${errorId}/resolve`, {},
+            { headers: this._headers() })
+      .pipe(catchError(() => of(null)));
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Inventory
+  // ══════════════════════════════════════════════════════════════════════════
+
+  getInventory(storeId: string): Observable<any> {
+    return this.http
+      .get(`${API}/api/inventory/store/${storeId}`, { headers: this._headers() })
+      .pipe(catchError(() => of(null)));
+  }
+
   getInventoryAlerts(storeId: string): Observable<any> {
-    return this.http.get(`${this.inventoryBase}/alerts/${storeId}`)
-      .pipe(timeout(this.requestTimeout));
+    return this.http
+      .get(`${API}/api/inventory/alerts/${storeId}`, { headers: this._headers() })
+      .pipe(catchError(() => of({ alerts: [] })));
   }
 
-  /**
-   * Récupère le forecast de demande par SKU (TimesFM).
-   */
-  getInventoryForecast(storeId: string): Observable<any> {
-    return this.http.get(`${this.inventoryBase}/forecast/${storeId}`)
-      .pipe(timeout(this.requestTimeout));
+  // ══════════════════════════════════════════════════════════════════════════
+  // Auth
+  // ══════════════════════════════════════════════════════════════════════════
+
+  getAuthUsers(): Observable<any> {
+    return this.http
+      .get(`${API}/api/auth/users`, { headers: this._headers() })
+      .pipe(catchError(() => of({ users: [] })));
+  }
+
+  cleanSessions(): Observable<any> {
+    return this.http
+      .get(`${API}/api/auth/sessions/clean`, { headers: this._headers() })
+      .pipe(catchError(() => of(null)));
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Health
+  // ══════════════════════════════════════════════════════════════════════════
+
+  getHealth(): Observable<any> {
+    return this.http
+      .get(`${API}/health`)
+      .pipe(catchError(() => of({ status: 'offline' })));
   }
 }

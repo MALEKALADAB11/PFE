@@ -6,7 +6,7 @@ import {
 import { CommonModule }     from '@angular/common';
 import { HttpClient }       from '@angular/common/http';
 import { Subject }          from 'rxjs';
-import { takeUntil }        from 'rxjs/operators';
+import { takeUntil, timeout }        from 'rxjs/operators';
 
 import { MockDataService }  from '../../core/services/mock-data';
 import { WebSocketService } from '../../core/services/websocket.service';
@@ -416,7 +416,8 @@ export class ConseillerComponent implements AfterViewChecked, OnInit, OnDestroy 
         forecast_eod:      metrics?.forecast_eod ?? 0,
         nb_ventes:         adv?.nbVentes ?? 0,
       },
-    }).subscribe({
+    }).pipe(timeout(25000))
+    .subscribe({
       next: (resp) => {
         this._removeTyping();
         this.messages.update(list => [...list, {

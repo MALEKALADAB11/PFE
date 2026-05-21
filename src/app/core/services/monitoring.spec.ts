@@ -17,3 +17,4 @@ describe('Monitoring', () => {
       expect(service).toBeTruthy();
     });
   });
+});

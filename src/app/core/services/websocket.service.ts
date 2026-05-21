@@ -65,6 +65,9 @@ export class WebSocketService {
   liveInventory = signal<any>(null);
   connected     = signal(false);
 
+  // Emits true while the backend pipeline is running (inventory_loading received)
+  inventoryLoading = signal(false);
+
   // ── Agent Analyste ─────────────────────────────────────────────────────────
   analystNodes   = signal<AnalystNodes | null>(null);
   urgencyLevel   = signal<'HIGH' | 'MEDIUM' | 'LOW'>('LOW');
@@ -144,6 +147,10 @@ export class WebSocketService {
   private isBrowser                = false;
   private _isConnecting            = false;
 
+  // How many real items we've received from the backend.
+  // stock_delta patches are only applied AFTER a full snapshot has been received.
+  private _inventoryItemCount      = 0;
+
   private readonly RECONNECT_DELAY_NORMAL = 30000;
   private readonly RECONNECT_DELAY_BLOCK  = 60000;
   private readonly CONNECT_TIMEOUT        = 15000;
@@ -167,7 +174,10 @@ export class WebSocketService {
       this.storeId === storeId
     ) return;
 
-    if (this._isConnecting) return;
+    if (this._isConnecting) {
+      console.log('[WS] Connexion en cours, skip');
+      return;
+    }
 
     this.storeId = storeId;
 
@@ -244,7 +254,10 @@ export class WebSocketService {
         this._isConnecting = false;
         this.connected.set(false);
 
-        if (event.code === 1000) return;
+        if (event.code === 1000) {
+          console.log('[WS] Fermeture volontaire');
+          return;
+        }
 
         const delay = event.code === 1008
           ? this.RECONNECT_DELAY_BLOCK
@@ -431,6 +444,13 @@ export class WebSocketService {
   connectInventory(storeId: string, objective = 'balanced') {
     if (!this.isBrowser) return;
 
+    // If reconnecting to a different store, reset the item count so
+    // stock_delta patches don't fire until the new snapshot arrives.
+    if (storeId !== this.inventoryStore) {
+      this._inventoryItemCount = 0;
+      this.liveInventory.set(null);
+    }
+
     if (this.inventoryReconnectTimer) {
       clearTimeout(this.inventoryReconnectTimer);
       this.inventoryReconnectTimer = null;
@@ -455,40 +475,89 @@ export class WebSocketService {
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
+
+          // ── heartbeat ────────────────────────────────────────────────────
           if (data.type === 'heartbeat') return;
 
-          if (data.type === 'stock_delta') {
-            const current = this.liveInventory();
-            if (current?.items?.length) {
-              const patchedItems = current.items.map((item: any) =>
-                item.sku === data.sku ? {
-                  ...item,
-                  stock:         data.new_stock,
-                  daysOfStock:   data.days_of_stock,
-                  coverageRatio: data.coverage_ratio,
-                  riskLevel:     data.risk_level,
-                  riskScore: (
-                    data.risk_level === 'critical' ? 0.90 :
-                    data.risk_level === 'high'     ? 0.72 :
-                    data.risk_level === 'medium'   ? 0.45 : 0.10
-                  ),
-                } : item
-              );
-              this.liveInventory.set({ ...current, type: 'inventory_update', items: patchedItems });
-            }
+          // ── pipeline still running — don't touch liveInventory ──────────
+          if (data.type === 'inventory_loading') {
+            console.log('[WS] ⏳ Backend pipeline running for', storeId, '— HTTP polling will pick it up');
+            this.inventoryLoading.set(true);
             return;
           }
 
+          // ── stock_delta — ONLY apply if we already have a real snapshot ──
+          // If _inventoryItemCount is 0 the snapshot hasn't arrived yet.
+          // Applying the patch now would set liveInventory with 7 mock items
+          // (from current = null fallback) and poison the first-load path.
+          if (data.type === 'stock_delta') {
+            console.log('[WS] ⚡ stock_delta:', data.sku, '→', data.new_stock, 'units | risk:', data.risk_level);
+
+            const current = this.liveInventory();
+            // Guard: only patch if we have a real snapshot (> 7 items)
+            if (!current?.items?.length || current.items.length <= 7) {
+              console.log('[WS] stock_delta skipped — no real snapshot yet');
+              return;
+            }
+
+            const patchedItems = current.items.map((item: any) =>
+              item.sku === data.sku
+                ? {
+                    ...item,
+                    stock:         data.new_stock,
+                    daysOfStock:   data.days_of_stock,
+                    coverageRatio: data.coverage_ratio,
+                    riskLevel:     data.risk_level,
+                    riskRationale: data.risk_rationale,
+                    riskScore: (
+                      data.risk_level === 'critical' ? 0.90 :
+                      data.risk_level === 'high'     ? 0.72 :
+                      data.risk_level === 'medium'   ? 0.45 : 0.10
+                    ),
+                  }
+                : item
+            );
+
+            const patchedAlerts = patchedItems
+              .filter((i: any) => i.riskLevel === 'critical' || i.riskLevel === 'high')
+              .map((i: any) => ({
+                id:      `alert-${i.riskLevel}-${i.sku}`,
+                type:    'rupture',
+                urgency: i.riskLevel,
+                title:   `${i.riskLevel === 'critical' ? 'Stockout imminent' : 'Low stock'}: ${i.name}`,
+                message: `${i.name} — ${i.stock} units left, ${i.daysOfStock}d coverage`,
+                action:  null,
+                time:    new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+              }));
+
+            this.liveInventory.set({
+              ...current,
+              type:   'inventory_update',
+              items:  patchedItems,
+              alerts: patchedAlerts,
+            });
+            return;
+          }
+
+          // ── full snapshot ────────────────────────────────────────────────
           if (data.type === 'inventory_update') {
+            const count = data.items?.length ?? 0;
+            console.log('[WS] 📦 Inventory snapshot:', count, 'items for', storeId);
+            this._inventoryItemCount = count;
+            this.inventoryLoading.set(false);
             this.liveInventory.set(data);
           }
-        } catch { }
+
+        } catch (e) {
+          console.error('[WS] Parse error:', e);
+        }
       };
 
       ws.onerror  = () => {};
       ws.onclose  = (event) => {
         if (this.inventoryWs !== ws && this.inventoryWs !== null) return;
         if (this.inventoryWs === null) return;
+
         this.inventoryReconnectTimer = setTimeout(
           () => this.connectInventory(this.inventoryStore, this.inventoryObjective),
           15000,
@@ -526,6 +595,7 @@ export class WebSocketService {
     inv?.close(1000, 'disconnect');
 
     this.connected.set(false);
+    this._inventoryItemCount = 0;
     console.log('[WS] Déconnexion volontaire');
   }
 }

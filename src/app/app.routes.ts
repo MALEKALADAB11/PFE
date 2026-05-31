@@ -27,7 +27,7 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./features/dashboard/dashboard')
         .then(m => m.Dashboard),
-    data: { prerender: false },
+    data: { prerender: false }
   },
   {
     path: 'inventory',
@@ -41,7 +41,7 @@ export const routes: Routes = [
     canActivate: [managerGuard],
     loadComponent: () =>
       import('./features/monitoring/monitoring')
-        .then(m => m.MonitoringComponent),
+        .then(m => m.Monitoring),
   },
 
   // ── Manager + Vendeur ───────────────────────────────────

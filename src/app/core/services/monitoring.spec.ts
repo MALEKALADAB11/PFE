@@ -1,15 +1,20 @@
 import { TestBed } from '@angular/core/testing';
-import { MonitoringService } from './monitoring';
+import { Monitoring } from '../../features/monitoring/monitoring';
+import { MonitoringService } from './monitoring.service';
 
-describe('MonitoringService', () => {
-  let service: MonitoringService;
 
-  beforeEach(() => {
-    TestBed.configureTestingModule({});
-    service = TestBed.inject(MonitoringService);
-  });
+describe('Monitoring', () => {
+  let service: Monitoring;
+  describe('MonitoringService', () => {
+    let service: MonitoringService;
 
-  it('should be created', () => {
-    expect(service).toBeTruthy();
+    beforeEach(() => {
+      TestBed.configureTestingModule({});
+      service = TestBed.inject(MonitoringService);
+    });
+
+    it('should be created', () => {
+      expect(service).toBeTruthy();
+    });
   });
 });

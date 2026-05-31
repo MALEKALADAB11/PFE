@@ -668,8 +668,7 @@
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 16px;
-  max-height: 10%;
-  overflow-y: auto;
+  // No max-height cap — let the grid grow to show all filtered results
 }
 
 // ══ FLIP CARD ══
@@ -783,6 +782,11 @@
   color: var(--text-primary);
   margin: 0 0 1px;
   letter-spacing: -0.01em;
+  // Prevent long product names from overflowing the fixed-height card
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 .item-sku {
@@ -1424,19 +1428,28 @@
   align-items: flex-start;
   gap: 4px;
   font-size: 10px;
+  background: rgba(108, 92, 231, 0.05);
+  border-left: 2px solid rgba(108, 92, 231, 0.25);
+  border-radius: 0 4px 4px 0;
+  padding: 4px 6px;
 
-  svg { flex-shrink: 0; margin-top: 1px; color: var(--inv-muted); }
+  svg { flex-shrink: 0; margin-top: 1px; color: var(--color-purple, #6C5CE7); opacity: 0.7; }
 
   &__label {
-    font-weight: 700;
-    color: var(--text-secondary);
+    font-weight: 800;
+    color: var(--color-purple, #6C5CE7);
     flex-shrink: 0;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-top: 1px;
   }
 
   &__text {
-    font-style: italic;
-    color: var(--text-secondary);
+    font-style: normal;
+    color: var(--text-primary);
     line-height: 1.4;
+    font-weight: 500;
   }
 }
 
@@ -1485,6 +1498,7 @@
 }
 
 .decision-result {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 5px;
@@ -1492,6 +1506,7 @@
   font-weight: 700;
   padding: 6px 10px;
   border-radius: var(--radius-sm);
+  overflow: hidden;  // contain the progress bar pseudo-element
 
   &--approved {
     background: #D1FADF;
@@ -1501,6 +1516,27 @@
   &--rejected {
     background: #FEE4E2;
     color: #7A271A;
+  }
+}
+
+// Countdown progress bar — drains over ALERT_UNDO_MS (4 s) matching the TS timer
+@keyframes undo-drain {
+  from { width: 100%; }
+  to   { width: 0%;   }
+}
+
+.undo-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  background: #05603A;
+  opacity: 0.35;
+  animation: undo-drain 4s linear forwards;
+  pointer-events: none;
+
+  &--rejected {
+    background: #7A271A;
   }
 }
 

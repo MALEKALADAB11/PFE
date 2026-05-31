@@ -2,7 +2,7 @@ import { isPlatformBrowser } from '@angular/common';
 import { Injectable, signal, computed, inject } from '@angular/core';
 import { PLATFORM_ID } from '@angular/core';
 
-// ── Interfaces ────────────────────────────────────────────────────────────────
+// ── Interfaces ─────────────────────────────────
 
 export interface AnalystNodes {
   receive_pos:    { status: string; transactions?: number };
@@ -504,11 +504,12 @@ export class WebSocketService {
               item.sku === data.sku
                 ? {
                     ...item,
-                    stock:         data.new_stock,
-                    daysOfStock:   data.days_of_stock,
-                    coverageRatio: data.coverage_ratio,
-                    riskLevel:     data.risk_level,
-                    riskRationale: data.risk_rationale,
+                    stock:          data.new_stock,
+                    stockInTransit: data.stock_in_transit ?? item.stockInTransit,
+                    daysOfStock:    data.days_of_stock,
+                    coverageRatio:  data.coverage_ratio,
+                    riskLevel:      data.risk_level,
+                    riskRationale:  data.risk_rationale ?? item.riskRationale,
                     riskScore: (
                       data.risk_level === 'critical' ? 0.90 :
                       data.risk_level === 'high'     ? 0.72 :

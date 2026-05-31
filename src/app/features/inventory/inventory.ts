@@ -1,25 +1,5 @@
-/**
- * InventoryComponent — FIXED
- *
- * Root causes fixed:
- * 1. stock_delta was patching liveInventory with type='inventory_update' before
- *    the real snapshot arrived, setting lastPayloadHash and blocking the real data.
- *    Fix: guard effect on payload.items.length > 10 (mock has 7), and clear hash
- *    when store changes.
- *
- * 2. effect() in constructor fires before connectInventory() (afterNextRender).
- *    Fix: moved WS connect call to ngOnInit so it runs before the effect can miss data.
- *
- * 3. HTTP fallback used getStore() which defaults to page_size=100.
- *    Fix: added page_size=0 param to always get all items.
- *
- * 4. Store was hardcoded to 'I63'. Now driven by selectedStore signal.
- *    Changing store reconnects WS and reloads data.
- *
- * 5. HTTP fallback reduced from 25s to 5s — WS delivers initial snapshot
- *    within 2-3s when backend cache is warm.
- */
-
+// InventoryComponent 
+ 
 import {
   Component, computed, signal, OnInit, effect,
   inject, OnDestroy, DestroyRef, afterNextRender, PLATFORM_ID,
@@ -52,12 +32,11 @@ const AGENT_ANALYSIS_FIELDS: (keyof InventoryApiItem)[] = [
 const MIN_REAL_ITEMS = 8;
 
 // How long to wait before the first HTTP poll attempt.
-// The pipeline takes 15-20s on a cold start, so we start polling at 10s
-// and retry every 10s until real data arrives. Once cache is warm, the
-// first poll at 10s will succeed immediately.
-const HTTP_FIRST_POLL_MS  = 10_000;
-const HTTP_RETRY_POLL_MS  = 10_000;
-const HTTP_MAX_ATTEMPTS   = 6;      // give up after ~70s total
+// Pre-warm starts at server startup so cache may be warm within ~5-30s.
+// Poll every 8s. 30 attempts = up to 4 min total before giving up.
+const HTTP_FIRST_POLL_MS  = 5_000;
+const HTTP_RETRY_POLL_MS  = 8_000;
+const HTTP_MAX_ATTEMPTS   = 30;
 
 @Component({
   selector:    'app-inventory',
@@ -114,6 +93,19 @@ export class InventoryComponent implements OnInit, OnDestroy {
   flippedId  = signal<string | null>(null);
   decisions  = signal<Record<string, Decision>>({});
   productDecisions = signal<Record<string, Decision>>({});
+
+  /**
+   * Per-alert status right after a user action.
+   * Set immediately, cleared once the timed removal fires (or on undo).
+   * Values: 'validated' | 'rejected' | 'error'
+   */
+  alertStatuses = signal<Record<string, string>>({});
+
+  /** Timers for auto-removing decided alerts. Cancelled if user clicks Undo. */
+  private _alertRemovalTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+  /** How long (ms) the decided badge + Undo button stay visible before auto-remove. */
+  private readonly ALERT_UNDO_MS = 4_000;
   analysisModal = signal<InventoryItem | null>(null);
   flashedSkus   = signal<Set<string>>(new Set());
 
@@ -304,6 +296,9 @@ export class InventoryComponent implements OnInit, OnDestroy {
     // can catch the first message)
     this._connectWs();
 
+    // Load DB alerts immediately — don't wait for the pipeline to finish
+    this._loadDbAlerts();
+
     // HTTP fallback: if WS hasn't delivered real data within HTTP_FALLBACK_MS,
     // load via HTTP. This covers: slow first pipeline run (~20s), WS hiccups.
     this._scheduleFallback();
@@ -313,6 +308,9 @@ export class InventoryComponent implements OnInit, OnDestroy {
     this._cancelFallbackTimer();
     if (this._pollingTimer) { clearInterval(this._pollingTimer); this._pollingTimer = null; }
     if (this._refreshTimer) { clearInterval(this._refreshTimer); this._refreshTimer = null; }
+    // Clear any pending alert-removal timers
+    this._alertRemovalTimers.forEach(t => clearTimeout(t));
+    this._alertRemovalTimers.clear();
     // Do NOT call ws.disconnect() — WS service is shared with Dashboard/Advisor
   }
 
@@ -388,10 +386,18 @@ export class InventoryComponent implements OnInit, OnDestroy {
     this.alerts.set(this.mock.getInventoryAlerts());
     this.agentError.set(null);
     this.lastUpdate.set(null);
+    // Cancel any in-flight removal timers before clearing state
+    this._alertRemovalTimers.forEach(t => clearTimeout(t));
+    this._alertRemovalTimers.clear();
+    this.alertStatuses.set({});
+    this.decisions.set({});
 
     // Reconnect WS to new store
     this._connectWs();
     this._scheduleFallback();
+
+    // Reload DB alerts for the new store
+    this._loadDbAlerts();
   }
 
   private _connectWs(): void {
@@ -527,8 +533,17 @@ export class InventoryComponent implements OnInit, OnDestroy {
       this.items.set(mapped);
     }
 
-    this.alerts.set(payload.alerts as InventoryAlert[]);
     this.agentLoading.set(false);
+
+    // Apply alerts from the snapshot payload when present (they come straight
+    // from _build_alerts() and already have real DB UUIDs where available).
+    // Then always re-fetch from DB so the panel reflects the current pipeline
+    // run — _loadDbAlerts() on init fires before the pipeline finishes, so
+    // without this reload it would show stale data from the previous run.
+    if (payload.alerts?.length) {
+      this.alerts.set(payload.alerts as InventoryAlert[]);
+    }
+    this._loadDbAlerts();
 
     // Flash dots for decreased stock
     const decreased = payload.items
@@ -579,7 +594,7 @@ export class InventoryComponent implements OnInit, OnDestroy {
       `http://localhost:8000/api/inventory/store/${storeId}`,
       { params }
     ).pipe(
-      timeout(90_000)   // 90s — pipeline can take 20-40s; we retry on timeout via onEmpty
+      timeout(180_000)  // 3 min — pipeline with 50 SKUs can take 30-60s on cold LLM
     ).subscribe({
       next: payload => {
         const count = payload.items?.length ?? 0;
@@ -606,6 +621,87 @@ export class InventoryComponent implements OnInit, OnDestroy {
     });
   }
 
+  // ── DB alert loader ──────────────────────────────────────────────────────
+
+  /**
+   * Load alerts from the DB via GET /api/inventory/alerts/{storeId}.
+   * This is the single source of truth — alerts written by the analysis agent
+   * with real UUIDs that the PATCH endpoint can update.
+   *
+   * Falls back silently if the DB is unavailable (alerts stay as-is).
+   */
+  private _loadDbAlerts(): void {
+    this.invApi.getAlerts(this.selectedStore(), 'pending').subscribe({
+      next: res => {
+        const dbAlerts: InventoryAlert[] = (res.alerts ?? []).map((a: any) => {
+          // routes.py remaps alert_type → type ('rupture'|'redistribution'|'overstock')
+          // Always read the remapped 'type' — never fall back to raw 'alert_type'.
+          const type    = a.type    ?? 'redistribution';
+          const urgency = a.severity ?? a.urgency ?? 'high';
+          const name    = a.product_name ?? a.name ?? a.sku ?? '';
+
+          let title: string;
+          if (a.title) {
+            title = a.title;
+          } else if (type === 'rupture') {
+            title = `Stockout imminent: ${name}`;
+          } else if (type === 'redistribution') {
+            title = `Low stock: ${name}`;
+          } else {
+            title = `Overstock: ${name}`;
+          }
+
+          return {
+            id:      a.id,
+            sku:     a.sku,
+            type,
+            urgency,
+            title,
+            message: title,
+            action:  a.recommended_action ?? a.action ?? '',
+            time:    a.triggered_at ?? a.created_at ?? a.time ?? '',
+          };
+        });
+
+        // FIX: exclude any alert the user has already actioned locally
+        // (validated / rejected / dismissed) — whether or not the removal
+        // timer has fired yet.  Without this, a WS-triggered _loadDbAlerts()
+        // call during the 4-second undo window causes actioned alerts to
+        // reappear or be permanently stuck as "pending" in the UI.
+        const currentStatuses  = this.alertStatuses();
+        const decidedLocally   = new Set(
+          Object.entries(currentStatuses)
+            .filter(([, s]) => s === 'validated' || s === 'rejected' || s === 'dismissed')
+            .map(([id]) => id)
+        );
+
+        const incomingIds     = new Set(dbAlerts.map(a => a.id));
+
+        // Keep alerts still in the undo window that the DB no longer returns
+        const preservedAlerts = this.alerts()
+          .filter(a =>
+            this._alertRemovalTimers.has(a.id) &&
+            !incomingIds.has(a.id) &&
+            !decidedLocally.has(a.id)   // don't preserve if already decided
+          );
+
+        // Filter out any db alert the user already decided locally
+        const filteredDb = dbAlerts.filter(a => !decidedLocally.has(a.id));
+
+        const merged = [...filteredDb, ...preservedAlerts];
+        console.log(
+          `[Inventory] 🔔 DB alerts: ${dbAlerts.length} pending` +
+          (decidedLocally.size ? ` (${decidedLocally.size} suppressed — locally decided)` : '') +
+          (preservedAlerts.length ? ` + ${preservedAlerts.length} in undo window` : '')
+        );
+        this.alerts.set(merged);
+      },
+      error: err => {
+        console.warn('[Inventory] Could not load DB alerts:', err?.status);
+      },
+    });
+  }
+
   // ── UI helpers ─────────────────────────────────────────────────────────────
 
   toggleFlip(id: string): void { this.flippedId.update(cur => cur === id ? null : id); }
@@ -622,11 +718,23 @@ export class InventoryComponent implements OnInit, OnDestroy {
   approveAlert(id: string, e: Event): void {
     e.stopPropagation();
     this.decisions.update(d => ({ ...d, [id]: 'approved' }));
-    // Always try — backend returns 404 for fake IDs, which we ignore
-    this.invApi.acknowledgeAlert(id, 'acknowledged').subscribe({
-      next: () => console.log('[Alert] ✅ DB status → acknowledged:', id),
+    this.alertStatuses.update(s => ({ ...s, [id]: 'validated' }));
+    this._scheduleAlertRemoval(id);   // auto-removes after ALERT_UNDO_MS
+
+    this.invApi.acknowledgeAlert(id, 'validated').subscribe({
+      next: (res: any) => {
+        if (res?.skipped) {
+          console.warn('[Alert] Skipped PATCH (fake id):', id);
+        } else {
+          console.log('[Alert] ✅ DB status → validated:', id);
+        }
+      },
       error: err => {
-        if (err?.status !== 404) console.warn('[Alert] PATCH failed:', err?.status, id);
+        // DB write failed — show error badge; cancel auto-removal so user sees it
+        this._cancelAlertRemoval(id);
+        this.alertStatuses.update(s => ({ ...s, [id]: 'error' }));
+        this.decisions.update(d => ({ ...d, [id]: null }));
+        console.warn('[Alert] PATCH failed (validate):', err?.status, id);
       },
     });
   }
@@ -634,17 +742,43 @@ export class InventoryComponent implements OnInit, OnDestroy {
   rejectAlert(id: string, e: Event): void {
     e.stopPropagation();
     this.decisions.update(d => ({ ...d, [id]: 'rejected' }));
-    this.invApi.acknowledgeAlert(id, 'dismissed').subscribe({
-      next: () => console.log('[Alert] ✅ DB status → dismissed:', id),
+    this.alertStatuses.update(s => ({ ...s, [id]: 'rejected' }));
+    this._scheduleAlertRemoval(id);   // auto-removes after ALERT_UNDO_MS
+
+    this.invApi.acknowledgeAlert(id, 'rejected').subscribe({
+      next: (res: any) => {
+        if (res?.skipped) {
+          console.warn('[Alert] Skipped PATCH (fake id):', id);
+        } else {
+          console.log('[Alert] ✅ DB status → rejected:', id);
+        }
+      },
       error: err => {
-        if (err?.status !== 404) console.warn('[Alert] PATCH failed:', err?.status, id);
+        this._cancelAlertRemoval(id);
+        this.alertStatuses.update(s => ({ ...s, [id]: 'error' }));
+        this.decisions.update(d => ({ ...d, [id]: null }));
+        console.warn('[Alert] PATCH failed (reject):', err?.status, id);
       },
     });
   }
 
   undoDecision(id: string, e: Event): void {
     e.stopPropagation();
+    // Cancel the scheduled removal and clear local state
+    this._cancelAlertRemoval(id);
     this.decisions.update(d => ({ ...d, [id]: null }));
+    this.alertStatuses.update(s => {
+      const copy = { ...s };
+      delete copy[id];
+      return copy;
+    });
+    // Revert DB status to 'acknowledged' so the alert stays in the pending queue
+    if (id && !id.startsWith('alert-')) {
+      this.invApi.acknowledgeAlert(id, 'acknowledged').subscribe({
+        next: () => console.log('[Alert] Undone → acknowledged:', id),
+        error: err => console.warn('[Alert] Undo PATCH failed:', err?.status, id),
+      });
+    }
   }
 
   setSearch(text: string): void { this.searchText.set(text); }
@@ -677,10 +811,21 @@ export class InventoryComponent implements OnInit, OnDestroy {
   }
 
   dismissAlert(id: string): void {
+    // X button = gone immediately, no undo
+    this._cancelAlertRemoval(id);
+    this.alertStatuses.update(s => {
+      const copy = { ...s }; delete copy[id]; return copy;
+    });
+    this.decisions.update(d => {
+      const copy = { ...d }; delete copy[id]; return copy;
+    });
     this.alerts.update(list => list.filter(a => a.id !== id));
     this.invApi.acknowledgeAlert(id, 'dismissed').subscribe({
+      next: (res: any) => {
+        if (!res?.skipped) console.log('[Alert] ✅ DB status → dismissed:', id);
+      },
       error: err => {
-        if (err?.status !== 404) console.warn('[Alert] PATCH failed:', err?.status, id);
+        if (err?.status !== 404) console.warn('[Alert] PATCH failed (dismiss):', err?.status, id);
       },
     });
   }
@@ -811,6 +956,69 @@ export class InventoryComponent implements OnInit, OnDestroy {
       !(item as any).recommendation?.startsWith('Order ');
   }
 
+
+  // ── Alert timed-removal helpers ─────────────────────────────────────────────
+
+  /**
+   * Schedule auto-removal of an alert card after ALERT_UNDO_MS.
+   * The user can cancel this by clicking Undo.
+   */
+  private _scheduleAlertRemoval(id: string): void {
+    this._cancelAlertRemoval(id);  // clear any prior timer for this id
+    const t = setTimeout(() => {
+      this._alertRemovalTimers.delete(id);
+      this.alerts.update(list => list.filter(a => a.id !== id));
+      this.alertStatuses.update(s => { const c = { ...s }; delete c[id]; return c; });
+      this.decisions.update(d => { const c = { ...d }; delete c[id]; return c; });
+    }, this.ALERT_UNDO_MS);
+    this._alertRemovalTimers.set(id, t);
+  }
+
+  /** Cancel a scheduled removal (e.g. user clicked Undo, or DB write failed). */
+  private _cancelAlertRemoval(id: string): void {
+    const t = this._alertRemovalTimers.get(id);
+    if (t !== undefined) {
+      clearTimeout(t);
+      this._alertRemovalTimers.delete(id);
+    }
+  }
+
+  // ── Alert status / recommendation helpers ───────────────────────────────────────
+
+  /** Returns the local decision status for an alert id, if any. */
+  getAlertLocalStatus(id: string): string | null {
+    return this.alertStatuses()[id] ?? null;
+  }
+
+  /** True when an alert has been acted on (validated, rejected, or error). */
+  alertIsDecided(id: string): boolean {
+    const s = this.alertStatuses()[id];
+    return s === 'validated' || s === 'rejected' || s === 'error';
+  }
+
+  /**
+   * Short AI recommendation for display on the alert card.
+   * Comes from recommended_action (stored in alert.message by _loadDbAlerts).
+   */
+  alertRecommendation(alert: InventoryAlert): string | null {
+    // action = recommended_action from DB (the AI suggestion text)
+    const txt = (alert as any).action || (alert as any).message;
+    if (!txt) return null;
+    return txt.length > 90 ? txt.substring(0, 88) + '…' : txt;
+  }
+
+  /** Label + colours for the decided-status badge shown on an alert card. */
+  alertStatusBadge(id: string): { label: string; color: string; bg: string; canUndo: boolean } | null {
+    const s = this.alertStatuses()[id];
+    if (!s) return null;
+    switch (s) {
+      case 'validated': return { label: '✓ Validated',   color: '#007A63', bg: '#E6FAF4', canUndo: true  };
+      case 'rejected':  return { label: '✕ Rejected',    color: '#B45309', bg: '#FFF8E1', canUndo: true  };
+      case 'error':     return { label: '⚠ Save failed', color: '#C0392B', bg: '#FDEDEC', canUndo: false };
+      default:          return null;
+    }
+  }
+
   // ── Ask Coach ─────────────────────────────────────────────────────────────
 
   askChat(item: InventoryItem, e: Event): void {
@@ -839,6 +1047,14 @@ export class InventoryComponent implements OnInit, OnDestroy {
 
   askChatFromAlert(alert: InventoryAlert, e: Event): void {
     e.stopPropagation();
+
+    // Mark alert as acknowledged in DB so it doesn't stay pending forever
+    if (alert.id && !alert.id.startsWith('alert-')) {
+      this.invApi.acknowledgeAlert(alert.id, 'acknowledged').subscribe({
+        next: () => console.log('[Alert] acknowledged (ask chat):', alert.id),
+        error: err => console.warn('[Alert] PATCH failed (ask chat):', err?.status, alert.id),
+      });
+    }
 
     const item = this.items().find((i: InventoryItem) => i.sku === alert.sku);
     if (item) {

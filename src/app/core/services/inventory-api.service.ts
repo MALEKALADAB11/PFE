@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient, HttpParams } from '@angular/common/http';
-import { Observable, map } from 'rxjs';
+import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
+import { Observable, map, of } from 'rxjs';
 import { InventoryItem, InventoryAlert } from '../models/inventory';
 
 export interface InventoryApiItem extends InventoryItem {
@@ -67,6 +67,13 @@ export class InventoryApiService {
   private readonly http = inject(HttpClient);
   private readonly base = 'http://localhost:8000/api/inventory';
 
+  private _headers(): HttpHeaders {
+    const token = sessionStorage.getItem('ooredoo_token');
+    return token
+      ? new HttpHeaders({ Authorization: `Bearer ${token}` })
+      : new HttpHeaders();
+  }
+
   getStores(): Observable<{ id: string; name: string }[]> {
     return this.http.get<{ stores: { id: string; name: string }[] }>(`${this.base}/stores`)
       .pipe(map(r => r.stores ?? []));
@@ -125,7 +132,25 @@ export class InventoryApiService {
     return this.http.get<{ alerts: any[]; count: number }>(`${this.base}/alerts/${storeId}`, { params });
   }
 
-  acknowledgeAlert(alertId: string, status = 'acknowledged'): Observable<any> {
-    return this.http.patch(`${this.base}/alerts/${alertId}`, { status });
+  /**
+   * Update an alert's status.
+   *
+   * @param alertId UUID from GET /alerts/{storeId} → alert.id  (must be a real DB UUID)
+   * @param status  'acknowledged' | 'validated' | 'rejected' | 'resolved' | 'dismissed'
+   */
+  acknowledgeAlert(
+    alertId: string,
+    status: 'acknowledged' | 'validated' | 'rejected' | 'resolved' | 'dismissed' = 'acknowledged',
+  ): Observable<any> {
+    // Fake ids (alert-rupture-SKU123) can't be PATCH'd — return a no-op
+    if (!alertId || alertId.startsWith('alert-')) {
+      console.warn('[Alerts] Skipping PATCH — fake alert id:', alertId);
+      return of({ skipped: true, reason: 'fake_id' });
+    }
+    return this.http.patch(
+      `${this.base}/alerts/${alertId}`,
+      { status },
+      { headers: this._headers() },
+    );
   }
 }

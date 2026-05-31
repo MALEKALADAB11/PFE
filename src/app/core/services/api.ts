@@ -190,10 +190,48 @@ export class ApiService {
       .pipe(catchError(() => of(null)));
   }
 
-  getInventoryAlerts(storeId: string): Observable<any> {
+  /**
+   * Get inventory alerts for a store.
+   *
+   * NOTE: Use InventoryApiService.getAlerts() instead of this method when you need
+   * full typed responses or status filtering.  This method exists for legacy callers
+   * and delegates to the same backend endpoint.
+   *
+   * @param storeId  Store identifier (e.g. 'I63')
+   * @param status   Filter: 'pending' (default), 'all', or any specific status
+   */
+  getInventoryAlerts(storeId: string, status = 'pending'): Observable<any> {
     return this.http
-      .get(`${API}/api/inventory/alerts/${storeId}`, { headers: this._headers() })
+      .get(`${API}/api/inventory/alerts/${storeId}`, {
+        headers: this._headers(),
+        params:  { status },
+      })
       .pipe(catchError(() => of({ alerts: [] })));
+  }
+
+  /**
+   * Validate or reject a specific alert.
+   * alertId must be the UUID returned by getInventoryAlerts (alert.id).
+   *
+   * @param alertId   Real DB UUID
+   * @param status    'acknowledged' | 'validated' | 'rejected' | 'resolved' | 'dismissed'
+   * @param decidedBy Optional user identifier
+   */
+  updateInventoryAlert(
+    alertId: string,
+    status: 'acknowledged' | 'validated' | 'rejected' | 'resolved' | 'dismissed',
+    decidedBy?: string,
+  ): Observable<any> {
+    // Fake ids (alert-rupture-SKU123) can't be PATCH'd — return a no-op
+    if (!alertId || alertId.startsWith('alert-')) {
+      console.warn('[Alerts] Skipping PATCH — fake alert id:', alertId);
+      return of({ skipped: true, reason: 'fake_id' });
+    }
+    const body: Record<string, string> = { status };
+    if (decidedBy) body['decided_by'] = decidedBy;
+    return this.http
+      .patch(`${API}/api/inventory/alerts/${alertId}`, body, { headers: this._headers() })
+      .pipe(catchError(() => of(null)));
   }
 
   // ══════════════════════════════════════════════════════════════════════════

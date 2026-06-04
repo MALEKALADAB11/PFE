@@ -195,7 +195,7 @@
                    [title]="p.name + ' — Stock: ' + p.stock + ' · Demand: ' + p.demandForecast24h + '/day'"
                    (click)="toggleFlip(p.id)">
                 <span class="inv-q-dot__label">
-                  {{ p.name.split(' ')[0] }}
+                  {{ (p.name || p.sku || '?').toString().split(' ')[0] }}
                 </span>
               </div>
             }
@@ -381,7 +381,7 @@
                   </div>
                   <span class="risk-score__val mono"
                         [style.color]="riskColor(item.riskLevel)">
-                    {{ (item.riskScore * 100).toFixed(0) }}%
+                    {{ ($any(item.riskScore) * 100 || 0).toFixed(0) }}%
                   </span>
                 </div>
                 <div class="flip-hint">
@@ -420,7 +420,7 @@
 
                     <div class="confidence-ring">
                       <span class="confidence-val">
-                        {{ (item.confidence * 100).toFixed(0) }}%
+                        {{ ($any(item.confidence) * 100 || 0).toFixed(0) }}%
                       </span>
                     </div>
                   </div>
@@ -596,41 +596,48 @@
                   </span>
                   <span class="alert-panel-sku mono">{{ alert.sku }}</span>
                   <span class="alert-panel-time mono">{{ alert.time }}</span>
-                  <button class="alert-dismiss-btn"
-                          (click)="dismissAlert(alert.id)"
-                          title="Dismiss">
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
-                         stroke="currentColor" stroke-width="2.5">
-                      <line x1="18" y1="6"  x2="6"  y2="18"/>
-                      <line x1="6"  y1="6"  x2="18" y2="18"/>
-                    </svg>
-                  </button>
+                  <!-- Dismiss only available when not in undo countdown -->
+                  @if (getDecision(alert.id) === null) {
+                    <button class="alert-dismiss-btn"
+                            (click)="dismissAlert(alert.id)"
+                            title="Dismiss">
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+                           stroke="currentColor" stroke-width="2.5">
+                        <line x1="18" y1="6"  x2="6"  y2="18"/>
+                        <line x1="6"  y1="6"  x2="18" y2="18"/>
+                      </svg>
+                    </button>
+                  }
                 </div>
 
-                <!-- Message -->
+                <!-- Alert title (bold) -->
                 <p class="alert-panel-msg">{{ alert.message }}</p>
 
-                <!-- AI reco -->
-                <div class="alert-panel-reco">
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
-                       stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="10"/>
-                    <path d="M12 16v-4M12 8h.01"/>
-                  </svg>
-                  <span class="alert-panel-reco__label">AI recommendation:</span>
-                  <em class="alert-panel-reco__text">{{ alert.action }}</em>
-                </div>
+                <!-- AI recommendation (from analysis agent recommended_action) -->
+                @if (alertRecommendation(alert); as reco) {
+                  <div class="alert-panel-reco">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="2">
+                      <circle cx="12" cy="12" r="10"/>
+                      <path d="M12 16v-4M12 8h.01"/>
+                    </svg>
+                    <span class="alert-panel-reco__label">AI:</span>
+                    <em class="alert-panel-reco__text">{{ reco }}</em>
+                  </div>
+                }
 
                 <!-- Ask Chat shortcut -->
-                <button class="btn-ask-chat-alert"
-                        (click)="askChatFromAlert(alert, $event)"
-                        title="Discuss this alert in Chat">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
-                       stroke="currentColor" stroke-width="2">
-                    <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
-                  </svg>
-                  Ask Chat
-                </button>
+                @if (getDecision(alert.id) === null) {
+                  <button class="btn-ask-chat-alert"
+                          (click)="askChatFromAlert(alert, $event)"
+                          title="Discuss this alert in Chat">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="2">
+                      <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+                    </svg>
+                    Ask Chat
+                  </button>
+                }
 
                 <!-- Decision zone -->
                 <div class="alert-decision-zone">
@@ -665,11 +672,12 @@
                            stroke="currentColor" stroke-width="2.5">
                         <polyline points="20,6 9,17 4,12"/>
                       </svg>
-                      Validated — processing order…
+                      Validated
                       <button class="btn-undo"
                               (click)="undoDecision(alert.id, $event)">
                         Undo
                       </button>
+                      <div class="undo-progress"></div>
                     </div>
                   }
 
@@ -680,11 +688,12 @@
                         <line x1="18" y1="6" x2="6"  y2="18"/>
                         <line x1="6"  y1="6" x2="18" y2="18"/>
                       </svg>
-                      Rejected — no action taken
+                      Rejected
                       <button class="btn-undo"
                               (click)="undoDecision(alert.id, $event)">
                         Undo
                       </button>
+                      <div class="undo-progress undo-progress--rejected"></div>
                     </div>
                   }
 
@@ -772,7 +781,7 @@
               </div>
               <div class="analysis-metric">
                 <span class="analysis-metric-label">Coverage Ratio</span>
-                <span class="analysis-metric-value">{{ analysisModal()!.coverageRatio.toFixed(2) }}x</span>
+                <span class="analysis-metric-value">{{ ($any(analysisModal()!.coverageRatio) || 0).toFixed(2) }}x</span>
               </div>
               <div class="analysis-metric">
                 <span class="analysis-metric-label">Category</span>

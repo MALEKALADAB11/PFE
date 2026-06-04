@@ -526,9 +526,12 @@ export class InventoryComponent implements OnInit, OnDestroy {
                                 ?? agentItem.analystNote
                                 ?? fallback?.recommendationDetail
                                 ?? null,
+<<<<<<< HEAD
           // recommendation comes from the decision agent (ORDER/EXPEDITE/MONITOR/HOLD).
           // Only fall back to the formula string when the decision agent didn't run
           // (fast/rule-based path with no decision_result).
+=======
+>>>>>>> 75f302a1c68c4a3a3de53fe6c939b6de11c076ef
           recommendation: agentItem.recommendation
                           ?? (agentItem.formulaOrderQty
                               ? `Order ${agentItem.formulaOrderQty} units`
@@ -1079,6 +1082,69 @@ export class InventoryComponent implements OnInit, OnDestroy {
       none:       '—',
     };
     return labels[(item as any).orderTiming] ?? ((item as any).orderTiming ?? '—');
+  }
+
+
+  // ── Alert timed-removal helpers ─────────────────────────────────────────────
+
+  /**
+   * Schedule auto-removal of an alert card after ALERT_UNDO_MS.
+   * The user can cancel this by clicking Undo.
+   */
+  private _scheduleAlertRemoval(id: string): void {
+    this._cancelAlertRemoval(id);  // clear any prior timer for this id
+    const t = setTimeout(() => {
+      this._alertRemovalTimers.delete(id);
+      this.alerts.update(list => list.filter(a => a.id !== id));
+      this.alertStatuses.update(s => { const c = { ...s }; delete c[id]; return c; });
+      this.decisions.update(d => { const c = { ...d }; delete c[id]; return c; });
+    }, this.ALERT_UNDO_MS);
+    this._alertRemovalTimers.set(id, t);
+  }
+
+  /** Cancel a scheduled removal (e.g. user clicked Undo, or DB write failed). */
+  private _cancelAlertRemoval(id: string): void {
+    const t = this._alertRemovalTimers.get(id);
+    if (t !== undefined) {
+      clearTimeout(t);
+      this._alertRemovalTimers.delete(id);
+    }
+  }
+
+  // ── Alert status / recommendation helpers ───────────────────────────────────────
+
+  /** Returns the local decision status for an alert id, if any. */
+  getAlertLocalStatus(id: string): string | null {
+    return this.alertStatuses()[id] ?? null;
+  }
+
+  /** True when an alert has been acted on (validated, rejected, or error). */
+  alertIsDecided(id: string): boolean {
+    const s = this.alertStatuses()[id];
+    return s === 'validated' || s === 'rejected' || s === 'error';
+  }
+
+  /**
+   * Short AI recommendation for display on the alert card.
+   * Comes from recommended_action (stored in alert.message by _loadDbAlerts).
+   */
+  alertRecommendation(alert: InventoryAlert): string | null {
+    // action = recommended_action from DB (the AI suggestion text)
+    const txt = (alert as any).action || (alert as any).message;
+    if (!txt) return null;
+    return txt.length > 90 ? txt.substring(0, 88) + '…' : txt;
+  }
+
+  /** Label + colours for the decided-status badge shown on an alert card. */
+  alertStatusBadge(id: string): { label: string; color: string; bg: string; canUndo: boolean } | null {
+    const s = this.alertStatuses()[id];
+    if (!s) return null;
+    switch (s) {
+      case 'validated': return { label: '✓ Validated',   color: '#007A63', bg: '#E6FAF4', canUndo: true  };
+      case 'rejected':  return { label: '✕ Rejected',    color: '#B45309', bg: '#FFF8E1', canUndo: true  };
+      case 'error':     return { label: '⚠ Save failed', color: '#C0392B', bg: '#FDEDEC', canUndo: false };
+      default:          return null;
+    }
   }
 
 

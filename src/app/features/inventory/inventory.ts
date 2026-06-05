@@ -25,6 +25,10 @@ const AGENT_ANALYSIS_FIELDS: (keyof InventoryApiItem)[] = [
   'formulaOrderQty', 'totalReplenishmentCost', 'holdingCostPerCycleDt',
   'effectiveServiceLevel', 'zScore', 'moqIsBinding', 'moqBindingNote',
   'highCostFlag', 'highHoldingFlag', 'analystNote', 'unitCost', 'moq',
+  // Decision agent fields
+  'recommendation', 'recommendationDetail', 'recommendationId',
+  'finalOrderQty', 'orderTiming',
+  'decisionConfidence', 'escalateToHuman', 'escalationReason', 'tradeOffs',
 ];
 
 // Minimum number of items a payload must contain to be treated as real backend
@@ -522,15 +526,41 @@ export class InventoryComponent implements OnInit, OnDestroy {
                                 ?? agentItem.analystNote
                                 ?? fallback?.recommendationDetail
                                 ?? null,
+          // recommendation comes from the decision agent (ORDER/EXPEDITE/MONITOR/HOLD).
+          // Only fall back to the formula string when the decision agent didn't run
+          // (fast/rule-based path with no decision_result).
           recommendation: agentItem.recommendation
                           ?? (agentItem.formulaOrderQty
                               ? `Order ${agentItem.formulaOrderQty} units`
                               : null),
+          // Pass-through new decision agent fields — backend always sets these
+          // (null when decision agent didn't run, which is fine).
+          finalOrderQty:      agentItem.finalOrderQty      ?? null,
+          orderTiming:        agentItem.orderTiming        ?? null,
+          decisionConfidence: agentItem.decisionConfidence ?? null,
+          escalateToHuman:    agentItem.escalateToHuman    ?? false,
+          escalationReason:   agentItem.escalationReason   ?? null,
+          tradeOffs:          agentItem.tradeOffs          ?? null,
+          recommendationId:   agentItem.recommendationId   ?? null,
         } as InventoryItem;
       });
 
     if (mapped.length > 0) {
       this.items.set(mapped);
+
+      // Rehydrate productDecisions from DB-backed recommendationStatus so
+      // approve/reject state survives navigation and page refresh.
+      // Only overwrite entries that have a real non-pending decision.
+      const rehydrated: Record<string, Decision> = {};
+      for (const item of mapped) {
+        const recStatus = (item as any).recommendationStatus as string | null;
+        if (item.id && recStatus && recStatus !== 'pending') {
+          rehydrated[item.id] = recStatus as Decision;
+        }
+      }
+      if (Object.keys(rehydrated).length > 0) {
+        this.productDecisions.update(d => ({ ...d, ...rehydrated }));
+      }
     }
 
     this.agentLoading.set(false);
@@ -789,16 +819,64 @@ export class InventoryComponent implements OnInit, OnDestroy {
   approveProduct(id: string, e: Event): void {
     e.stopPropagation();
     this.productDecisions.update(d => ({ ...d, [id]: 'approved' }));
+
+    // id here is the item's sku-based id (inv-SKU). The recommendationId is on the item.
+    const item = this.items().find(i => (i as any).id === id || i.sku === id);
+    const recId: string | null = (item as any)?.recommendationId ?? null;
+
+    if (!recId) {
+      console.warn('[Recommendations] No recommendationId for item', id, '— local only');
+      return;
+    }
+
+    this.invApi.updateRecommendation(recId, 'approved').subscribe({
+      next: (res: any) => {
+        if (res?.skipped) {
+          console.warn('[Recommendations] Skipped PATCH (no id):', recId);
+        } else {
+          console.log('[Recommendations] ✅ DB status → approved:', recId);
+        }
+      },
+      error: err => {
+        // Roll back local state on failure
+        this.productDecisions.update(d => ({ ...d, [id]: null }));
+        console.warn('[Recommendations] PATCH failed (approve):', err?.status, recId);
+      },
+    });
   }
 
   rejectProduct(id: string, e: Event): void {
     e.stopPropagation();
     this.productDecisions.update(d => ({ ...d, [id]: 'rejected' }));
+
+    const item = this.items().find(i => (i as any).id === id || i.sku === id);
+    const recId: string | null = (item as any)?.recommendationId ?? null;
+
+    if (!recId) {
+      console.warn('[Recommendations] No recommendationId for item', id, '— local only');
+      return;
+    }
+
+    this.invApi.updateRecommendation(recId, 'rejected').subscribe({
+      next: (res: any) => {
+        if (res?.skipped) {
+          console.warn('[Recommendations] Skipped PATCH (no id):', recId);
+        } else {
+          console.log('[Recommendations] ✅ DB status → rejected:', recId);
+        }
+      },
+      error: err => {
+        this.productDecisions.update(d => ({ ...d, [id]: null }));
+        console.warn('[Recommendations] PATCH failed (reject):', err?.status, recId);
+      },
+    });
   }
 
   undoProductDecision(id: string, e: Event): void {
     e.stopPropagation();
     this.productDecisions.update(d => ({ ...d, [id]: null }));
+    // No DB undo for recommendations — there is no 'pending' reset path on the backend.
+    // The decision simply clears from local UI state.
   }
 
   viewFullAnalysis(item: InventoryItem, e: Event): void {
@@ -952,8 +1030,55 @@ export class InventoryComponent implements OnInit, OnDestroy {
   }
 
   hasDecision(item: InventoryItem): boolean {
-    return !!(item as any).recommendation &&
-      !(item as any).recommendation?.startsWith('Order ');
+    const api = item as any;
+    // True when the decision agent produced a real action (not just a formula fallback).
+    // ACTION values from the decision agent: ORDER, EXPEDITE, MONITOR, HOLD.
+    const action = api.recommendation as string | null;
+    return !!action && ['ORDER', 'EXPEDITE', 'MONITOR', 'HOLD'].includes(action);
+  }
+
+  /** Human label for the decision action badge. */
+  actionLabel(item: InventoryItem): string {
+    const labels: Record<string, string> = {
+      ORDER:    'Order',
+      EXPEDITE: 'Expedite',
+      MONITOR:  'Monitor',
+      HOLD:     'Hold',
+    };
+    return labels[(item as any).recommendation] ?? ((item as any).recommendation ?? '—');
+  }
+
+  /** Badge colour for the decision action. */
+  actionColor(item: InventoryItem): string {
+    const colors: Record<string, string> = {
+      ORDER:    '#2D9CDB',
+      EXPEDITE: '#E74C3C',
+      MONITOR:  '#F9A825',
+      HOLD:     '#9CA3AF',
+    };
+    return colors[(item as any).recommendation] ?? '#9CA3AF';
+  }
+
+  /** Badge background for the decision action. */
+  actionBg(item: InventoryItem): string {
+    const bgs: Record<string, string> = {
+      ORDER:    '#E8F4FD',
+      EXPEDITE: '#FDEDEC',
+      MONITOR:  '#FFF8E1',
+      HOLD:     '#F2F4F8',
+    };
+    return bgs[(item as any).recommendation] ?? '#F2F4F8';
+  }
+
+  /** Urgency label for orderTiming. */
+  timingLabel(item: InventoryItem): string {
+    const labels: Record<string, string> = {
+      immediate:  '🔴 Immediate',
+      this_week:  '🟠 This week',
+      this_month: '🟡 This month',
+      none:       '—',
+    };
+    return labels[(item as any).orderTiming] ?? ((item as any).orderTiming ?? '—');
   }
 
 

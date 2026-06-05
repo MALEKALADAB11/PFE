@@ -27,10 +27,17 @@ export interface InventoryApiItem extends InventoryItem {
   highCostFlag:           boolean;
   highHoldingFlag:        boolean;
   analystNote:            string;
-  recommendation:         string | null;
-  recommendationDetail:   string | null;
-  finalOrderQty:          number | null;
-  orderTiming:            string | null;
+  recommendation:         string | null;   // ORDER | EXPEDITE | MONITOR | HOLD
+  recommendationDetail:   string | null;   // operator-facing prose from decision agent
+  recommendationId:       string | null;   // inv.recommendations UUID — use with PATCH /recommendations/{id}
+  recommendationStatus:   string | null;   // current DB status: pending | approved | rejected
+  finalOrderQty:          number | null;   // decision agent's confirmed order qty
+  orderTiming:            string | null;   // immediate | this_week | this_month | none
+  // Extended decision agent fields
+  decisionConfidence:     string | null;   // high | medium | low
+  escalateToHuman:        boolean;
+  escalationReason:       string | null;
+  tradeOffs:              string | null;
 }
 
 export interface InventorySummary {
@@ -150,6 +157,31 @@ export class InventoryApiService {
     return this.http.patch(
       `${this.base}/alerts/${alertId}`,
       { status },
+      { headers: this._headers() },
+    );
+  }
+
+  /**
+   * Update a recommendation's status.
+   *
+   * @param recommendationId UUID from the item's 'recommendationId' field (inv.recommendations)
+   * @param status           'approved' | 'rejected'
+   * @param decidedBy        Optional user identifier
+   */
+  updateRecommendation(
+    recommendationId: string,
+    status: 'approved' | 'rejected',
+    decidedBy?: string,
+  ): Observable<any> {
+    if (!recommendationId) {
+      console.warn('[Recommendations] Skipping PATCH — no recommendationId');
+      return of({ skipped: true, reason: 'no_id' });
+    }
+    const body: Record<string, string> = { status };
+    if (decidedBy) body['decided_by'] = decidedBy;
+    return this.http.patch(
+      `${this.base}/recommendations/${recommendationId}`,
+      body,
       { headers: this._headers() },
     );
   }

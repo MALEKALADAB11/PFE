@@ -67,6 +67,7 @@ export class Dashboard implements OnInit, OnDestroy {
   private _mockAdvisors: Advisor[] = [];
   private refreshTimer: any = null;
   private agentTimer:   any = null;
+  private inventoryTimer: any = null;
   private destroy$ = new Subject<void>();
 
   // ── Ratios horaires réels I63 (calculés depuis historique mars 2026) ──
@@ -142,11 +143,11 @@ export class Dashboard implements OnInit, OnDestroy {
   );
 
   caTarget = computed(() =>
-  this.ws.liveMetrics()?.ca_target
-  ?? this.liveMetrics()?.ca_target
-  ?? this.store?.caObjectif
-  ?? REAL_TARGET_DT
-);
+    this.ws.liveMetrics()?.ca_target
+    ?? this.liveMetrics()?.ca_target
+    ?? this.store?.caObjectif
+    ?? REAL_TARGET_DT
+  );
 
   attainment = computed(() =>
     this.ws.liveMetrics()?.attainment
@@ -215,18 +216,18 @@ export class Dashboard implements OnInit, OnDestroy {
   isHoliday    = computed(() => this.ws.isHolidayToday());
   nextHoliday  = computed(() => this.ws.nextHoliday()  ?? '');
 
-  // ── Stock KPI — mock seeds, agent overwrites via ngOnInit ─────────────────
   // ── Stock KPI ─────────────────────────────────────────
-  stockKpi = signal({
-    critical: 2, total: 6, okCount: 3,
-    allOk: false, avgCoverage: 1.8,
+  stockKpi = signal<{ critical: number; total: number; okCount: number; allOk: boolean; avgCoverage: number }>({
+    critical: 0, total: 0, okCount: 0,
+    allOk: false, avgCoverage: 0,
   });
 
   stockBackLines = signal<string[]>([
-    'iPhone 16 Pro: 3 units — risk 91%',
-    'Apple Watch S10: 2 units — risk 88%',
-    'Avg. coverage ratio: 1.8x',
+    'Chargement des données inventory...',
   ]);
+
+  // ── Signal items inventory (alimenté par _applyAgentData) ─────────
+  inventoryItems = signal<InventoryApiItem[]>([]);
 
   // ── Flip Cards ────────────────────────────────────────
   flipCards = computed((): FlipCardData[] => {
@@ -287,7 +288,6 @@ export class Dashboard implements OnInit, OnDestroy {
           `Forecast : ${Math.round(eod).toLocaleString()} DT`,
         ]
       },
-      // ── Card 4: Stock health — driven by live inventory agent ─────────────
       {
         label:       'Stock health',
         value:       String(this.stockKpi().critical),
@@ -302,7 +302,6 @@ export class Dashboard implements OnInit, OnDestroy {
   });
 
   // ── Hourly performance ────────────────────────────────
-  // Initialisation avec ratios réels I63 pour affichage immédiat
   hourlyPerf = signal<HourlyPerf[]>(
     this._buildDefaultHourlyPerf()
   );
@@ -391,52 +390,24 @@ export class Dashboard implements OnInit, OnDestroy {
     return ['','Low','Med','High','Crit','Crit'][val] ?? '';
   }
 
-  // ── Inventory vs Sales ────────────────────────────────
-  inventoryVsSales = [
-    {
-      id: 'p1', sku: 'IPH16PRO',  name: 'iPhone 16 Pro',    shortName: 'iPhone 16',
-      color: '#6C5CE7', risk: 'critical' as const,
-      stock: 3,   stockMax: 40,  demand24h: 11, sold: 14, target: 18, revenue: 2380
-    },
-    {
-      id: 'p2', sku: 'SAMA55',    name: 'Samsung A55',       shortName: 'Samsung A55',
-      color: '#2D9CDB', risk: 'ok' as const,
-      stock: 24,  stockMax: 35,  demand24h: 8,  sold: 9,  target: 8,  revenue: 1470
-    },
-    {
-      id: 'p3', sku: 'AIRPDP3',   name: 'AirPods Pro 3',     shortName: 'AirPods',
-      color: '#F9A825', risk: 'high' as const,
-      stock: 7,   stockMax: 25,  demand24h: 9,  sold: 4,  target: 9,  revenue: 420
-    },
-    {
-      id: 'p4', sku: 'APLWTCH',   name: 'Apple Watch S10',   shortName: 'Watch S10',
-      color: '#E74C3C', risk: 'critical' as const,
-      stock: 2,   stockMax: 20,  demand24h: 6,  sold: 3,  target: 6,  revenue: 1347
-    },
-    {
-      id: 'p5', sku: 'FIB2GPRO',  name: 'Fiber Box 2G Pro',  shortName: 'Fiber 2G',
-      color: '#00B894', risk: 'ok' as const,
-      stock: 18,  stockMax: 30,  demand24h: 5,  sold: 9,  target: 8,  revenue: 1470
-    },
-    {
-      id: 'p6', sku: 'ASRPREM',   name: 'Premium Insurance', shortName: 'Insurance',
-      color: '#A29BFE', risk: 'ok' as const,
-      stock: 999, stockMax: 999, demand24h: 12, sold: 7,  target: 10, revenue: 630
-    },
-  ];
+  // ── Inventory vs Sales — alimenté par l'agent inventory ──────────
+  inventoryVsSales: any[] = [];
 
   invChartMax = computed(() => {
-    const vals = this.inventoryVsSales.flatMap(p => [
+    const items = this.inventoryVsSales;
+    if (!items.length) return 100;
+    const vals = items.flatMap((p: any) => [
       p.stock >= 999 ? 0 : p.stock,
       p.demand24h, p.sold, p.target,
       p.stockMax >= 999 ? 0 : p.stockMax,
     ]);
-    return Math.max(...vals) * 1.15;
+    return Math.max(...vals, 1) * 1.15;
   });
 
   invBarH(val: number): number {
     if (val >= 999) return 100;
-    return Math.round((val / this.invChartMax()) * 100);
+    const max = this.invChartMax();
+    return Math.round((val / max) * 100);
   }
 
   invRiskColor(r: string): string {
@@ -459,23 +430,18 @@ export class Dashboard implements OnInit, OnDestroy {
 
   invCoverage(stock: number, demand: number): string {
     if (stock >= 999) return '∞';
-    return (stock / demand).toFixed(1) + 'x';
+    return (stock / Math.max(demand, 1)).toFixed(1) + 'x';
   }
 
   invCoverageColor(stock: number, demand: number): string {
     if (stock >= 999) return '#00B894';
-    const r = stock / demand;
+    const r = stock / Math.max(demand, 1);
     return r < 0.5 ? '#E74C3C' : r < 1.0 ? '#F9A825' : '#00B894';
   }
 
-  // ── Lead time ─────────────────────────────────────────
-  leadTimeData = [
-    { label: 'Top-up',      days: 4, status: 'ok'   },
-    { label: 'Smartphones', days: 7, status: 'late'  },
-    { label: 'SIM',         days: 5, status: 'ok'    },
-    { label: 'Accessories', days: 9, status: 'crit'  },
-    { label: 'Routers',     days: 6, status: 'late'  },
-    { label: 'Tablets',     days: 3, status: 'ok'    },
+  // ── Lead time — alimenté par l'agent inventory ────────────────────
+  leadTimeData: { label: string; days: number; status: string }[] = [
+    { label: 'Chargement...', days: 0, status: 'ok' },
   ];
 
   leadTimeBarHeight(days: number): number { return Math.min(100, ((days || 0) / 12) * 100); }
@@ -497,16 +463,22 @@ export class Dashboard implements OnInit, OnDestroy {
     this.agentTimer   = setInterval(() => this.syncFromWs(), 3000);
     this.refreshTimer = setInterval(() => this.loadData(), 120000);
 
-    // Inventory agent overlay (APP08)
-    this.invApi.getStore('I63').subscribe({
-      next:  payload => this._applyAgentData(payload.items, payload.summary),
-      error: err     => console.warn('Stock agent unavailable:', err),
-    });
+    // Inventory agent — chargement initial + refresh toutes les 5 min
+    const loadInventory = () => {
+      this.invApi.getStore('I63').subscribe({
+        next:  payload => this._applyAgentData(payload.items, payload.summary),
+        error: err     => console.warn('Stock agent unavailable:', err),
+      });
+    };
+
+    loadInventory();
+    this.inventoryTimer = setInterval(loadInventory, 300_000); // 5 min
   }
 
   ngOnDestroy() {
-    if (this.refreshTimer) clearInterval(this.refreshTimer);
-    if (this.agentTimer)   clearInterval(this.agentTimer);
+    if (this.refreshTimer)   clearInterval(this.refreshTimer);
+    if (this.agentTimer)     clearInterval(this.agentTimer);
+    if (this.inventoryTimer) clearInterval(this.inventoryTimer);
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -554,32 +526,15 @@ export class Dashboard implements OnInit, OnDestroy {
     const live = this.ws.liveMetrics();
     if (!live) return;
 
-    this.cards.set(this.mapCardsFromWs(live));
-    this.productMix.set(this.mapProductMixFromWs(live));
-    this.riskHours.set(this.mapRiskHoursFromWs(live));
-    this.applyHeatmapFromWs(live);
-
-    if (live.advisors?.length) this.liveAdvisors.set(live.advisors);
-
-    // ── Hourly perf — Always update (backend data OR default fallback) ──
-    const hourly = live 
-      ? this.mapHourlyPerfFromWs(live)
-      : this._buildDefaultHourlyPerf();
-    if (hourly.length) this.hourlyPerf.set([...hourly]);
-
-    // If no WS connection, still update other data from default
-    if (!live) return;
-
-    // ── Product Mix — spread pour forcer la détection ─
-    const mix = this.mapProductMixFromWs(live);
-    if (mix.length) this.productMix.set([...mix]);
-
-    // ── Cards / Risk / Heatmap ───────────────────────
     this.cards.set([...this.mapCardsFromWs(live)]);
+    this.productMix.set([...this.mapProductMixFromWs(live)]);
     this.riskHours.set([...this.mapRiskHoursFromWs(live)]);
     this.applyHeatmapFromWs(live);
 
     if (live.advisors?.length) this.liveAdvisors.set([...live.advisors]);
+
+    const hourly = this.mapHourlyPerfFromWs(live);
+    if (hourly.length) this.hourlyPerf.set([...hourly]);
 
     const wsHeatmap = this.ws.contextHeatmap();
     if (wsHeatmap?.traffic?.length) this.applyHeatmapDirect(wsHeatmap);
@@ -587,6 +542,7 @@ export class Dashboard implements OnInit, OnDestroy {
 
   // ── Inventory agent overlay ───────────────────────────
   private _applyAgentData(items: InventoryApiItem[], summary: InventorySummary): void {
+    // ── KPI card Stock health ────────────────────────────────────────
     this.stockKpi.set({
       critical:    summary.criticalCount,
       total:       summary.totalSkus,
@@ -594,22 +550,59 @@ export class Dashboard implements OnInit, OnDestroy {
       allOk:       summary.allOk,
       avgCoverage: summary.avgCoverageRatio,
     });
-
     this.stockBackLines.set([
-      ...summary.backLines,
-      `Avg. coverage ratio: ${summary.avgCoverageRatio.toFixed(1)}x`,
+      `Critical: ${summary.criticalCount} SKU(s)`,
+      `High risk: ${(summary as any).highCount ?? 0} SKU(s)`,
+      `Avg. coverage: ${summary.avgCoverageRatio.toFixed(1)}x`,
     ]);
 
-    this.inventoryVsSales = this.inventoryVsSales.map(entry => {
-      const a = items.find(i => i.sku === entry.sku);
-      if (!a) return entry;
-      return {
-        ...entry,
-        stock:     a.stock,
-        demand24h: a.demandForecast24h,
-        risk:      a.riskLevel as 'critical' | 'high' | 'ok',
-      };
+    // ── inventoryVsSales — top 6 SKUs les plus risqués ────────────────
+    const COLORS = ['#6C5CE7','#2D9CDB','#F9A825','#E74C3C','#00B894','#A29BFE'];
+    const sorted = [...items]
+      .sort((a, b) => (b.riskScore ?? 0) - (a.riskScore ?? 0))
+      .slice(0, 6);
+
+    this.inventoryVsSales = sorted.map((item, i) => ({
+      id:        item.id ?? `inv-${i}`,
+      sku:       item.sku,
+      name:      item.name ?? item.sku,
+      shortName: (item.name ?? item.sku).slice(0, 14),
+      color:     COLORS[i % COLORS.length],
+      risk:      (['critical','high'].includes(item.riskLevel)
+                    ? item.riskLevel : 'ok') as 'critical' | 'high' | 'ok',
+      stock:     item.stock    ?? 0,
+      stockMax:  Math.max(item.stock ?? 0, (item.reorderPoint ?? 0) * 3, 10),
+      demand24h: item.demandForecast24h ?? 1,
+      sold:      item.stock    ?? 0,
+      target:    item.reorderPoint ?? 5,
+      revenue:   Math.round((item.stock ?? 0) * (item.unitCost ?? 0)),
+    }));
+
+    // ── leadTimeData — agrégé par catégorie depuis les items réels ────
+    const catMap: Record<string, { totalDays: number; count: number; maxRisk: number }> = {};
+
+    items.forEach(item => {
+      const cat = item.category ?? 'Autre';
+      if (!catMap[cat]) catMap[cat] = { totalDays: 0, count: 0, maxRisk: 0 };
+      catMap[cat].totalDays += item.leadTimeDays ?? 7;
+      catMap[cat].count++;
+      const rs = item.riskLevel === 'critical' ? 3
+               : item.riskLevel === 'high'     ? 2 : 1;
+      catMap[cat].maxRisk = Math.max(catMap[cat].maxRisk, rs);
     });
+
+    this.leadTimeData = Object.entries(catMap)
+      .sort((a, b) => b[1].maxRisk - a[1].maxRisk)
+      .slice(0, 6)
+      .map(([label, v]) => {
+        const avgDays = Math.round(v.totalDays / Math.max(v.count, 1));
+        const status  = v.maxRisk === 3 ? 'crit'
+                      : v.maxRisk === 2 ? 'late' : 'ok';
+        return { label, days: avgDays, status };
+      });
+
+    // ── Signal items pour autres composants ───────────────────────────
+    this.inventoryItems.set(items);
   }
 
   // ── Mappers ───────────────────────────────────────────
@@ -644,12 +637,9 @@ export class Dashboard implements OnInit, OnDestroy {
     }));
   }
 
-  // ── FIX : Product Mix — mapping complet depuis payload backend ──
   private mapProductMixFromWs(data: any): any[] {
     const raw = data?.product_mix ?? [];
 
-    // Si le backend n'envoie pas product_mix,
-    // on reconstruit depuis les transactions par catégorie
     if (!raw.length) {
       return this._buildProductMixFromTransactions(data);
     }
@@ -687,13 +677,10 @@ export class Dashboard implements OnInit, OnDestroy {
     });
   }
 
-  // Fallback : reconstruit le Product Mix depuis les données brutes
-  // du payload si product_mix est absent
   private _buildProductMixFromTransactions(data: any): any[] {
     const advisors = data?.advisors ?? [];
     if (!advisors.length) return [];
 
-    // Agrège par catégorie simulée depuis les ventes
     const CATEGORIES = [
       { id: 'forfait',    name: 'Forfait Mobile',  color: '#2D9CDB' },
       { id: 'recharge',   name: 'Recharge',        color: '#27AE60' },
@@ -706,7 +693,6 @@ export class Dashboard implements OnInit, OnDestroy {
       (sum: number, a: any) => sum + (a.revenue ?? 0), 0
     );
 
-    // Répartition historique I63 depuis données réelles
     const splits = [0.55, 0.20, 0.10, 0.09, 0.06];
 
     return CATEGORIES.map((cat, i) => {
@@ -733,11 +719,9 @@ export class Dashboard implements OnInit, OnDestroy {
     });
   }
 
-  // ── FIX PRINCIPAL : Hourly perf avec actual réel ──────
   private mapHourlyPerfFromWs(data: any): HourlyPerf[] {
     const raw = data?.hourly_performance ?? [];
-    
-    // Si le backend n'envoie pas hourly_performance, retourner les valeurs par défaut
+
     if (!raw.length) return this._buildDefaultHourlyPerf();
 
     const now         = new Date();
@@ -746,27 +730,13 @@ export class Dashboard implements OnInit, OnDestroy {
     const mapped = raw.map((h: any) => {
       const hourStr = h.hour || '';
       const hourNum = this._parseHourToInt(hourStr);
-      // Une heure est "passée" si elle est <= heure courante
       const isPast  = hourNum !== null && hourNum <= currentHour;
 
-      // Actual : champ revenue OU actual du backend
-      // On affiche seulement si l'heure est passée
-      const rawActual = Number(
-        h.revenue ?? h.actual ?? h.ca_heure ?? h.ca ?? 0
-      ) || 0;
-      const actual = isPast ? Math.max(0, rawActual) : 0;
-
-      // Target : objectif horaire
-      const target = Math.max(0, Number(h.target ?? h.target_ca ?? 0) || 0);
-
-      // Forecast : prévision horaire
-      const forecast = Math.max(0, Number(
-        h.forecast ?? h.forecast_ca ?? h.predicted ?? 0
-      ) || 0);
-
-      // Risk : heure à risque si actual < 50% target
-      const isRisk = !!h.risk
-        || (isPast && target > 0 && rawActual < target * 0.5);
+      const rawActual = Number(h.revenue ?? h.actual ?? h.ca_heure ?? h.ca ?? 0) || 0;
+      const actual    = isPast ? Math.max(0, rawActual) : 0;
+      const target    = Math.max(0, Number(h.target ?? h.target_ca ?? 0) || 0);
+      const forecast  = Math.max(0, Number(h.forecast ?? h.forecast_ca ?? h.predicted ?? 0) || 0);
+      const isRisk    = !!h.risk || (isPast && target > 0 && rawActual < target * 0.5);
 
       return {
         hour:     this.normalizeHourLabel(hourStr),
@@ -782,28 +752,22 @@ export class Dashboard implements OnInit, OnDestroy {
     return mapped;
   }
 
-  // ── Parse "9h" / "9AM" / "2PM" → int ─────────────────
   private _parseHourToInt(label: string): number | null {
     if (!label) return null;
-    // Format "9h" ou "14h"
     const mH = label.match(/^(\d{1,2})h$/i);
     if (mH) return parseInt(mH[1], 10);
-    // Format "9AM" / "11AM"
     const mAM = label.match(/^(\d{1,2})AM$/i);
     if (mAM) return parseInt(mAM[1], 10);
-    // Format "1PM" / "8PM"
     const mPM = label.match(/^(\d{1,2})PM$/i);
     if (mPM) {
       const n = parseInt(mPM[1], 10);
       return n === 12 ? 12 : n + 12;
     }
-    // Format "14:00" ou "09:00"
     const mColon = label.match(/^(\d{1,2}):/);
     if (mColon) return parseInt(mColon[1], 10);
     return null;
   }
 
-  // ── Construction horaire par défaut avec ratios réels I63 ──
   private _buildDefaultHourlyPerf(): HourlyPerf[] {
     const now         = new Date();
     const currentHour = now.getHours();
@@ -819,24 +783,11 @@ export class Dashboard implements OnInit, OnDestroy {
     return hours.map(h => {
       const ratio    = (this.HOURLY_RATIOS[h] ?? 5) / 100;
       const target   = Math.round(dailyTarget * ratio);
-      const forecast = Math.round(target * 1.05); // +5% forecast
-      
-      // For all hours up to (and including) current hour: show actual values
-      // For future hours: show 0 actual
+      const forecast = Math.round(target * 1.05);
       const isPast   = h <= currentHour;
+      const actual   = isPast ? Math.round(target * (0.80 + Math.random() * 0.20)) : 0;
 
-      // For past hours: generate realistic actual values using target ratio
-      // Add some variance (80-100% of target) to simulate realistic performance
-      const actualVariance = 0.80 + Math.random() * 0.20;
-      const actual   = isPast ? Math.round(target * actualVariance) : 0;
-
-      return {
-        hour:     labels[h],
-        actual,
-        target,
-        forecast,
-        risk:     false,
-      };
+      return { hour: labels[h], actual, target, forecast, risk: false };
     });
   }
 
@@ -888,12 +839,9 @@ export class Dashboard implements OnInit, OnDestroy {
     });
   }
 
-  // ── normalizeHourLabel ────────────────────────────────
   private normalizeHourLabel(hour: string): string {
     if (!hour) return '';
-    // déjà au bon format "9AM", "2PM"
     if (/^\d{1,2}(AM|PM)$/i.test(hour)) return hour.toUpperCase();
-    // format "9h", "14h"
     const m = hour.match(/^(\d{1,2})h$/i);
     if (m) {
       const n = Number(m[1]);
@@ -901,7 +849,6 @@ export class Dashboard implements OnInit, OnDestroy {
       if (n < 12)   return `${n}AM`;
       return `${n - 12}PM`;
     }
-    // format "14:00"
     const mc = hour.match(/^(\d{1,2}):/);
     if (mc) {
       const n = Number(mc[1]);

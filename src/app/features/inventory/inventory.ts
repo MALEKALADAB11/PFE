@@ -148,7 +148,7 @@ export class InventoryComponent implements OnInit, OnDestroy {
   // ── Quadrant chart ────────────────────────────────────────────────────────
 
   quadrantStockMax = computed(() => {
-    const vals = this.items()
+    const vals = this.items()                                                  
       .map(p => p.stock >= 999 ? 0 : p.stock)
       .filter(v => v > 0)
       .sort((a, b) => a - b);

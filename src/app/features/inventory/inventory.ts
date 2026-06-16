@@ -37,10 +37,10 @@ const MIN_REAL_ITEMS = 8;
 
 // How long to wait before the first HTTP poll attempt.
 // Pre-warm starts at server startup so cache may be warm within ~5-30s.
-// Poll every 8s. 30 attempts = up to 4 min total before giving up.
-const HTTP_FIRST_POLL_MS  = 5_000;
-const HTTP_RETRY_POLL_MS  = 8_000;
-const HTTP_MAX_ATTEMPTS   = 30;
+// Poll every 15s. 12 attempts = up to 3 min total before giving up.
+const HTTP_FIRST_POLL_MS  = 8_000;
+const HTTP_RETRY_POLL_MS  = 15_000;
+const HTTP_MAX_ATTEMPTS   = 12;
 
 @Component({
   selector:    'app-inventory',
@@ -118,6 +118,7 @@ export class InventoryComponent implements OnInit, OnDestroy {
   private _pollingTimer:  any = null;
   private _refreshTimer:  any = null;
   private _fallbackTimer: any = null;
+  private _activeHttpSub: any = null;  // tracks in-flight HTTP poll — cancelled before each new attempt
 
   // ── KPIs ──────────────────────────────────────────────────────────────────
   totalItems    = computed(() => this.items().length);
@@ -423,6 +424,12 @@ export class InventoryComponent implements OnInit, OnDestroy {
   }
 
   private _pollOnce(): void {
+    // Cancel any previous in-flight request so requests don't pile up.
+    if (this._activeHttpSub) {
+      this._activeHttpSub.unsubscribe();
+      this._activeHttpSub = null;
+    }
+
     const hasRealData =
       this.items().length > MIN_REAL_ITEMS ||
       this.items().some((i: any) => i.safetyStock > 0 || i.riskRationale);
@@ -437,7 +444,7 @@ export class InventoryComponent implements OnInit, OnDestroy {
       `[Inventory] HTTP poll attempt ${this._pollAttempts}/${HTTP_MAX_ATTEMPTS} — pipeline may still be running`
     );
 
-    this.loadAgentOverlay(
+    this._activeHttpSub = this.loadAgentOverlay(
       this.selectedStore(),
       this.selectedObjective(),
       // onSuccess: stop polling
@@ -612,7 +619,7 @@ export class InventoryComponent implements OnInit, OnDestroy {
     objective = this.selectedObjective(),
     onSuccess?: () => void,
     onEmpty?:   () => void,
-  ): void {
+  ): any {
     this.agentLoading.set(true);
     this.agentError.set(null);
 
@@ -620,11 +627,11 @@ export class InventoryComponent implements OnInit, OnDestroy {
       .set('business_objective', objective)
       .set('page_size', '0');
 
-    this.http.get<StorePayload>(
+    return this.http.get<StorePayload>(
       `http://localhost:8000/api/inventory/store/${storeId}`,
       { params }
     ).pipe(
-      timeout(180_000)  // 3 min — pipeline with 50 SKUs can take 30-60s on cold LLM
+      timeout(60_000)  // 60s — if it takes longer the backend has a real problem
     ).subscribe({
       next: payload => {
         const count = payload.items?.length ?? 0;

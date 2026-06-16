@@ -589,8 +589,8 @@
               <span class="heat-row-label">{{ row.label }}</span>
               @for (h of heatHours; track h; let i = $index) {
                 <div class="heat-cell"
-                     [style.background]="heatColor((heatData[row.key] ?? [])[i] ?? 1)"
-                     [title]="row.label + ' ' + h + ' : ' + heatLabel((heatData[row.key] ?? [])[i] ?? 1)">
+                     [style.background]="heatColor(heatData[row.key][i])"
+                     [title]="row.label + ' ' + h + ' : ' + heatLabel(heatData[row.key][i])">
                 </div>
               }
             </div>

@@ -444,12 +444,18 @@ export class WebSocketService {
   connectInventory(storeId: string, objective = 'balanced') {
     if (!this.isBrowser) return;
 
-    // If reconnecting to a different store, reset the item count so
-    // stock_delta patches don't fire until the new snapshot arrives.
+    // Only reset snapshot state when switching to a DIFFERENT store.
+    // When reconnecting to the same store (tab switch, network blip), we keep
+    // liveInventory intact so the UI doesn't blank out while the new WS handshake
+    // completes. The backend will either send a warm cache snapshot immediately
+    // (patched in-memory by invalidate_store) or inventory_loading if the pipeline
+    // is still running — in which case the existing data stays visible.
     if (storeId !== this.inventoryStore) {
       this._inventoryItemCount = 0;
       this.liveInventory.set(null);
     }
+    // Note: _inventoryItemCount is NOT reset on same-store reconnect so that
+    // incoming stock_delta patches continue to be applied against the existing snapshot.
 
     if (this.inventoryReconnectTimer) {
       clearTimeout(this.inventoryReconnectTimer);
@@ -481,8 +487,16 @@ export class WebSocketService {
 
           // ── pipeline still running — don't touch liveInventory ──────────
           if (data.type === 'inventory_loading') {
-            console.log('[WS] ⏳ Backend pipeline running for', storeId, '— HTTP polling will pick it up');
-            this.inventoryLoading.set(true);
+            // Only signal loading if we don't already have a usable snapshot.
+            // On a tab-switch reconnect the backend may send inventory_loading
+            // while the pipeline catches up, but we should keep showing the
+            // existing (in-memory patched) data rather than blanking the UI.
+            if (!this.liveInventory()) {
+              console.log('[WS] ⏳ Backend pipeline running for', storeId, '— HTTP polling will pick it up');
+              this.inventoryLoading.set(true);
+            } else {
+              console.log('[WS] ⏳ Pipeline running for', storeId, '— keeping existing snapshot visible');
+            }
             return;
           }
 

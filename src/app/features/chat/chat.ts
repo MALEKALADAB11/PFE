@@ -50,6 +50,15 @@ interface SuggestedPrompt {
   color:    string;
 }
 
+// ── Inventory chat response shape ─────────────────────────────────────────
+interface InventoryChatResponse {
+  answer:      string;
+  intent:      string;
+  sku:         string | null;
+  data_source: string;
+  timestamp:   string;
+}
+
 @Component({
   selector:    'app-chat',
   standalone:  true,
@@ -73,6 +82,9 @@ export class ChatComponent implements OnInit, AfterViewChecked, OnDestroy {
   searchQuery   = signal('');
   showSidebar   = signal(true);
   prefillMeta   = signal<{ sku?: string; name?: string; mode?: string } | null>(null);
+
+  // ── SKU context tracking for multi-turn inventory conversations ───
+  private currentSkuContext = signal<string | null>(null);
 
   // ── Données live depuis le WebSocket ───────────────────────────
   liveGapPct        = computed(() => this.ws.gapPct()         ?? 0);
@@ -223,6 +235,8 @@ export class ChatComponent implements OnInit, AfterViewChecked, OnDestroy {
           const existing = this.conversations().find(c => c.mode === 'inventory');
           if (existing) this.selectConv(existing.id);
           else this.newConvWithMode('inventory', parsed.name ?? 'Stock alert');
+          // Seed the SKU context from the prefill so the first turn resolves it
+          if (parsed.sku) this.currentSkuContext.set(parsed.sku);
         }
       }
     } catch { /* ignore */ }
@@ -248,7 +262,7 @@ export class ChatComponent implements OnInit, AfterViewChecked, OnDestroy {
     const actions  = this.liveActions();
     const cause    = this.liveCause();
 
-    const action1 = actions[0]?.action ?? 'Focus bundle terminal + forfait';
+    const action1  = actions[0]?.action ?? 'Focus bundle terminal + forfait';
     const produit1 = actions[0]?.produit_cible ?? 'Forfait Flexi 25Go';
 
     const greetMsg = summary
@@ -297,8 +311,84 @@ export class ChatComponent implements OnInit, AfterViewChecked, OnDestroy {
     // Afficher le typing indicator
     this.addMessage({ id: 'typing', role: 'coach', text: '', time: this.now(), typing: true });
 
-    // Appeler le backend RAG
-    this._callCoachBackend(msg);
+    // Route to the correct backend based on conversation mode
+    const mode = this.activeConv()?.mode ?? 'general';
+    if (mode === 'inventory') {
+      this._callInventoryBackend(msg);
+    } else {
+      this._callCoachBackend(msg);
+    }
+  }
+
+  // ── Appel backend inventory /api/inventory/chat ─────────────────
+  private _callInventoryBackend(userMsg: string): void {
+    const prefill = this.prefillMeta();
+    const skuCtx  = this.currentSkuContext() ?? prefill?.sku ?? null;
+
+    const payload = {
+      message:              userMsg,
+      store_id:             'I63',
+      conversation_history: this.activeConv()
+        ?.messages
+        .filter(m => m.role === 'user' || m.role === 'coach')
+        .map(m => ({
+          role:    m.role === 'coach' ? 'assistant' : 'user',
+          content: m.text,
+        })) ?? [],
+      sku_context: skuCtx,
+    };
+
+    this.http
+      .post<InventoryChatResponse>(
+        'http://localhost:8000/api/inventory/chat',
+        payload,
+        { headers: { 'Content-Type': 'application/json' } }
+      )
+      .subscribe({
+        next: (resp) => {
+          this._removeTyping();
+
+          // Carry the resolved SKU forward to the next turn
+          if (resp.sku) this.currentSkuContext.set(resp.sku);
+
+          this.addMessage({
+            id:         'c' + Date.now(),
+            role:       'coach',
+            text:       resp.answer,
+            time:       this.now(),
+            sources:    this._buildInventorySources(resp.intent, resp.data_source),
+            confidence: resp.data_source === 'fresh_analysis' ? 0.95 : 0.88,
+          });
+
+          this.isTyping.set(false);
+          this.shouldScroll = true;
+        },
+        error: (err) => {
+          this._removeTyping();
+          this.addMessage({
+            id:   'err' + Date.now(),
+            role: 'coach',
+            text: 'Unable to reach inventory agent. Please check your connection.',
+            time: this.now(),
+          });
+          this.isTyping.set(false);
+          console.error('[Chat] inventory backend error', err);
+        },
+      });
+  }
+
+  private _buildInventorySources(intent: string, dataSource: string): string[] {
+    const map: Record<string, string[]> = {
+      explain_recommendation: ['Decision Agent', 'DB Recommendations'],
+      explain_alert:          ['Analysis Agent', 'Risk Engine'],
+      discuss_decision:       ['Decision Agent', 'Analysis Agent'],
+      weather_or_context:     ['Context Agent', 'Open-Meteo'],
+      broad_overview:         ['All Agents'],
+      free_question:          ['Inventory Knowledge'],
+    };
+    const sources = [...(map[intent] ?? ['Inventory Agent'])];
+    if (dataSource === 'fresh_analysis') sources.push('Live Pipeline');
+    return sources;
   }
 
   // ── Appel backend /api/v1/coach/chat avec contexte live ─────────
@@ -482,6 +572,8 @@ export class ChatComponent implements OnInit, AfterViewChecked, OnDestroy {
 
     this.conversations.update(list => [conv, ...list]);
     this.activeConvId.set(id);
+    // Reset SKU context when starting a fresh inventory conversation
+    if (mode === 'inventory') this.currentSkuContext.set(null);
     this.shouldScroll = true;
   }
 

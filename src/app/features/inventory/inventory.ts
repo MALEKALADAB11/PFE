@@ -1150,7 +1150,6 @@ export class InventoryComponent implements OnInit, OnDestroy {
       default:          return null;
     }
   }
-
   // ── Ask Coach ─────────────────────────────────────────────────────────────
 
   askChat(item: InventoryItem, e: Event): void {

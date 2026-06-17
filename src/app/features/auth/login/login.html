@@ -3,7 +3,7 @@
 
     <!-- Logo Ooredoo -->
     <div class="login-logo-area">
-      <img class="login-logo-img" src="assets/logo-ooredoo.png"/>
+      <img class="login-logo-img" src="assets/logo-ooredoo.png" />
     </div>
 
     <div class="login-divider-h"></div>
@@ -13,23 +13,17 @@
 
     <!-- Onglets -->
     <div class="login-tabs">
-      <button class="login-tab"
-              [class.login-tab--active]="tab() === 'manager'"
-              (click)="setTab('manager')">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2">
-          <rect x="2" y="7" width="20" height="14" rx="2"/>
-          <path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/>
+      <button class="login-tab" [class.login-tab--active]="tab() === 'manager'" (click)="setTab('manager')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="2" y="7" width="20" height="14" rx="2" />
+          <path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2" />
         </svg>
         Manager
       </button>
-      <button class="login-tab"
-              [class.login-tab--active]="tab() === 'vendeur'"
-              (click)="setTab('vendeur')">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2">
-          <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
-          <circle cx="12" cy="7" r="4"/>
+      <button class="login-tab" [class.login-tab--active]="tab() === 'vendeur'" (click)="setTab('vendeur')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+          <circle cx="12" cy="7" r="4" />
         </svg>
         Conseiller
       </button>
@@ -39,19 +33,14 @@
     <div class="login-field">
       <label class="login-label">Identifiant</label>
       <div class="login-input-wrap">
-        <svg class="login-input-icon" width="16" height="16" viewBox="0 0 24 24"
-             fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
-          <circle cx="12" cy="7" r="4"/>
+        <svg class="login-input-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="2">
+          <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+          <circle cx="12" cy="7" r="4" />
         </svg>
-        <input
-          type="text"
-          class="login-input"
-          [placeholder]="tab() === 'manager' ? 'ex: managerlac2' : 'ex: zouiTeninsaf'"
-          [value]="username()"
-          (input)="updateUsername($event)"
-          (keydown)="onKey($event)"
-          autocomplete="username"/>
+        <input type="text" class="login-input"
+          [placeholder]="tab() === 'manager' ? 'ex: managerlac2' : 'ex: zouiTeninsaf'" [value]="username()"
+          (input)="updateUsername($event)" (keydown)="onKey($event)" autocomplete="username" />
       </div>
     </div>
 
@@ -59,34 +48,25 @@
     <div class="login-field">
       <label class="login-label">Mot de passe</label>
       <div class="login-input-wrap">
-        <svg class="login-input-icon" width="16" height="16" viewBox="0 0 24 24"
-             fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-          <path d="M7 11V7a5 5 0 0110 0v4"/>
+        <svg class="login-input-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="2">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+          <path d="M7 11V7a5 5 0 0110 0v4" />
         </svg>
-        <input
-          [type]="showPass() ? 'text' : 'password'"
-          class="login-input"
-          placeholder="••••••••"
-          [value]="password()"
-          (input)="updatePassword($event)"
-          (keydown)="onKey($event)"
-          autocomplete="current-password"/>
-        <button class="login-eye-btn" type="button"
-                (click)="showPass.update(v => !v)"
-                aria-label="Afficher/masquer">
+        <input [type]="showPass() ? 'text' : 'password'" class="login-input" placeholder="••••••••" [value]="password()"
+          (input)="updatePassword($event)" (keydown)="onKey($event)" autocomplete="current-password" />
+        <button class="login-eye-btn" type="button" (click)="showPass.update(v => !v)" aria-label="Afficher/masquer">
           @if (showPass()) {
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-                 stroke="currentColor" stroke-width="2">
-              <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/>
-              <line x1="1" y1="1" x2="23" y2="23"/>
-            </svg>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path
+              d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19" />
+            <line x1="1" y1="1" x2="23" y2="23" />
+          </svg>
           } @else {
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-                 stroke="currentColor" stroke-width="2">
-              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-              <circle cx="12" cy="12" r="3"/>
-            </svg>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
           }
         </button>
       </div>
@@ -94,62 +74,30 @@
 
     <!-- Erreur -->
     @if (error()) {
-      <div class="login-error">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="10"/>
-          <line x1="12" y1="8" x2="12" y2="12"/>
-          <line x1="12" y1="16" x2="12.01" y2="16"/>
-        </svg>
-        {{ error() }}
-      </div>
+    <div class="login-error">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10" />
+        <line x1="12" y1="8" x2="12" y2="12" />
+        <line x1="12" y1="16" x2="12.01" y2="16" />
+      </svg>
+      {{ error() }}
+    </div>
     }
 
-    <!-- Bouton -->
-    <button class="login-btn"
-            [class.login-btn--loading]="loading()"
-            [disabled]="loading()"
-            (click)="submit()">
+    <!-- Bouton Se connecter -->
+    <button class="login-btn" [class.login-btn--loading]="loading()" [disabled]="loading()" (click)="submit()">
       @if (loading()) {
-        <div class="login-spinner"></div>
-        Connexion en cours...
+      <div class="login-spinner"></div>
+      Connexion en cours...
       } @else {
-        <!-- <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2">
-          <path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4"/>
-          <polyline points="10,17 15,12 10,7"/>
-          <line x1="15" y1="12" x2="3" y2="12"/>
-        </svg> -->
-        Se connecter
+      Se connecter
       }
     </button>
 
-    <!-- Permissions -->
-    <div class="login-perms">
-      @if (tab() === 'manager') {
-        <div class="login-perm login-perm--ok">
-          <!-- <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-               stroke="#1D9E75" stroke-width="2.5">
-            <polyline points="20,6 9,17 4,12"/>
-          </svg> -->
-          
-        </div>
-      } @else {
-        <div class="login-perm login-perm--ok">
-          <!-- <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-               stroke="#1D9E75" stroke-width="2.5">
-            <polyline points="20,6 9,17 4,12"/>
-          </svg> -->
-        </div>
-        <div class="login-perm login-perm--off">
-          <!-- <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-               stroke="#E24B4A" stroke-width="2.5">
-            <line x1="18" y1="6" x2="6" y2="18"/>
-            <line x1="6" y1="6" x2="18" y2="18"/>
-          </svg> -->
-          
-        </div>
-      }
+    <!-- Pied de la Card (Nouveaux Liens) -->
+    <div class="login-footer-links">
+      <a href="#" class="login-link-forgot">Mot de passe oublié ?</a>
+      <button class="login-btn-register">Créer un compte</button>
     </div>
 
   </div>

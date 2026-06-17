@@ -65,8 +65,9 @@ export class Dashboard implements OnInit, OnDestroy {
   riskHours  = signal<RiskHour[]>([]);
 
   private _mockAdvisors: Advisor[] = [];
-  private refreshTimer: any = null;
-  private agentTimer:   any = null;
+  private refreshTimer:   any = null;
+  private agentTimer:     any = null;
+  private inventoryTimer: any = null;
   private destroy$ = new Subject<void>();
 
   // ── Ratios horaires réels I63 (calculés depuis historique mars 2026) ──
@@ -215,18 +216,18 @@ export class Dashboard implements OnInit, OnDestroy {
   isHoliday    = computed(() => this.ws.isHolidayToday());
   nextHoliday  = computed(() => this.ws.nextHoliday()  ?? '');
 
-  // ── Stock KPI — mock seeds, agent overwrites via ngOnInit ─────────────────
-  // ── Stock KPI ─────────────────────────────────────────
+  // ── Stock KPI — agent overwrites via ngOnInit (lightweight summary call) ──
   stockKpi = signal({
-    critical: 2, total: 6, okCount: 3,
-    allOk: false, avgCoverage: 1.8,
+    critical: 0, total: 0, okCount: 0,
+    allOk: false, avgCoverage: 0,
   });
 
   stockBackLines = signal<string[]>([
-    'iPhone 16 Pro: 3 units — risk 91%',
-    'Apple Watch S10: 2 units — risk 88%',
-    'Avg. coverage ratio: 1.8x',
+    'Chargement des données inventory...',
   ]);
+
+  // ── Signal items inventory (alimenté par _applyAgentData) ─────────
+  inventoryItems = signal<InventoryApiItem[]>([]);
 
   // ── Flip Cards ────────────────────────────────────────
   flipCards = computed((): FlipCardData[] => {
@@ -382,6 +383,16 @@ export class Dashboard implements OnInit, OnDestroy {
     risk:    [1,1,1,1,1,1,1,1],
   };
 
+  // Safe lookup for heatData[key][i] — kept here instead of inline in the
+  // template with `??`, since ngtsc's NG8102 extended diagnostic flags `??`
+  // in templates as dead code when the declared type (Record<string, number[]>)
+  // doesn't include undefined. The real-world data can still be short a key
+  // or an hour, so the fallback stays — just moved out of the template.
+  heatVal(key: string, i: number): number {
+    const row = this.heatData[key];
+    return (row && row[i] !== undefined) ? row[i] : 1;
+  }
+
   heatColor(val: number): string {
     const colors = ['#EAF3DE','#C0DD97','#EF9F27','#E74C3C','#A32D2D'];
     return colors[Math.min(Math.max((val || 1) - 1, 0), 4)];
@@ -391,52 +402,24 @@ export class Dashboard implements OnInit, OnDestroy {
     return ['','Low','Med','High','Crit','Crit'][val] ?? '';
   }
 
-  // ── Inventory vs Sales ────────────────────────────────
-  inventoryVsSales = [
-    {
-      id: 'p1', sku: 'IPH16PRO',  name: 'iPhone 16 Pro',    shortName: 'iPhone 16',
-      color: '#6C5CE7', risk: 'critical' as const,
-      stock: 3,   stockMax: 40,  demand24h: 11, sold: 14, target: 18, revenue: 2380
-    },
-    {
-      id: 'p2', sku: 'SAMA55',    name: 'Samsung A55',       shortName: 'Samsung A55',
-      color: '#2D9CDB', risk: 'ok' as const,
-      stock: 24,  stockMax: 35,  demand24h: 8,  sold: 9,  target: 8,  revenue: 1470
-    },
-    {
-      id: 'p3', sku: 'AIRPDP3',   name: 'AirPods Pro 3',     shortName: 'AirPods',
-      color: '#F9A825', risk: 'high' as const,
-      stock: 7,   stockMax: 25,  demand24h: 9,  sold: 4,  target: 9,  revenue: 420
-    },
-    {
-      id: 'p4', sku: 'APLWTCH',   name: 'Apple Watch S10',   shortName: 'Watch S10',
-      color: '#E74C3C', risk: 'critical' as const,
-      stock: 2,   stockMax: 20,  demand24h: 6,  sold: 3,  target: 6,  revenue: 1347
-    },
-    {
-      id: 'p5', sku: 'FIB2GPRO',  name: 'Fiber Box 2G Pro',  shortName: 'Fiber 2G',
-      color: '#00B894', risk: 'ok' as const,
-      stock: 18,  stockMax: 30,  demand24h: 5,  sold: 9,  target: 8,  revenue: 1470
-    },
-    {
-      id: 'p6', sku: 'ASRPREM',   name: 'Premium Insurance', shortName: 'Insurance',
-      color: '#A29BFE', risk: 'ok' as const,
-      stock: 999, stockMax: 999, demand24h: 12, sold: 7,  target: 10, revenue: 630
-    },
-  ];
+  // ── Inventory vs Sales — alimenté par l'agent inventory ──────────
+  inventoryVsSales: any[] = [];
 
   invChartMax = computed(() => {
-    const vals = this.inventoryVsSales.flatMap(p => [
+    const items = this.inventoryVsSales;
+    if (!items.length) return 100;
+    const vals = items.flatMap((p: any) => [
       p.stock >= 999 ? 0 : p.stock,
       p.demand24h, p.sold, p.target,
       p.stockMax >= 999 ? 0 : p.stockMax,
     ]);
-    return Math.max(...vals) * 1.15;
+    return Math.max(...vals, 1) * 1.15;
   });
 
   invBarH(val: number): number {
     if (val >= 999) return 100;
-    return Math.round((val / this.invChartMax()) * 100);
+    const max = this.invChartMax();
+    return Math.round((val / max) * 100);
   }
 
   invRiskColor(r: string): string {
@@ -459,23 +442,18 @@ export class Dashboard implements OnInit, OnDestroy {
 
   invCoverage(stock: number, demand: number): string {
     if (stock >= 999) return '∞';
-    return (stock / demand).toFixed(1) + 'x';
+    return (stock / Math.max(demand, 1)).toFixed(1) + 'x';
   }
 
   invCoverageColor(stock: number, demand: number): string {
     if (stock >= 999) return '#00B894';
-    const r = stock / demand;
+    const r = stock / Math.max(demand, 1);
     return r < 0.5 ? '#E74C3C' : r < 1.0 ? '#F9A825' : '#00B894';
   }
 
-  // ── Lead time ─────────────────────────────────────────
-  leadTimeData = [
-    { label: 'Top-up',      days: 4, status: 'ok'   },
-    { label: 'Smartphones', days: 7, status: 'late'  },
-    { label: 'SIM',         days: 5, status: 'ok'    },
-    { label: 'Accessories', days: 9, status: 'crit'  },
-    { label: 'Routers',     days: 6, status: 'late'  },
-    { label: 'Tablets',     days: 3, status: 'ok'    },
+  // ── Lead time — alimenté par l'agent inventory ────────────────────
+  leadTimeData: { label: string; days: number; status: string }[] = [
+    { label: 'Chargement...', days: 0, status: 'ok' },
   ];
 
   leadTimeBarHeight(days: number): number { return Math.min(100, ((days || 0) / 12) * 100); }
@@ -497,18 +475,33 @@ export class Dashboard implements OnInit, OnDestroy {
     this.agentTimer   = setInterval(() => this.syncFromWs(), 3000);
     this.refreshTimer = setInterval(() => this.loadData(), 120000);
 
-    // Stock KPI card — use the lightweight summary endpoint (no pipeline trigger).
-    // The full getStore() call was firing analyze_store() on every page visit,
-    // taking 10-30 min when the cache was cold after a sale event invalidation.
-    this.invApi.getSummary('I63').subscribe({
-      next:  summary => this._applyAgentSummary(summary),
-      error: err     => console.warn('Stock summary unavailable:', err),
+    // Stock KPI card — lightweight summary endpoint (no pipeline trigger).
+    // Cheap enough to poll regularly, so it stays fresh on its own.
+    const loadSummary = () => {
+      this.invApi.getSummary('I63').subscribe({
+        next:  summary => this._applyAgentSummary(summary),
+        error: err     => console.warn('Stock summary unavailable:', err),
+      });
+    };
+    loadSummary();
+    this.inventoryTimer = setInterval(loadSummary, 60_000); // 1 min, cheap
+
+    // Inventory vs Sales / Lead time widgets need per-SKU detail, which only
+    // the full getStore() payload provides. getStore() triggers analyze_store()
+    // on a cold cache (10-30 min) — fine to eat once on load, but we deliberately
+    // do NOT poll it on an interval: that's what made every page visit hang
+    // before. Refresh manually (e.g. via triggerAgent()) or swap this for a
+    // lightweight items endpoint if/when the backend adds one.
+    this.invApi.getStore('I63').subscribe({
+      next:  payload => this._applyAgentData(payload.items, payload.summary),
+      error: err     => console.warn('Stock agent unavailable:', err),
     });
   }
 
   ngOnDestroy() {
-    if (this.refreshTimer) clearInterval(this.refreshTimer);
-    if (this.agentTimer)   clearInterval(this.agentTimer);
+    if (this.refreshTimer)   clearInterval(this.refreshTimer);
+    if (this.agentTimer)     clearInterval(this.agentTimer);
+    if (this.inventoryTimer) clearInterval(this.inventoryTimer);
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -588,31 +581,58 @@ export class Dashboard implements OnInit, OnDestroy {
     ]);
   }
 
-  // Full path: only called when full item list is needed (e.g., inventory page).
-  private _applyAgentData(items: InventoryApiItem[], summary: InventorySummary): void {
-    this.stockKpi.set({
-      critical:    summary.criticalCount,
-      total:       summary.totalSkus,
-      okCount:     summary.okCount,
-      allOk:       summary.allOk,
-      avgCoverage: summary.avgCoverageRatio,
+  // Full path: called once from ngOnInit with the full item list, to drive
+  // the Inventory vs Sales and Lead Time widgets with real per-SKU data.
+  // Does NOT touch stockKpi/stockBackLines — that's owned by _applyAgentSummary
+  // above, which polls the cheap endpoint and stays fresh on its own.
+  private _applyAgentData(items: InventoryApiItem[], _summary: InventorySummary): void {
+    // ── inventoryVsSales — top 6 SKUs les plus risqués ────────────────
+    const COLORS = ['#6C5CE7','#2D9CDB','#F9A825','#E74C3C','#00B894','#A29BFE'];
+    const sorted = [...items]
+      .sort((a, b) => (b.riskScore ?? 0) - (a.riskScore ?? 0))
+      .slice(0, 6);
+
+    this.inventoryVsSales = sorted.map((item, i) => ({
+      id:        item.id ?? `inv-${i}`,
+      sku:       item.sku,
+      name:      item.name ?? item.sku,
+      shortName: (item.name ?? item.sku).slice(0, 14),
+      color:     COLORS[i % COLORS.length],
+      risk:      (['critical','high'].includes(item.riskLevel)
+                    ? item.riskLevel : 'ok') as 'critical' | 'high' | 'ok',
+      stock:     item.stock    ?? 0,
+      stockMax:  Math.max(item.stock ?? 0, (item.reorderPoint ?? 0) * 3, 10),
+      demand24h: item.demandForecast24h ?? 1,
+      sold:      item.stock    ?? 0,
+      target:    item.reorderPoint ?? 5,
+      revenue:   Math.round((item.stock ?? 0) * (item.unitCost ?? 0)),
+    }));
+
+    // ── leadTimeData — agrégé par catégorie depuis les items réels ────
+    const catMap: Record<string, { totalDays: number; count: number; maxRisk: number }> = {};
+
+    items.forEach(item => {
+      const cat = item.category ?? 'Autre';
+      if (!catMap[cat]) catMap[cat] = { totalDays: 0, count: 0, maxRisk: 0 };
+      catMap[cat].totalDays += item.leadTimeDays ?? 7;
+      catMap[cat].count++;
+      const rs = item.riskLevel === 'critical' ? 3
+               : item.riskLevel === 'high'     ? 2 : 1;
+      catMap[cat].maxRisk = Math.max(catMap[cat].maxRisk, rs);
     });
 
-    this.stockBackLines.set([
-      ...summary.backLines,
-      `Avg. coverage ratio: ${summary.avgCoverageRatio.toFixed(1)}x`,
-    ]);
+    this.leadTimeData = Object.entries(catMap)
+      .sort((a, b) => b[1].maxRisk - a[1].maxRisk)
+      .slice(0, 6)
+      .map(([label, v]) => {
+        const avgDays = Math.round(v.totalDays / Math.max(v.count, 1));
+        const status  = v.maxRisk === 3 ? 'crit'
+                      : v.maxRisk === 2 ? 'late' : 'ok';
+        return { label, days: avgDays, status };
+      });
 
-    this.inventoryVsSales = this.inventoryVsSales.map(entry => {
-      const a = items.find(i => i.sku === entry.sku);
-      if (!a) return entry;
-      return {
-        ...entry,
-        stock:     a.stock,
-        demand24h: a.demandForecast24h,
-        risk:      a.riskLevel as 'critical' | 'high' | 'ok',
-      };
-    });
+    // ── Signal items pour autres composants ───────────────────────────
+    this.inventoryItems.set(items);
   }
 
   // ── Mappers ───────────────────────────────────────────

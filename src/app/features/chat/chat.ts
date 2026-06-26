@@ -83,6 +83,10 @@ export class ChatComponent implements OnInit, AfterViewChecked, OnDestroy {
   showSidebar   = signal(true);
   prefillMeta   = signal<{ sku?: string; name?: string; mode?: string } | null>(null);
 
+  editingConvId = signal<string | null>(null);
+  editingTitle  = signal('');
+  chatDomain    = signal<'sales' | 'stock'>('sales');
+
   // ── SKU context tracking for multi-turn inventory conversations ───
   private currentSkuContext = signal<string | null>(null);
 
@@ -634,5 +638,71 @@ export class ChatComponent implements OnInit, AfterViewChecked, OnDestroy {
 
   trackById(_: number, item: { id: string }): string {
     return item.id;
+  }
+
+  // ── Right panel live metrics ──────────────────────────────────────
+  liveCAToday     = computed(() => Math.round(this.liveMetrics()?.ca_today  ?? 1033));
+  liveCATarget2   = computed(() => Math.round(this.liveMetrics()?.ca_target ?? 1007));
+  liveCAPctChange = computed(() => {
+    const ca = this.liveCAToday(), t = this.liveCATarget2();
+    return t > 0 ? +((ca - t) / t * 100).toFixed(1) : 0;
+  });
+  liveObjectiveOk = computed(() => this.liveCAToday() >= this.liveCATarget2());
+  dailyObjPct     = computed(() =>
+    Math.min(Math.round(this.liveCAToday() / Math.max(this.liveCATarget2(), 1) * 100), 100)
+  );
+  liveTraffic     = computed(() =>
+    this.liveMetrics()?.traffic_per_hour ?? this.liveMetrics()?.traffic ?? 30
+  );
+  liveCapacityPct = computed(() => this.liveMetrics()?.capacity_pct      ?? 75);
+  stockCritique   = computed(() => this.liveMetrics()?.critical_sku_count ?? 2);
+
+  objDonut = computed(() => {
+    const R = 28, C = 2 * Math.PI * R;
+    const arc = (this.dailyObjPct() / 100) * C;
+    return { dashArray: `${arc.toFixed(1)} ${C.toFixed(1)}`, dashOffset: C.toFixed(1) };
+  });
+
+  actionCards = computed(() => {
+    const suggs  = this.dynamicSuggestions();
+    const icons  = ['strategie', 'argument', 'produit', 'closing'];
+    const cats   = ['STRATÉGIE', 'ARGUMENT', 'PRODUIT', 'CLOSING'];
+    const colors = ['#6C5CE7', '#27AE60', '#2D9CDB', '#F9A825'];
+    return suggs.map((s, i) => ({
+      ...s,
+      icon:  icons[i]  ?? icons[0],
+      cat:   cats[i]   ?? s.category.toUpperCase(),
+      color: colors[i] ?? s.color,
+    }));
+  });
+
+  // ── Domain switcher ───────────────────────────────────────────────
+  switchDomain(domain: 'sales' | 'stock'): void {
+    this.chatDomain.set(domain);
+  }
+
+  // ── Conversation rename ───────────────────────────────────────────
+  startRename(id: string, currentTitle: string, e: Event): void {
+    e.stopPropagation();
+    this.editingConvId.set(id);
+    this.editingTitle.set(currentTitle);
+  }
+
+  saveRename(id: string, e?: Event): void {
+    e?.stopPropagation();
+    const t = this.editingTitle().trim();
+    if (t) {
+      this.conversations.update(convs =>
+        convs.map(c => c.id === id ? { ...c, title: t } : c)
+      );
+    }
+    this.editingConvId.set(null);
+  }
+
+  cancelRename(): void { this.editingConvId.set(null); }
+
+  onRenameKey(e: KeyboardEvent, id: string): void {
+    if (e.key === 'Enter')  { e.preventDefault(); this.saveRename(id); }
+    if (e.key === 'Escape') { e.stopPropagation(); this.cancelRename(); }
   }
 }

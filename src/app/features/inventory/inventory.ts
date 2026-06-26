@@ -1,8 +1,6 @@
-// InventoryComponent 
- 
 import {
   Component, computed, signal, OnInit, effect,
-  inject, OnDestroy, DestroyRef, afterNextRender, PLATFORM_ID,
+  inject, OnDestroy, DestroyRef, PLATFORM_ID,
 } from '@angular/core';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { HttpClientModule, HttpParams } from '@angular/common/http';
@@ -1214,5 +1212,246 @@ export class InventoryComponent implements OnInit, OnDestroy {
   trackById(_: number, item: { id: string }): string {
     return item.id;
   }
+
+  // ── Overview dashboard signals ─────────────────────────────────────────────
+
+  coveragePercent = computed(() => {
+    const items = this.items();
+    if (!items.length) return 0;
+    return Math.round(items.filter(i => i.coverageRatio >= 1.0).length / items.length * 100);
+  });
+
+  coverageByCategory = computed(() => {
+    const catMap = new Map<string, { total: number; count: number }>();
+    for (const item of this.items()) {
+      const cat = String((item as any).category || 'Autre');
+      const prev = catMap.get(cat) ?? { total: 0, count: 0 };
+      const days = (item as any).daysOfStock != null ? +(item as any).daysOfStock : item.coverageRatio * 7;
+      catMap.set(cat, { total: prev.total + days, count: prev.count + 1 });
+    }
+    return Array.from(catMap.entries())
+      .map(([category, { total, count }]) => {
+        const avgDays = Math.round((total / count) * 10) / 10;
+        return {
+          category,
+          avgDays,
+          pct: Math.min(Math.round(avgDays / 12 * 100), 100),
+          color: avgDays < 2 ? '#E74C3C' : avgDays < 5 ? '#F9A825' : '#27AE60',
+        };
+      })
+      .sort((a, b) => b.avgDays - a.avgDays)
+      .slice(0, 5);
+  });
+
+  stockDonut = computed(() => {
+    const items = this.items();
+    const total = Math.max(items.length, 1);
+    const critical = items.filter(i => i.riskLevel === 'critical').length;
+    const high     = items.filter(i => i.riskLevel === 'high').length;
+    const overstk  = items.filter(i => (i as any).overstockFlag || i.stock >= 999).length;
+    const optimal  = items.filter(i => i.riskLevel === 'ok' && i.coverageRatio >= 1.5 && i.stock < 999).length;
+    const faible   = Math.max(total - critical - high - overstk - optimal, 0);
+    const R = 54;
+    const C = 2 * Math.PI * R;
+    const cats = [
+      { label: 'Stock optimal',   count: optimal,  color: '#27AE60' },
+      { label: 'Risque élevé',    count: high,     color: '#F9A825' },
+      { label: 'Surstock',        count: overstk,  color: '#2D9CDB' },
+      { label: 'Faible activité', count: faible,   color: '#CBD5E0' },
+      { label: 'Rupture',         count: critical, color: '#E74C3C' },
+    ];
+    let cum = 0;
+    return cats.filter(s => s.count > 0).map(s => {
+      const arc = (s.count / total) * C;
+      const dashOffset = (C - cum).toFixed(1);
+      cum += arc;
+      return { ...s, pct: Math.round(s.count / total * 100), dashArray: `${arc.toFixed(1)} ${C.toFixed(1)}`, dashOffset };
+    });
+  });
+
+  topAtRisk = computed(() =>
+    [...this.items()]
+      .filter(i => i.stock < 999)
+      .sort((a, b) => {
+        const order: Record<string, number> = { critical: 0, high: 1, medium: 2, ok: 3 };
+        const ra = order[a.riskLevel] ?? 3;
+        const rb = order[b.riskLevel] ?? 3;
+        return ra !== rb ? ra - rb : a.coverageRatio - b.coverageRatio;
+      })
+      .slice(0, 5)
+  );
+
+  invRecs = computed(() => {
+    const items = this.items();
+    const recs: { icon: string; title: string; desc: string }[] = [];
+    const critical = items.filter(i => i.riskLevel === 'critical');
+    const high     = items.filter(i => i.riskLevel === 'high');
+    const overstk  = items.filter(i => (i as any).overstockFlag || i.stock >= 999);
+    if (critical.length || high.length) {
+      const item = critical[0] ?? high[0];
+      recs.push({ icon: 'transfer', title: 'Transférer du stock', desc: `Transférer ${(item as any).formulaOrderQty || 5} unités de ${item.name} depuis FR LAC1 vers FR LAC2` });
+    }
+    if (high.length) {
+      const item = high[0];
+      recs.push({ icon: 'reorder', title: 'Réapprovisionnement recommandé', desc: `Commander ${(item as any).formulaOrderQty || 8} unités de ${item.name} (couverture < 2 jours)` });
+    }
+    if (overstk.length) {
+      const item = overstk[0];
+      recs.push({ icon: 'promo', title: 'Promouvoir pour écouler le surstock', desc: `Lancer une promo sur ${item.name} (${item.stock} unités en surstock)` });
+    }
+    if (!recs.length) recs.push({ icon: 'reorder', title: 'Stock sain', desc: 'Aucune action urgente. Surveillance habituelle recommandée.' });
+    return recs;
+  });
+
+  lastUpdateTime = computed(() => {
+    const lu = this.lastUpdate();
+    return (lu ?? new Date()).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  });
+
+  coverageDays(item: InventoryItem): string {
+    const d = (item as any).daysOfStock;
+    return d != null ? `${(+d).toFixed(1)}j` : `${(item.coverageRatio * 7).toFixed(1)}j`;
+  }
+
+  alertBadgeFr(alert: InventoryAlert): string {
+    if (alert.type === 'rupture') return 'Rupture probable';
+    if (alert.type === 'overstock') return 'Surstock';
+    return alert.urgency === 'critical' ? 'Stock critique' : alert.urgency === 'high' ? 'Risque élevé' : 'Stock faible';
+  }
+
+  formatAlertTime(timeStr: string): string {
+    if (!timeStr) return '';
+    try {
+      const d = new Date(timeStr);
+      if (!isNaN(d.getTime())) return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    } catch {}
+    return String(timeStr).substring(0, 5);
+  }
+
+  alertProductName(alert: InventoryAlert): string {
+    const item = this.items().find(i => i.sku === alert.sku);
+    if (item?.name) return item.name;
+    const msg = String(alert.message ?? '');
+    const idx = msg.indexOf(':');
+    return idx > -1 ? msg.substring(idx + 1).trim() : msg;
+  }
+
+  alertSubFr(alert: InventoryAlert): string {
+    const item = this.items().find(i => i.sku === alert.sku);
+    if (!item) return alert.sku ?? '';
+    if (alert.type === 'rupture') return `Stock disponible : ${item.stock} unité${item.stock !== 1 ? 's' : ''}`;
+    if (alert.type === 'overstock') return `Surstock : ${item.stock} unités`;
+    return `Couverture : ${this.coverageDays(item)}`;
+  }
+
+  productInitials(item: InventoryItem): string {
+    const name = String(item.name ?? item.sku ?? '?');
+    return name.split(' ').slice(0, 2).map((w: string) => w[0] ?? '').join('').toUpperCase();
+  }
+
+  // ── New design helpers ──────────────────────────────────────────────────────
+
+  kpiStatus(type: 'critical' | 'high' | 'ok' | 'coverage' | 'total'): { label: string; color: string } {
+    switch (type) {
+      case 'critical': return this.criticalCount() === 0
+        ? { label: 'Excellent', color: '#27AE60' }
+        : { label: 'Critique', color: '#E74C3C' };
+      case 'high': return this.highCount() === 0
+        ? { label: 'Sous contrôle', color: '#27AE60' }
+        : { label: 'Attention', color: '#F9A825' };
+      case 'ok': return this.okCount() > 0
+        ? { label: 'Excellent', color: '#27AE60' }
+        : { label: 'Insuffisant', color: '#94A3B8' };
+      case 'coverage': {
+        const v = parseFloat(String(this.avgCoverage()));
+        return isNaN(v) ? { label: '—', color: '#94A3B8' }
+          : v >= 2.0 ? { label: 'Bon', color: '#27AE60' }
+          : v >= 1.0 ? { label: 'Correct', color: '#F9A825' }
+          : { label: 'Insuffisant', color: '#E74C3C' };
+      }
+      case 'total': return { label: '100%', color: '#6C5CE7' };
+    }
+  }
+
+  alertStockCount(alert: InventoryAlert): number {
+    return this.items().find(i => i.sku === alert.sku)?.stock ?? 0;
+  }
+
+  alertUrgencyLabel(alert: InventoryAlert): string {
+    if (alert.type === 'rupture') return 'Rupture imminente';
+    if (alert.type === 'overstock') return 'Surstock';
+    return 'À risque';
+  }
+
+  alertUrgencyColor(alert: InventoryAlert): string {
+    if (alert.type === 'rupture' || alert.urgency === 'critical') return '#E74C3C';
+    return '#F9A825';
+  }
+
+  alertUrgencyBg(alert: InventoryAlert): string {
+    if (alert.type === 'rupture' || alert.urgency === 'critical') return '#FDEDEC';
+    return '#FFF8E1';
+  }
+
+  riskBadgeFr(riskLevel: string): string {
+    if (riskLevel === 'critical') return 'Critique';
+    if (riskLevel === 'high') return 'À risque';
+    return 'Correct';
+  }
+
+  recImpact(rec: { icon: string }): { label: string; color: string; bg: string } {
+    if (rec.icon === 'transfer') return { label: 'Impact élevé', color: '#27AE60', bg: '#E8F8F5' };
+    if (rec.icon === 'promo')    return { label: 'Impact moyen', color: '#F9A825', bg: '#FFF8E1' };
+    return { label: 'Impact moyen', color: '#6C5CE7', bg: '#F0ECFD' };
+  }
+
+  quadrantDotColor(p: InventoryItem): string {
+    switch (this.quadrantZone(p)) {
+      case 'star':      return '#27AE60';
+      case 'stockout':  return '#E74C3C';
+      case 'ok':        return '#94A3B8';
+      case 'overstock': return '#F9A825';
+    }
+  }
+
+  coverageByCategoryRatio = computed(() => {
+    const catMap = new Map<string, { totalRatio: number; count: number }>();
+    for (const item of this.items()) {
+      const cat = String((item as any).category || 'Autre');
+      const prev = catMap.get(cat) ?? { totalRatio: 0, count: 0 };
+      catMap.set(cat, { totalRatio: prev.totalRatio + item.coverageRatio, count: prev.count + 1 });
+    }
+    return Array.from(catMap.entries())
+      .map(([category, { totalRatio, count }]) => {
+        const r = Math.round((totalRatio / count) * 10) / 10;
+        const pct = Math.min(Math.round(r / 3 * 100), 100);
+        const color = r < 0.5 ? '#E74C3C' : r < 1.0 ? '#F9A825' : '#27AE60';
+        const statusLabel = r >= 1.5 ? 'Optimal' : r >= 1.0 ? 'Correct' : 'À risque';
+        return { category, r, pct, color, statusLabel };
+      })
+      .sort((a, b) => b.r - a.r)
+      .slice(0, 4);
+  });
+
+  stockDonutSimple = computed(() => {
+    const items = this.items();
+    const total = Math.max(items.length, 1);
+    const critical = items.filter(i => i.riskLevel === 'critical').length;
+    const atRisk   = items.filter(i => i.riskLevel === 'high').length;
+    const optimal  = Math.max(total - critical - atRisk, 0);
+    const R = 54, C = 2 * Math.PI * R;
+    const cats = [
+      { label: 'Optimal',  count: optimal,  color: '#27AE60' },
+      { label: 'À risque', count: atRisk,   color: '#F9A825' },
+      { label: 'Critique', count: critical, color: '#E74C3C' },
+    ];
+    let cum = 0;
+    return cats.filter(s => s.count > 0).map(s => {
+      const arc = (s.count / total) * C;
+      const off = (C - cum).toFixed(1);
+      cum += arc;
+      return { ...s, pct: Math.round(s.count / total * 100), dashArray: `${arc.toFixed(1)} ${C.toFixed(1)}`, dashOffset: off };
+    });
+  });
 
 }

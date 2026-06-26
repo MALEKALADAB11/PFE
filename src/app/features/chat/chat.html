@@ -1,132 +1,151 @@
 <div class="chat-page">
 
-  <!-- ══ LEFT SIDEBAR — Conversations ══ -->
+  <!-- ═══════════════════  LEFT SIDEBAR  ═══════════════════ -->
   <aside class="conv-sidebar" [class.is-hidden]="!showSidebar()">
 
-    <!-- Header -->
+    <!-- Brand header -->
     <div class="conv-sidebar__header">
       <div class="conv-brand">
         <div class="conv-brand__icon">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-               stroke="white" stroke-width="2">
-            <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5">
+            <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/>
           </svg>
         </div>
-        <span class="conv-brand__label">CoachAgent</span>
+        <div class="conv-brand__text">
+          <span class="conv-brand__label">CoachAgent</span>
+          <span class="conv-brand__status">
+            <span class="brand-dot"></span>En ligne
+          </span>
+        </div>
       </div>
       <button class="new-conv-btn" (click)="newConv()" title="Nouvelle session">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2.5">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
           <line x1="12" y1="5"  x2="12" y2="19"/>
           <line x1="5"  y1="12" x2="19" y2="12"/>
         </svg>
       </button>
     </div>
 
-    <!-- Contexte live -->
-    <div class="live-context-bar">
-      <div class="live-ctx-item" [class.live-ctx-item--urgent]="liveUrgency() === 'HIGH'">
-        <span class="live-ctx-dot" [class.live-ctx-dot--high]="liveUrgency() === 'HIGH'"
-              [class.live-ctx-dot--med]="liveUrgency() === 'MEDIUM'"></span>
-        <span>Gap {{ liveGapPct().toFixed(0) }}%</span>
+    <!-- Status pills -->
+    <div class="ctx-pills">
+      <div class="ctx-pill" [class.ctx-pill--urgent]="liveGapPct() > 30">
+        <span class="ctx-pill__dot" [class.ctx-pill__dot--red]="liveGapPct() > 50" [class.ctx-pill__dot--yellow]="liveGapPct() > 20 && liveGapPct() <= 50" [class.ctx-pill__dot--green]="liveGapPct() <= 20"></span>
+        Gap {{ liveGapPct().toFixed(0) }}%
       </div>
-      <div class="live-ctx-item">
-        <span>{{ liveWeather() }}</span>
-      </div>
+      <div class="ctx-pill">{{ liveWeather() }}</div>
       @if (liveActions().length > 0) {
-        <div class="live-ctx-rag">
-          <span class="rag-badge">RAG</span>
-          <span>{{ liveActions().length }} action(s)</span>
+        <div class="ctx-pill ctx-pill--rag">
+          <span class="ctx-pill__dot ctx-pill__dot--green"></span>RAG actif
         </div>
       }
     </div>
 
     <!-- Search -->
     <div class="conv-search">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-           stroke="currentColor" stroke-width="2">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <circle cx="11" cy="11" r="8"/>
         <line x1="21" y1="21" x2="16.65" y2="16.65"/>
       </svg>
-      <input type="text" placeholder="Rechercher…" class="conv-search__input"
-             (input)="onSearch($event)"/>
+      <input type="text" placeholder="Rechercher une session…" class="conv-search__input" (input)="onSearch($event)"/>
     </div>
 
-    <!-- Conversations list -->
+    <!-- Sessions label -->
+    <div class="conv-list-label">SESSIONS RÉCENTES</div>
+
+    <!-- Session list -->
     <div class="conv-list">
       @for (conv of filteredConvs(); track conv.id) {
-        <div class="conv-item" [class.is-active]="conv.id === activeConvId()"
-             (click)="selectConv(conv.id)">
-          <div class="conv-mode-dot" [style.background]="modeColors[conv.mode]"></div>
+        <div class="conv-item" [class.is-active]="conv.id === activeConvId()" (click)="selectConv(conv.id)">
+          <div class="conv-item__dot" [style.background]="modeColors[conv.mode]"></div>
           <div class="conv-item__body">
             <div class="conv-item__top">
-              <span class="conv-item__title">{{ conv.title }}</span>
-              <span class="conv-item__time mono">{{ conv.time }}</span>
+              @if (editingConvId() === conv.id) {
+                <input class="conv-rename-input"
+                       [value]="editingTitle()"
+                       (input)="editingTitle.set($any($event.target).value)"
+                       (keydown)="onRenameKey($event, conv.id)"
+                       (blur)="saveRename(conv.id)"
+                       (click)="$event.stopPropagation()"
+                       autofocus />
+              } @else {
+                <span class="conv-item__title">{{ conv.title }}</span>
+              }
+              <span class="conv-item__time">{{ conv.time }}</span>
             </div>
             <p class="conv-item__preview">{{ conv.preview }}</p>
           </div>
-          @if (conv.unread > 0) {
-            <span class="conv-unread">{{ conv.unread }}</span>
-          }
-          <button class="conv-delete" (click)="deleteConv(conv.id, $event)" title="Supprimer">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
-                 stroke="currentColor" stroke-width="2.5">
-              <line x1="18" y1="6"  x2="6"  y2="18"/>
-              <line x1="6"  y1="6"  x2="18" y2="18"/>
-            </svg>
-          </button>
+          <div class="conv-item__actions">
+            @if (conv.unread > 0) { <span class="conv-unread">{{ conv.unread }}</span> }
+            <button class="conv-rename-btn" (click)="startRename(conv.id, conv.title, $event)" title="Renommer">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+            </button>
+            <button class="conv-delete" (click)="deleteConv(conv.id, $event)" title="Supprimer">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <line x1="18" y1="6"  x2="6"  y2="18"/>
+                <line x1="6"  y1="6"  x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
         </div>
       }
       @if (filteredConvs().length === 0) {
-        <div class="conv-empty"><p>Aucune session</p></div>
+        <div class="conv-empty"><p>Aucune session pour ce domaine</p></div>
       }
     </div>
 
-    <!-- Actions stratège live -->
-    @if (liveActions().length > 0) {
-      <div class="conv-sidebar__stratege">
-        <p class="footer-label">Actions stratège</p>
-        @for (a of liveActions().slice(0, 2); track a.priorite) {
-          <div class="stratege-action-chip"
-               (click)="send('Comment appliquer: ' + a.action + ' avec ' + a.produit_cible + '?')">
-            <span class="action-priority">P{{ a.priorite }}</span>
-            <span class="action-text">{{ a.action.slice(0, 50) }}{{ a.action.length > 50 ? '…' : '' }}</span>
-          </div>
-        }
+    <!-- Daily objective donut -->
+    <div class="obj-section">
+      <div class="obj-section__title">Objectif du jour</div>
+      <div class="obj-donut-row">
+        <svg width="64" height="64" viewBox="0 0 64 64">
+          <circle cx="32" cy="32" r="28" fill="none" stroke="#E5E7EB" stroke-width="6"/>
+          <circle cx="32" cy="32" r="28" fill="none"
+            [attr.stroke]="liveObjectiveOk() ? '#27AE60' : '#6C5CE7'"
+            stroke-width="6" stroke-linecap="round"
+            [attr.stroke-dasharray]="objDonut().dashArray"
+            stroke-dashoffset="0"
+            transform="rotate(-90 32 32)"/>
+          <text x="32" y="36" text-anchor="middle" font-size="11" font-weight="700"
+            [attr.fill]="liveObjectiveOk() ? '#27AE60' : '#6C5CE7'">
+            {{ dailyObjPct() }}%
+          </text>
+        </svg>
+        <div class="obj-donut-info">
+          <div class="obj-donut-val">{{ liveCAToday() | number:'1.0-0' }} DT</div>
+          <div class="obj-donut-target">/ {{ liveCATarget2() | number:'1.0-0' }} DT</div>
+          @if (liveObjectiveOk()) {
+            <div class="obj-attained">Objectif atteint ✓</div>
+          } @else {
+            <div class="obj-progress">En cours…</div>
+          }
+        </div>
       </div>
-    }
+    </div>
 
-    <!-- Advisors -->
+    <!-- Active advisors -->
     <div class="conv-sidebar__footer">
-      <p class="footer-label">Conseillers actifs</p>
+      <p class="footer-label">CONSEILLERS ACTIFS ({{ advisors.slice(0, 5).length }})</p>
       <div class="advisor-chips">
-        @for (adv of advisors; track adv.id) {
-          <div class="adv-chip" [style.border-color]="adv.avatarColor"
-               [title]="adv.name + ' · ' + adv.performance + '%'"
-               (click)="newConvForAdvisor(adv.name)">
-            <div class="adv-chip__avatar" [style.background]="adv.avatarColor">
-              {{ adv.initials }}
-            </div>
-            <span class="adv-chip__pct"
-                  [style.color]="adv.performance >= 80 ? '#00B894' :
-                                  adv.performance >= 50 ? '#F9A825' : '#E74C3C'">
-              {{ adv.performance }}%
-            </span>
+        @for (adv of advisors.slice(0, 5); track adv.id) {
+          <div class="adv-chip" [title]="adv.name + ' · ' + adv.performance + '%'" (click)="newConvForAdvisor(adv.name)">
+            <div class="adv-chip__avatar" [style.background]="adv.avatarColor">{{ adv.initials }}</div>
           </div>
         }
       </div>
+      <button class="footer-link">Voir tous les conseillers →</button>
     </div>
 
   </aside>
 
-  <!-- ══ MAIN CHAT AREA ══ -->
+  <!-- ═══════════════════  MAIN CHAT  ═══════════════════ -->
   <div class="chat-main">
 
-    <!-- Chat header -->
     <div class="chat-header">
       <button class="sidebar-toggle" (click)="showSidebar.update(v => !v)" title="Toggle sidebar">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <line x1="3"  y1="6"  x2="21" y2="6"/>
           <line x1="3"  y1="12" x2="21" y2="12"/>
           <line x1="3"  y1="18" x2="21" y2="18"/>
@@ -135,193 +154,236 @@
 
       <div class="chat-header__info">
         @if (activeConv()) {
-          <div class="chat-header__mode"
-               [style.background]="modeColors[activeConv().mode] + '22'"
-               [style.color]="modeColors[activeConv().mode]">
+          <span class="chat-header__title">{{ activeConv().title }}</span>
+          <div class="chat-header__mode" [style.background]="modeColors[activeConv().mode] + '1A'" [style.color]="modeColors[activeConv().mode]">
             {{ modeLabels[activeConv().mode] }}
           </div>
-          <span class="chat-header__title">{{ activeConv().title }}</span>
         }
       </div>
 
       <div class="chat-header__meta">
-        <!-- Indicateur RAG -->
         <div class="rag-status" [class.rag-status--active]="liveActions().length > 0">
           <span class="rag-status__dot"></span>
-          <span>RAG {{ liveActions().length > 0 ? 'actif' : 'inactif' }}</span>
+          <span>RAG {{ liveActions().length > 0 ? 'Actif' : 'Veille' }}</span>
         </div>
-        <!-- Urgence -->
-        <div class="urgency-badge"
-             [class.urgency-badge--high]="liveUrgency() === 'HIGH'"
-             [class.urgency-badge--med]="liveUrgency() === 'MEDIUM'"
-             [class.urgency-badge--low]="liveUrgency() === 'LOW'">
-          {{ liveUrgency() }}
-        </div>
-        @if (activeConv()) {
-          <div class="msg-count mono">{{ activeConv().messages.length }} messages</div>
-        }
       </div>
     </div>
 
-    <!-- Messages area -->
-    <div class="messages-area">
-      @if (activeConv()) {
-        @for (msg of activeConv().messages; track msg.id) {
+    <div class="chat-container">
 
-          <!-- System message -->
-          @if (msg.role === 'system') {
-            <div class="sys-msg">
-              <span class="sys-msg__line"></span>
-              <span class="sys-msg__text">{{ msg.text }}</span>
-              <span class="sys-msg__line"></span>
-            </div>
-          }
+      <div class="messages-area">
+        @if (activeConv()) {
+          @for (msg of activeConv().messages; track msg.id) {
 
-          <!-- Coach message -->
-          @if (msg.role === 'coach') {
-            <div class="msg-row msg-row--coach">
-              <div class="msg-avatar msg-avatar--coach">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                     stroke="white" stroke-width="2">
-                  <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-                  <path d="M2 17l10 5 10-5"/>
-                  <path d="M2 12l10 5 10-5"/>
-                </svg>
+            @if (msg.role === 'system') {
+              <div class="sys-msg">
+                <span class="sys-msg__line"></span>
+                <span class="sys-msg__text">{{ msg.text }}</span>
+                <span class="sys-msg__line"></span>
               </div>
-              <div class="msg-content">
-                @if (msg.typing) {
-                  <div class="msg-bubble msg-bubble--coach typing-bubble">
-                    <div class="typing-dots">
-                      <span></span><span></span><span></span>
-                    </div>
-                  </div>
-                } @else {
-                  <div class="msg-bubble msg-bubble--coach">
-                    <p class="msg-text" style="white-space: pre-line">{{ msg.text }}</p>
+            }
 
-                    @if (msg.sources?.length) {
-                      <div class="msg-sources">
-                        <svg width="10" height="10" viewBox="0 0 24 24"
-                             fill="none" stroke="currentColor" stroke-width="2">
-                          <circle cx="12" cy="12" r="10"/>
-                          <line x1="12" y1="8"  x2="12"    y2="12"/>
-                          <line x1="12" y1="16" x2="12.01" y2="16"/>
-                        </svg>
-                        <span>Sources:</span>
-                        @for (src of msg.sources; track src) {
-                          <span class="source-tag"
-                                [class.source-tag--rag]="src === 'RAG Milvus'"
-                                [class.source-tag--agent]="src.includes('Agent')">
-                            {{ src }}
-                          </span>
-                        }
-                        @if (msg.confidence) {
-                          <span class="confidence-tag"
-                                [style.color]="msg.confidence >= 0.85 ? '#00B894' : '#F9A825'">
-                            {{ (msg.confidence * 100).toFixed(0) }}% confiance
-                          </span>
-                        }
-                        @if (msg.rag_used) {
-                          <span class="rag-tag">⚡ RAG</span>
-                        }
-                      </div>
-                    }
+            @if (msg.role === 'coach') {
+              <div class="msg-row msg-row--coach">
+                <div class="msg-avatar msg-avatar--coach">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5">
+                    <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/>
+                  </svg>
+                </div>
+                <div class="msg-content">
+                  @if (msg.typing) {
+                    <div class="msg-bubble msg-bubble--coach typing-bubble">
+                      <div class="typing-dots"><span></span><span></span><span></span></div>
+                    </div>
+                  } @else {
+                    <div class="msg-bubble msg-bubble--coach">
+                      <p class="msg-text" style="white-space: pre-line">{{ msg.text }}</p>
+
+                      @if (msg.sources?.length) {
+                        <div class="msg-sources">
+                          @for (src of msg.sources; track src) {
+                            <span class="source-tag">{{ src }}</span>
+                          }
+                          @if (msg.confidence) {
+                            <span class="confidence-tag" [style.color]="msg.confidence >= 0.85 ? '#10B981' : '#F59E0B'">
+                              {{ (msg.confidence * 100).toFixed(0) }}% certitude
+                            </span>
+                          }
+                        </div>
+                      }
+                    </div>
+                    <span class="msg-time">{{ msg.time }}</span>
+                  }
+                </div>
+              </div>
+            }
+
+            @if (msg.role === 'user') {
+              <div class="msg-row msg-row--user">
+                <div class="msg-content msg-content--user">
+                  <div class="msg-bubble msg-bubble--user">
+                    <p class="msg-text">{{ msg.text }}</p>
                   </div>
-                  <span class="msg-time mono">{{ msg.time }}</span>
+                  <span class="msg-time">{{ msg.time }}</span>
+                </div>
+                <div class="msg-avatar msg-avatar--user">MG</div>
+              </div>
+            }
+          }
+        }
+        <div #msgEnd></div>
+      </div>
+
+      <!-- Action suggestion cards -->
+      @if (activeConv() && activeConv().messages.length <= 3) {
+        <div class="action-cards">
+          @for (card of actionCards(); track card.label) {
+            <button class="action-card" (click)="send(card.text)" [style.--card-color]="card.color">
+              <div class="action-card__icon" [style.background]="card.color + '18'">
+                @if (card.icon === 'strategie') {
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" [attr.stroke]="card.color" stroke-width="2.5"><polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/></svg>
+                } @else if (card.icon === 'argument') {
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" [attr.stroke]="card.color" stroke-width="2.5"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+                } @else if (card.icon === 'produit') {
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" [attr.stroke]="card.color" stroke-width="2.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+                } @else {
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" [attr.stroke]="card.color" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/></svg>
                 }
               </div>
-            </div>
-          }
-
-          <!-- User message -->
-          @if (msg.role === 'user') {
-            <div class="msg-row msg-row--user">
-              <div class="msg-content msg-content--user">
-                <div class="msg-bubble msg-bubble--user">
-                  <p class="msg-text">{{ msg.text }}</p>
-                </div>
-                <span class="msg-time mono">{{ msg.time }}</span>
+              <div class="action-card__body">
+                <span class="action-card__cat" [style.color]="card.color">{{ card.cat }}</span>
+                <span class="action-card__label">{{ card.label }}</span>
               </div>
-              <div class="msg-avatar msg-avatar--user">
-                {{ advisors[0]?.initials ?? 'U' }}
-              </div>
-            </div>
-          }
-
-        }
-      }
-      <div #msgEnd></div>
-    </div>
-
-    <!-- Suggestions dynamiques depuis le contexte live -->
-    @if (activeConv() && activeConv().messages.length <= 3) {
-      <div class="suggestions-strip">
-        <p class="suggestions-label">
-          Suggestions contextuelles
-          @if (liveActions().length > 0) {
-            <span class="rag-badge-small">⚡ RAG actif</span>
-          }
-        </p>
-        <div class="suggestions-grid">
-          @for (s of dynamicSuggestions(); track s.label) {
-            <button class="suggestion-card" [style.border-top-color]="s.color"
-                    (click)="send(s.text)">
-              <span class="suggestion-cat" [style.color]="s.color">{{ s.category }}</span>
-              <span class="suggestion-label">{{ s.label }}</span>
+              <svg class="action-card__arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12,5 19,12 12,19"/></svg>
             </button>
           }
         </div>
-      </div>
-    }
+      }
 
-    <!-- Input area -->
-    <div class="input-area">
-      <div class="input-wrap">
-        <textarea
-          class="chat-textarea"
-          rows="1"
-          placeholder="Posez votre question au CoachAgent… (↵ Envoyer, Shift+↵ Nouvelle ligne)"
-          [value]="inputValue()"
-          (input)="onInput($event)"
-          (keydown)="onKey($event)">
-        </textarea>
-
-        <div class="input-actions">
-          <div class="input-hints">
-            <span class="input-hint" [class.input-hint--active]="liveActions().length > 0">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
-                   stroke="currentColor" stroke-width="2">
-                <circle cx="11" cy="11" r="8"/>
-                <path d="M21 21l-4.35-4.35"/>
-              </svg>
-              RAG {{ liveActions().length > 0 ? 'actif' : '—' }}
-            </span>
-            <span class="input-hint input-hint--teal">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
-                   stroke="currentColor" stroke-width="2">
-                <polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/>
-              </svg>
-              Données live
-            </span>
-            <span class="input-hint">
-              Gap {{ liveGapPct().toFixed(0) }}% · {{ liveWeather() }}
-            </span>
+      <!-- Input area -->
+      <div class="chat-dock">
+        <div class="input-wrap">
+          <div class="input-header">
+            <div class="model-selector">
+              <button class="model-btn" [class.active]="chatDomain() === 'sales'" (click)="switchDomain('sales')">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                Agent Ventes
+              </button>
+              <button class="model-btn" [class.active]="chatDomain() === 'stock'" (click)="switchDomain('stock')">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+                Agent Stock
+              </button>
+            </div>
           </div>
 
-          <button class="send-btn"
-                  [class.send-btn--active]="inputValue().trim()"
-                  [disabled]="!inputValue().trim() || isTyping()"
-                  (click)="send()">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-                 stroke="currentColor" stroke-width="2">
-              <line x1="22" y1="2"  x2="11" y2="13"/>
-              <polygon points="22,2 15,22 11,13 2,9"/>
-            </svg>
-          </button>
+          <textarea
+            class="chat-textarea"
+            rows="1"
+            placeholder="Posez une question à votre CoachAgent..."
+            [value]="inputValue()"
+            (input)="onInput($event)"
+            (keydown)="onKey($event)">
+          </textarea>
+
+          <div class="input-actions">
+            <span class="ctx-live-badge">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="13,2 13,9 22,9"/><polyline points="11,22 11,15 2,15"/><path d="M3.29 8.5L12 2l8.71 6.5"/><path d="M12 2v7"/></svg>
+              Contexte Live Intégré
+            </span>
+            <button class="send-btn"
+                    [class.send-btn--active]="inputValue().trim()"
+                    [disabled]="!inputValue().trim() || isTyping()"
+                    (click)="send()">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <line x1="22" y1="2"  x2="11" y2="13"/>
+                <polygon points="22,2 15,22 11,13 2,9"/>
+              </svg>
+            </button>
+          </div>
         </div>
+        <p class="input-footer">CoachAgent peut faire des erreurs. Vérifiez les recommandations avec votre équipe.</p>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ═══════════════════  RIGHT PANEL  ═══════════════════ -->
+  <aside class="live-panel">
+    <div class="live-panel__header">
+      <span class="live-panel__dot"></span>
+      <span class="live-panel__title">APERÇU EN TEMPS RÉEL</span>
+    </div>
+
+    <!-- Chiffre d'affaires -->
+    <div class="lm-card">
+      <div class="lm-card__label">Chiffre d'affaires</div>
+      <div class="lm-sparkline">
+        <svg width="100%" height="36" viewBox="0 0 120 36" preserveAspectRatio="none">
+          <polyline points="0,30 15,22 30,25 45,18 60,20 75,14 90,10 105,8 120,6"
+            fill="none" stroke="#6C5CE7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <polyline points="0,30 15,22 30,25 45,18 60,20 75,14 90,10 105,8 120,6 120,36 0,36"
+            fill="#6C5CE7" fill-opacity="0.08"/>
+        </svg>
+      </div>
+      <div class="lm-card__value">{{ liveCAToday() | number:'1.0-0' }} DT</div>
+      <div class="lm-card__sub">
+        vs objectif {{ liveCATarget2() | number:'1.0-0' }} DT
+        <span class="lm-change" [class.lm-change--up]="liveCAPctChange() >= 0" [class.lm-change--down]="liveCAPctChange() < 0">
+          {{ liveCAPctChange() >= 0 ? '+' : '' }}{{ liveCAPctChange() }}%
+        </span>
       </div>
     </div>
 
-  </div>
+    <!-- Écart vs objectif -->
+    <div class="lm-card">
+      <div class="lm-card__label">Écart vs objectif</div>
+      <div class="lm-card__value lm-card__value--big" [style.color]="liveGapPct() <= 5 ? '#27AE60' : liveGapPct() <= 30 ? '#F9A825' : '#E74C3C'">
+        Gap {{ liveGapPct().toFixed(0) }}%
+      </div>
+      @if (liveObjectiveOk()) {
+        <div class="lm-attained">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#27AE60" stroke-width="2.5"><polyline points="20,6 9,17 4,12"/></svg>
+          Objectif atteint
+        </div>
+      } @else {
+        <div class="lm-gap-bar">
+          <div class="lm-gap-fill" [style.width]="(100 - liveGapPct()) + '%'"></div>
+        </div>
+      }
+    </div>
+
+    <!-- Trafic magasin -->
+    <div class="lm-card">
+      <div class="lm-card__label">Trafic magasin</div>
+      <div class="lm-traffic-row">
+        <div class="lm-card__value">{{ liveTraffic() }}</div>
+        <span class="lm-card__unit">visiteurs/h</span>
+      </div>
+      <div class="lm-bar-wrap">
+        <div class="lm-bar-fill" [style.width]="liveCapacityPct() + '%'" [style.background]="liveCapacityPct() > 80 ? '#E74C3C' : '#6C5CE7'"></div>
+      </div>
+      <div class="lm-bar-label">{{ liveCapacityPct() }}% capacité</div>
+    </div>
+
+    <!-- Stock critique -->
+    <div class="lm-card lm-card--alert">
+      <div class="lm-card__label">Stock critique</div>
+      <div class="lm-stock-row">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#E74C3C" stroke-width="2.5">
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+          <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+        <span class="lm-stock-count">{{ stockCritique() }} SKU critiques</span>
+      </div>
+      <div class="lm-stock-badge">Réappro requis</div>
+    </div>
+
+    <!-- Urgency -->
+    <div class="lm-urgency" [class.lm-urgency--high]="liveUrgency() === 'HIGH'" [class.lm-urgency--med]="liveUrgency() === 'MEDIUM'">
+      <span class="lm-urg-dot"></span>
+      Urgence {{ liveUrgency() === 'HIGH' ? 'HAUTE' : liveUrgency() === 'MEDIUM' ? 'MOYENNE' : 'NORMALE' }}
+    </div>
+
+  </aside>
 
 </div>

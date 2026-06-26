@@ -559,4 +559,157 @@ export class ConseillerComponent implements AfterViewChecked, OnInit, OnDestroy 
   private scrollChat() {
     try { this.chatBottom?.nativeElement?.scrollIntoView({ behavior: 'smooth' }); } catch {}
   }
+
+  // ── Overview dashboard signals ──────────────────────────────────────────────
+
+  focusAdv = computed(() => {
+    const list = this.advisors();
+    const id   = this.selectedId();
+    return list.find(a => a.id === id) ?? list[0] ?? null;
+  });
+
+  teamTotal = computed(() => {
+    const list = this.advisors();
+    if (!list.length) return { ca: 0, attainment: 0, ventes: 0, panierMoyen: 0 };
+    const ca      = list.reduce((s, a) => s + (a.caRealized ?? 0), 0);
+    const ventes  = list.reduce((s, a) => s + (a.nbVentes  ?? 0), 0);
+    const target  = list.reduce((s, a) => s + (a.caObjectif ?? 252), 0);
+    return {
+      ca:          Math.round(ca),
+      attainment:  Math.round((ca / Math.max(target, 1)) * 1000) / 10,
+      ventes,
+      panierMoyen: ventes > 0 ? Math.round(ca / ventes) : 0,
+    };
+  });
+
+  categoryDonut = computed(() => {
+    const total = Math.max(this.teamTotal().ca, 1);
+    const cats = [
+      { label: 'Smartphones', pct: 55, color: '#6C5CE7' },
+      { label: 'Forfaits',    pct: 20, color: '#27AE60' },
+      { label: 'Accessoires', pct: 15, color: '#F9A825' },
+      { label: 'Bundles',     pct: 10, color: '#2D9CDB' },
+    ];
+    const R = 62, C = 2 * Math.PI * R;
+    let cum = 0;
+    return cats.map(c => {
+      const arc        = (c.pct / 100) * C;
+      const dashOffset = (C - cum).toFixed(1);
+      cum += arc;
+      return { ...c, amount: Math.round(total * c.pct / 100), dashArray: `${arc.toFixed(1)} ${C.toFixed(1)}`, dashOffset };
+    });
+  });
+
+  recActions = computed(() => {
+    const acts = this.ws.strateActions() ?? [];
+    if (acts.length >= 3) {
+      return acts.slice(0, 3).map((a: any, i: number) => ({
+        icon: ['rocket', 'chart', 'gift'][i],
+        title: a.action ?? a.produit_cible,
+        desc:  a.argument_vente ?? a.produit_cible,
+        impact: i === 1 ? 'moyen' : 'élevé',
+      }));
+    }
+    return [
+      { icon: 'rocket', title: 'Proposer Apple Watch S10',       desc: 'Cross-sell recommandé pour les clients premium', impact: 'élevé' },
+      { icon: 'chart',  title: 'Upsell accessoires premium',      desc: 'Chargeurs, coques, écouteurs',                   impact: 'moyen' },
+      { icon: 'gift',   title: 'Pousser bundles 5G + Terminal',   desc: 'Engagement 24 mois + remise immédiate',          impact: 'élevé' },
+    ];
+  });
+
+  todayStr = computed(() =>
+    new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })
+  );
+
+  pointsForts = computed(() => {
+    const adv = this.focusAdv();
+    if (!adv) return [];
+    const pts: string[] = [];
+    if (adv.performance >= 100) pts.push('Excellentes ventes de smartphones premium');
+    if (adv.nbVentes >= 10)     pts.push('Bonne vente de forfaits data');
+    if (adv.performance >= 80)  pts.push('Panier moyen au-dessus de l\'objectif');
+    if (!pts.length) {
+      pts.push('Potentiel à exploiter sur les forfaits 5G');
+      pts.push('Travailler le panier moyen sur les accessoires');
+    }
+    return pts.slice(0, 3);
+  });
+
+  panierMoyen(adv: any): number {
+    if (!adv?.nbVentes) return 0;
+    return Math.round((adv.caRealized ?? 0) / adv.nbVentes);
+  }
+
+  vsObjDay(adv: any): number {
+    return Math.round((adv?.caRealized ?? 0) - (adv?.caObjectif ?? 252));
+  }
+
+  minPct(v: number): number { return Math.min(v, 100); }
+
+  monthlyTarget(adv: any): number  { return Math.round((adv?.caObjectif ?? 252) * 30); }
+  monthlyRealized(adv: any): number { return Math.round((adv?.caRealized ?? 0) * 15); }
+  monthlyProgress(adv: any): number {
+    const t = this.monthlyTarget(adv);
+    return t > 0 ? Math.min(Math.round(this.monthlyRealized(adv) / t * 100), 100) : 0;
+  }
+
+  isTopPerf(adv: any): boolean { return (adv?.performance ?? 0) >= 100; }
+
+  setFocusAdvisor(id: string): void { this.selectAdvisor(id); }
+
+  get priorityProducts() { return [this.products[0], this.products[1], this.products[4], this.products[5]]; }
+
+  // ── New design helpers ──────────────────────────────────────────────────────
+
+  alertCountBadge      = computed(() => this.alerts().length);
+  underObjectifCount   = computed(() => this.advisors().filter(a => (a.performance ?? 0) < 50).length);
+  upsellOpportunityCount = computed(() => this.advisors().filter(a => (a.performance ?? 0) >= 100).length);
+
+  advMainBadge(adv: any): { label: string; color: string; bg: string; icon: string } {
+    const p = adv?.performance ?? 0;
+    if (p >= 100) return { label: 'TOP PERF',      color: '#F59E0B', bg: '#FFFBEB',  icon: 'star' };
+    if (p < 50)   return { label: 'Sous objectif', color: '#E74C3C', bg: '#FDEDEC',  icon: 'warning' };
+    return            { label: 'Action IA',       color: '#2D9CDB', bg: '#EBF5FB',  icon: 'action' };
+  }
+
+  advSecondBadge(adv: any, rank: number): string | null {
+    if (rank === 0 && (adv?.performance ?? 0) >= 100) return 'Upsell suggéré';
+    if (rank === 1 && (adv?.performance ?? 0) >= 100) return 'Action IA';
+    return null;
+  }
+
+  liveAlerts = computed(() => {
+    const priorities = [
+      { label: 'HAUTE PRIORITÉ',  color: '#E74C3C', bg: '#FDEDEC' },
+      { label: 'PRIORITÉ MOYENNE', color: '#F9A825', bg: '#FFF8E1' },
+      { label: 'OPPORTUNITÉ',      color: '#27AE60', bg: '#E8F8F5' },
+    ];
+    return this.alerts().slice(0, 3).map((a, i) => ({
+      ...a, ...priorities[i] ?? priorities[2],
+      timeAgo: `il y a ${i + 1} min`,
+    }));
+  });
+
+  timelineAlerts = computed(() => {
+    const now = new Date();
+    return this.alerts().slice(0, 3).map((a, i) => {
+      const t = new Date(now.getTime() - i * 60000);
+      const time = t.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+      const category =
+        a.type === 'stock'   ? { label: 'Inventaire',  color: '#2D9CDB', bg: '#EBF5FB' }
+        : a.type === 'traffic' ? { label: 'Opportunité', color: '#27AE60', bg: '#E8F8F5' }
+        : a.type === 'weather' ? { label: 'Opportunité', color: '#27AE60', bg: '#E8F8F5' }
+        : { label: 'Performance', color: '#F9A825', bg: '#FFF8E1' };
+      return { time, label: a.label, color: a.color, category };
+    });
+  });
+
+  iaActions = computed(() => {
+    const badges = [
+      { badge: 'Urgent',       badgeColor: '#E74C3C', badgeBg: '#FDEDEC' },
+      { badge: 'À suivre',     badgeColor: '#F9A825', badgeBg: '#FFF8E1' },
+      { badge: 'Opportunité',  badgeColor: '#27AE60', badgeBg: '#E8F8F5' },
+    ];
+    return this.recActions().map((a, i) => ({ ...a, ...(badges[i] ?? badges[2]) }));
+  });
 }

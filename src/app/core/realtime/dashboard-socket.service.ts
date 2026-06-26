@@ -11,7 +11,7 @@ export class DashboardSocketService {
   connect() {
     if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) return;
 
-    this.ws = new WebSocket('ws://localhost:8000/ws/dashboards');
+    this.ws = new WebSocket('ws://localhost:8000/ws/store/store-lac2');
 
     this.ws.onmessage = (ev) => {
       const msg = JSON.parse(ev.data) as AgentStreamMessage;

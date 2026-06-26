@@ -1,442 +1,422 @@
-<div class="conseiller" [class.chat-open]="chatOpen()">
+<div class="adv-page">
 
-  <!-- ══ MAIN CONTENT ══ -->
-  <div class="conseiller__main">
+  <!-- ══ PAGE HEADER ══ -->
+  <div class="adv-header">
 
-    <!-- PAGE HEADER -->
-    <div class="page-header">
-      <div>
-        <h1 class="page-title">Advisor</h1>
-        <p class="page-sub">
-          <span class="status-dot" [class.status-dot--live]="ws.connected()"></span>
-          {{ ws.connected() ? 'Connecté' : 'Polling' }} · Lac 2 ·
-          Analysé {{ ws.lastUpdated() || '--:--' }}
-        </p>
+    <div class="adv-header__top">
+      <div class="adv-header__left">
+        <h1 class="adv-page-title">Advisors Management</h1>
+        <p class="adv-page-sub">Performance équipe · Lac 2 · Analysé {{ ws.lastUpdated() || '--:--' }}</p>
       </div>
-      <button class="btn-coach" (click)="openChat()">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2">
-          <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
-        </svg>
-        Coach now
-      </button>
+      <div class="adv-header__right">
+        <span class="adv-date-pill">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/>
+            <line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+          </svg>
+          Aujourd'hui ({{ todayStr() }})
+        </span>
+        <button class="adv-refresh-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <polyline points="1,4 1,10 7,10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/>
+          </svg>
+        </button>
+      </div>
     </div>
 
-    <!-- ══ ADVISOR PROFILE ══ -->
-    @if (selected()) {
-      <div class="profile-card">
-        <div class="profile-card__left">
-          <div class="profile-avatar" [style.background]="selected()!.avatarColor">
-            {{ selected()!.initials }}
+    <!-- Alert Bar -->
+    <div class="adv-alert-bar">
+      <span class="adv-alert-bar__item adv-alert-bar__item--live">
+        <span class="adv-live-dot"></span> Alertes temps réel
+      </span>
+      <span class="adv-alert-bar__sep">|</span>
+      <span class="adv-alert-bar__item">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#F9A825" stroke-width="2.5" stroke-linecap="round">
+          <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+          <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+        <strong>{{ alertCountBadge() }}</strong> alertes actives
+      </span>
+      <span class="adv-alert-bar__sep">|</span>
+      <span class="adv-alert-bar__item">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#E74C3C" stroke-width="2.5" stroke-linecap="round">
+          <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        <strong>{{ underObjectifCount() }}</strong> conseiller sous objectif
+      </span>
+      <span class="adv-alert-bar__sep">|</span>
+      <span class="adv-alert-bar__item adv-alert-bar__item--green">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#27AE60" stroke-width="2.5" stroke-linecap="round">
+          <polyline points="23,6 13.5,15.5 8.5,10.5 1,18"/><polyline points="17,6 23,6 23,12"/>
+        </svg>
+        <strong>{{ upsellOpportunityCount() }}</strong> opportunités upsell
+      </span>
+    </div>
+
+  </div>
+
+  <!-- ══ TOP ADVISOR CARDS ══ -->
+  <div class="adv-top-cards">
+    @for (adv of advisors().slice(0, 4); track adv.id; let i = $index) {
+      <div class="adv-hero-card"
+           [class.adv-hero-card--active]="focusAdv()?.id === adv.id"
+           (click)="setFocusAdvisor(adv.id)">
+
+        <div class="adv-hero-row1">
+          <span class="adv-rank-badge">{{ i + 1 }}</span>
+          <div class="adv-avatar" [style.background]="adv.avatarColor">{{ adv.initials }}</div>
+          <div class="adv-hero-info">
+            <div class="adv-hero-name">{{ adv.name }}</div>
+            <div class="adv-hero-role">{{ adv.role }}</div>
           </div>
-          <div class="profile-info">
-            <h2 class="profile-name">{{ selected()!.name }}</h2>
-            <p class="profile-role">{{ selected()!.role }}</p>
-            <span class="profile-status" [class]="statusClass(selected()!.status)">
-              {{ statusText(selected()!.status) }}
-            </span>
-          </div>
-        </div>
-        <div class="profile-kpis">
-          <div class="profile-kpi">
-            <span class="profile-kpi__val">{{ selected()!.caRealized | number:'1.0-0' }} DT</span>
-            <span class="profile-kpi__label">CA actuel</span>
-          </div>
-          <div class="profile-kpi">
-            <span class="profile-kpi__val">{{ selected()!.caObjectif | number:'1.0-0' }} DT</span>
-            <span class="profile-kpi__label">Objectif</span>
-          </div>
-          <div class="profile-kpi">
-            <span class="profile-kpi__val" [style.color]="perfColor()">
-              {{ selected()!.performance }}%
-            </span>
-            <span class="profile-kpi__label">Atteinte</span>
-          </div>
-          <div class="profile-kpi">
-            <span class="profile-kpi__val" style="color:#6C5CE7">
-              {{ selected()!.coachScore }}
-            </span>
-            <span class="profile-kpi__label">Score IA</span>
-          </div>
-          <div class="profile-kpi">
-            <span class="profile-kpi__val">{{ selected()!.nbVentes }}</span>
-            <span class="profile-kpi__label">Ventes</span>
-          </div>
-        </div>
-        <div class="profile-progress">
-          <div class="profile-progress__track">
-            <div class="profile-progress__fill"
-                 [style.width.%]="caPercent()"
-                 [style.background]="perfColor()">
-            </div>
-          </div>
-          <span class="profile-progress__label" [style.color]="perfColor()">
-            Objectif journalier {{ caPercent() }}%
+          <!-- Main status badge -->
+          <span class="adv-main-badge" [style.color]="advMainBadge(adv).color" [style.background]="advMainBadge(adv).bg">
+            @if (advMainBadge(adv).icon === 'star') {
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="#F59E0B" stroke="none"><polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/></svg>
+            } @else if (advMainBadge(adv).icon === 'warning') {
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#E74C3C" stroke-width="2.5" stroke-linecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+            } @else {
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#2D9CDB" stroke-width="2.5" stroke-linecap="round"><polyline points="23,6 13.5,15.5 8.5,10.5 1,18"/><polyline points="17,6 23,6 23,12"/></svg>
+            }
+            {{ advMainBadge(adv).label }}
           </span>
         </div>
+
+        <!-- Second badge -->
+        @if (advSecondBadge(adv, i)) {
+          <span class="adv-second-badge">{{ advSecondBadge(adv, i) }}</span>
+        }
+
+        <!-- CA + attainment -->
+        <div class="adv-hero-ca-row">
+          <span class="adv-hero-ca">{{ adv.caRealized | number:'1.0-0' }} DT</span>
+          <div class="adv-hero-att">
+            <span class="adv-hero-pct" [style.color]="advPerfColor(adv.performance)">{{ adv.performance }}%</span>
+            <span class="adv-hero-obj-label">Objectif atteint</span>
+          </div>
+        </div>
+
+        <!-- Progress bar -->
+        <div class="adv-hero-bar-track">
+          <div class="adv-hero-bar"
+               [style.width.%]="minPct(adv.performance)"
+               [style.background]="advPerfColor(adv.performance)">
+          </div>
+        </div>
+
+        <!-- Stats row -->
+        <div class="adv-hero-stats">
+          <div class="adv-hero-stat">
+            <span class="adv-hero-stat__val">{{ adv.nbVentes }}</span>
+            <span class="adv-hero-stat__lbl">Ventes</span>
+          </div>
+          <div class="adv-hero-stat">
+            <span class="adv-hero-stat__val">{{ panierMoyen(adv) }} DT</span>
+            <span class="adv-hero-stat__lbl">Panier moyen</span>
+          </div>
+          <div class="adv-hero-stat">
+            <span class="adv-hero-stat__val" [style.color]="vsObjDay(adv) >= 0 ? '#27AE60' : '#E74C3C'">
+              {{ vsObjDay(adv) >= 0 ? '+' : '' }}{{ vsObjDay(adv) | number:'1.0-0' }} DT
+            </span>
+            <span class="adv-hero-stat__lbl">vs obj.</span>
+          </div>
+        </div>
+
       </div>
     }
+  </div>
 
-    <!-- ══ TEAM RANKING ══ -->
-    <div class="section">
-      <h2 class="section-title">
-        Team Ranking · Aujourd'hui
-        @if (ws.connected()) {
-          <span class="live-dot-small">● LIVE</span>
-        }
-      </h2>
-      <div class="team-table">
-        <div class="team-table__header">
+  <!-- ══ MID 3-COLUMN ROW ══ -->
+  <div class="adv-mid">
+
+    <!-- Classement équipe -->
+    <div class="adv-card adv-ranking-card">
+      <div class="adv-card-head">
+        <h2 class="adv-card-title">Classement équipe</h2>
+        <button class="adv-see-all">Voir tout</button>
+      </div>
+
+      <div class="adv-rank-table">
+        <div class="adv-rank-thead">
           <span>#</span>
           <span>Conseiller</span>
-          <span>CA Réalisé</span>
-          <span>Performance</span>
-          <span>Prévision EOD</span>
-          <span>Statut</span>
+          <span>CA réalisé</span>
+          <span>Attainment</span>
+          <span class="adv-th-center">Ventes</span>
+          <span class="adv-th-right">Panier moyen</span>
         </div>
-        @for (adv of advisors(); track adv.id; let i = $index) {
-          <div class="team-row"
-               [class.team-row--selected]="adv.id === selectedId()"
-               (click)="selectAdvisor(adv.id)">
-            <span class="rank" [class.rank--gold]="i === 0">{{ i + 1 }}</span>
-            <div class="team-advisor">
-              <div class="adv-avatar" [style.background]="adv.avatarColor">
-                {{ adv.initials }}
-              </div>
-              <div class="adv-info">
-                <span class="adv-name">
-                  {{ adv.name }}
-                  @if (i === 0) { <span class="me-tag">Top</span> }
-                </span>
-                <span class="adv-role">{{ adv.role }}</span>
+
+        @for (adv of advisors().slice(0, 4); track adv.id; let i = $index) {
+          <div class="adv-rank-row" [class.adv-rank-row--active]="focusAdv()?.id === adv.id"
+               (click)="setFocusAdvisor(adv.id)">
+            <span class="adv-rank-num">{{ i + 1 }}</span>
+            <div class="adv-rank-adv">
+              <div class="adv-avatar adv-avatar--sm" [style.background]="adv.avatarColor">{{ adv.initials }}</div>
+              <div>
+                <div class="adv-rank-name">{{ adv.name }}</div>
+                <div class="adv-rank-role">{{ adv.role }}</div>
               </div>
             </div>
-            <span class="team-ca">{{ adv.caRealized | number:'1.0-0' }} DT</span>
-            <div class="team-perf-col">
-              <div class="mini-bar">
-                <div class="mini-bar__fill"
-                     [style.width.%]="adv.performance"
-                     [style.background]="advPerfColor(adv.performance)">
-                </div>
+            <span class="adv-rank-ca">{{ adv.caRealized | number:'1.0-0' }} DT</span>
+            <div class="adv-rank-att">
+              <div class="adv-att-track">
+                <div class="adv-att-bar" [style.width.%]="minPct(adv.performance)" [style.background]="advPerfColor(adv.performance)"></div>
               </div>
-              <span class="perf-pct" [style.color]="advPerfColor(adv.performance)">
-                {{ adv.performance }}%
+              <span [style.color]="advPerfColor(adv.performance)" style="font-weight:600;font-size:12px;white-space:nowrap">{{ adv.performance }}%</span>
+            </div>
+            <span class="adv-rank-ventes adv-th-center">{{ adv.nbVentes }}</span>
+            <span class="adv-rank-panier adv-th-right">{{ panierMoyen(adv) }} DT</span>
+          </div>
+        }
+
+        <div class="adv-rank-total">
+          <span></span>
+          <span style="font-weight:700;color:#1A1D2E">Total équipe</span>
+          <span style="font-weight:700;color:#1A1D2E">{{ teamTotal().ca | number:'1.0-0' }} DT</span>
+          <span style="font-weight:700" [style.color]="teamTotal().attainment >= 100 ? '#27AE60' : '#F9A825'">{{ teamTotal().attainment }}%</span>
+          <span style="font-weight:700;color:#1A1D2E;text-align:center">{{ teamTotal().ventes }}</span>
+          <span style="font-weight:700;color:#1A1D2E;text-align:right">{{ teamTotal().panierMoyen }} DT</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Répartition par catégorie -->
+    <div class="adv-card adv-donut-card">
+      <div class="adv-card-head">
+        <h2 class="adv-card-title">Répartition par catégorie (CA)</h2>
+        <span class="adv-dropdown-pill">CA réalisé
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6,9 12,15 18,9"/></svg>
+        </span>
+      </div>
+
+      <div class="adv-donut-wrap">
+        <div class="adv-cat-legend adv-cat-legend--left">
+          @for (seg of categoryDonut().slice(0, 2); track seg.label) {
+            <div class="adv-cat-leg">
+              <span class="adv-cat-dot" [style.background]="seg.color"></span>
+              <div>
+                <div class="adv-cat-name">{{ seg.label }}</div>
+                <div class="adv-cat-pct" [style.color]="seg.color">{{ seg.pct }}%</div>
+                <div class="adv-cat-val">{{ seg.amount | number:'1.0-0' }} DT</div>
+              </div>
+            </div>
+          }
+        </div>
+
+        <svg width="160" height="160" viewBox="0 0 160 160" style="flex-shrink:0">
+          <circle cx="80" cy="80" r="62" fill="none" stroke="#F1F5F9" stroke-width="24"/>
+          <g transform="rotate(-90, 80, 80)">
+            @for (seg of categoryDonut(); track seg.label) {
+              <circle cx="80" cy="80" r="62" fill="none"
+                      [attr.stroke]="seg.color" stroke-width="24"
+                      [attr.stroke-dasharray]="seg.dashArray"
+                      [attr.stroke-dashoffset]="seg.dashOffset"/>
+            }
+          </g>
+          <text x="80" y="72" text-anchor="middle" font-size="20" font-weight="800" fill="#1A1D2E">{{ teamTotal().ca | number:'1.0-0' }}</text>
+          <text x="80" y="87" text-anchor="middle" font-size="10" fill="#94A3B8">DT</text>
+          <text x="80" y="101" text-anchor="middle" font-size="10" fill="#94A3B8">CA total</text>
+        </svg>
+
+        <div class="adv-cat-legend adv-cat-legend--right">
+          @for (seg of categoryDonut().slice(2); track seg.label) {
+            <div class="adv-cat-leg">
+              <span class="adv-cat-dot" [style.background]="seg.color"></span>
+              <div>
+                <div class="adv-cat-name">{{ seg.label }}</div>
+                <div class="adv-cat-pct" [style.color]="seg.color">{{ seg.pct }}%</div>
+                <div class="adv-cat-val">{{ seg.amount | number:'1.0-0' }} DT</div>
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+
+    <!-- Focus conseiller -->
+    <div class="adv-card adv-focus-card">
+      <div class="adv-card-head">
+        <h2 class="adv-card-title">Focus conseiller</h2>
+        @if (focusAdv()) {
+          <span class="adv-dropdown-pill">{{ focusAdv()!.name.split(' ')[0] }}
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6,9 12,15 18,9"/></svg>
+          </span>
+        }
+      </div>
+
+      <!-- Live alerts section -->
+      <div class="adv-focus-alerts-section">
+        <div class="adv-focus-alerts-head">
+          <div class="adv-focus-alerts-title">
+            <span class="adv-live-dot adv-live-dot--red"></span>
+            <span style="font-size:13px;font-weight:700;color:#1A1D2E">Alertes en direct</span>
+            <span class="adv-count-badge">{{ alertCountBadge() }}</span>
+          </div>
+          <a class="adv-see-all">Voir tout</a>
+        </div>
+
+        @for (al of liveAlerts(); track al.id) {
+          <div class="adv-live-alert" [style.border-left-color]="al.color">
+            <div class="adv-live-alert-head">
+              <span class="adv-priority-tag" [style.color]="al.color" [style.background]="al.bg">{{ al.label }}</span>
+              <span class="adv-alert-time">{{ al.timeAgo }}</span>
+            </div>
+            <div class="adv-live-alert-body">{{ al.detail }}</div>
+          </div>
+        }
+      </div>
+
+      <!-- Advisor profile -->
+      @if (focusAdv(); as adv) {
+        <div class="adv-focus-profile">
+          <div class="adv-focus-identity">
+            <div class="adv-avatar adv-avatar--lg" [style.background]="adv.avatarColor">{{ adv.initials }}</div>
+            <div>
+              <div class="adv-focus-name">{{ adv.name }}</div>
+              <div class="adv-focus-role">{{ adv.role }}</div>
+            </div>
+            @if (isTopPerf(adv)) {
+              <span class="adv-top-perf-wide">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="#F59E0B" stroke="none"><polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/></svg>
+                TOP PERFORMER
+              </span>
+            }
+          </div>
+
+          <div class="adv-focus-kpis">
+            <div class="adv-focus-kpi">
+              <span class="adv-focus-kpi__val">{{ adv.caRealized | number:'1.0-0' }} DT</span>
+              <span class="adv-focus-kpi__lbl">CA réalisé</span>
+            </div>
+            <div class="adv-focus-kpi">
+              <span class="adv-focus-kpi__val" [style.color]="advPerfColor(adv.performance)">{{ adv.performance }}%</span>
+              <span class="adv-focus-kpi__lbl">Attainment</span>
+            </div>
+            <div class="adv-focus-kpi">
+              <span class="adv-focus-kpi__val">{{ adv.nbVentes }}</span>
+              <span class="adv-focus-kpi__lbl">Ventes</span>
+            </div>
+            <div class="adv-focus-kpi">
+              <span class="adv-focus-kpi__val">{{ panierMoyen(adv) }} DT</span>
+              <span class="adv-focus-kpi__lbl">Panier moyen</span>
+            </div>
+          </div>
+
+          <div class="adv-focus-perf">
+            <div class="adv-focus-perf-title">Performance vs objectif</div>
+            <div class="adv-focus-obj-row">
+              <span>Objectif du jour</span>
+              <span>{{ adv.caObjectif | number:'1.0-0' }} DT</span>
+              <span [style.color]="vsObjDay(adv) >= 0 ? '#27AE60' : '#E74C3C'">
+                {{ vsObjDay(adv) >= 0 ? '+' : '' }}{{ vsObjDay(adv) | number:'1.0-0' }} DT
               </span>
             </div>
-            <span class="team-eod">{{ adv.previsionEod | number:'1.0-0' }} DT</span>
-            <span class="status-badge" [class]="statusClass(adv.status)">
-              {{ statusText(adv.status) }}
-            </span>
-          </div>
-        }
-        @if (advisors().length === 0) {
-          <p style="padding:20px;text-align:center;color:var(--text-tertiary);font-size:12px">
-            Chargement des conseillers...
-          </p>
-        }
-      </div>
-    </div>
-
-    <!-- ══ RECOMMENDED PRODUCTS ══ -->
-    <div class="section">
-      <div class="section-header">
-        <h2 class="section-title">
-          Produits Recommandés
-          @if (ws.weatherIcon()) {
-            <span class="context-tag">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
-                   stroke="currentColor" stroke-width="2">
-                <path d="M20 17.58A5 5 0 0018 8h-1.26A8 8 0 104 16.25"/>
-              </svg>
-              {{ ws.weatherIcon() }} {{ ws.weatherLabel() }}
-            </span>
-          }
-        </h2>
-        <p class="section-sub">Cliquez sur une carte pour révéler le script IA</p>
-      </div>
-      <div class="products-grid">
-        @for (product of products; track product.id) {
-          <div class="product-flip"
-               [class.flipped]="isFlipped(product.id)"
-               (click)="toggleFlip(product.id)">
-            <div class="product-inner">
-              <!-- FRONT -->
-              <div class="product-front">
-                @if (product.hot) {
-                  <div class="hot-badge">
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M12 2c0 6-6 8-6 14a6 6 0 0012 0c0-6-6-8-6-14z"/>
-                    </svg>
-                    Hot
-                  </div>
-                }
-                <p class="product-category">{{ product.category }}</p>
-                <h3 class="product-name">{{ product.name }}</h3>
-                <div class="product-price-row">
-                  <span class="product-price">{{ product.price }}</span>
-                  <span class="product-unit">{{ product.unit }}</span>
-                </div>
-                <div class="product-margin" [style.color]="product.marginColor">
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-                    <circle cx="12" cy="12" r="10"/>
-                  </svg>
-                  {{ product.margin }} margin
-                </div>
-                <div class="product-cta">
-                  <span>Script IA</span>
-                  <svg width="12" height="12" viewBox="0 0 24 24"
-                       fill="none" stroke="currentColor" stroke-width="2">
-                    <polyline points="9,18 15,12 9,6"/>
-                  </svg>
-                </div>
-              </div>
-              <!-- BACK -->
-              <div class="product-back" [style.--accent]="product.accentColor">
-                <div class="back-script-header">
-                  <p class="back-script-label">Script IA</p>
-                  <h3 class="back-script-title">{{ product.script }}</h3>
-                </div>
-                <ol class="script-steps">
-                  @for (line of product.scriptLines; track $index) {
-                    <li class="script-step">
-                      <span class="step-num">{{ $index + 1 }}</span>
-                      <span class="step-text">{{ line }}</span>
-                    </li>
-                  }
-                </ol>
-                <div class="back-hint">
-                  <svg width="10" height="10" viewBox="0 0 24 24"
-                       fill="none" stroke="currentColor" stroke-width="2">
-                    <polyline points="1,4 1,10 7,10"/>
-                    <path d="M3.51 15a9 9 0 102.13-9.36L1 10"/>
-                  </svg>
-                  Retour
-                </div>
-              </div>
+            <div class="adv-focus-obj-row">
+              <span>Objectif du mois</span>
+              <span>{{ monthlyTarget(adv) | number:'1.0-0' }} DT</span>
             </div>
+            <div class="adv-focus-obj-row">
+              <span>Réalisé mois</span>
+              <span>{{ monthlyRealized(adv) | number:'1.0-0' }} DT</span>
+            </div>
+            <div class="adv-focus-bar-track">
+              <div class="adv-focus-bar" [style.width.%]="monthlyProgress(adv)" [style.background]="advPerfColor(adv.performance)"></div>
+            </div>
+            <span class="adv-focus-bar-pct" [style.color]="advPerfColor(adv.performance)">{{ monthlyProgress(adv) }}%</span>
           </div>
+        </div>
+      }
+    </div>
+
+  </div>
+
+  <!-- ══ BOTTOM 3-COLUMN ROW ══ -->
+  <div class="adv-bottom">
+
+    <!-- Timeline des alertes -->
+    <div class="adv-card adv-timeline-card">
+      <div class="adv-card-head">
+        <h2 class="adv-card-title">Timeline des alertes</h2>
+        <span class="adv-live-badge-green"><span class="adv-live-dot"></span>En direct</span>
+      </div>
+      <div class="adv-timeline-list">
+        @for (al of timelineAlerts(); track al.time) {
+          <div class="adv-timeline-row">
+            <span class="adv-timeline-time">{{ al.time }}</span>
+            <span class="adv-timeline-dot" [style.background]="al.color"></span>
+            <span class="adv-timeline-label">{{ al.label }}</span>
+            <span class="adv-timeline-cat" [style.background]="al.category.bg" [style.color]="al.category.color">
+              {{ al.category.label }}
+            </span>
+          </div>
+        }
+        @if (!timelineAlerts().length) {
+          <div style="padding:14px;font-size:12px;color:#94A3B8;text-align:center">Aucune alerte récente</div>
         }
       </div>
     </div>
 
-  </div><!-- fin conseiller__main -->
-
-  <!-- ══ CHAT SIDEBAR ══ -->
-  <aside class="chat-sidebar" [class.is-open]="chatOpen()">
-
-    <div class="chat-sidebar__header">
-      <div class="chat-tabs">
-        <button class="chat-tab"
-                [class.is-active]="chatTab() === 'coach'"
-                (click)="chatTab.set('coach')">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-               stroke="currentColor" stroke-width="2">
-            <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
-          </svg>
-          CoachAgent
-        </button>
-        <button class="chat-tab"
-                [class.is-active]="chatTab() === 'alertes'"
-                (click)="chatTab.set('alertes')">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-               stroke="currentColor" stroke-width="2">
-            <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-            <path d="M13.73 21a2 2 0 01-3.46 0"/>
-          </svg>
-          Alertes
-          @if (alerts().length > 0) {
-            <span class="tab-count">{{ alerts().length }}</span>
-          }
-        </button>
+    <!-- Produits à prioriser -->
+    <div class="adv-card adv-products-card">
+      <div class="adv-card-head">
+        <h2 class="adv-card-title">Produits à prioriser</h2>
+        <span class="adv-margin-pill">High margin</span>
       </div>
-      <button class="chat-close" (click)="chatOpen.set(false)">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2.5">
-          <line x1="18" y1="6" x2="6" y2="18"/>
-          <line x1="6" y1="6" x2="18" y2="18"/>
-        </svg>
-      </button>
-    </div>
-
-    <!-- Context pills dynamiques depuis WS -->
-    <div class="chat-context">
-      <span class="ctx-pill ctx-pill--blue">
-        {{ ws.weatherIcon() || '⛅' }} {{ ws.weatherLabel() || 'Tunis' }}
-      </span>
-      <span class="ctx-pill ctx-pill--gray">
-        {{ hoursLeft() }}h restantes
-      </span>
-      @if (selected()) {
-        <span class="ctx-pill"
-              [style.background]="perfColor() + '22'"
-              [style.color]="perfColor()">
-          {{ selected()!.performance }}% obj.
-        </span>
-      }
-      @if (ws.urgencyLevel() !== 'LOW') {
-        <span class="ctx-pill ctx-pill--urgent">
-          ⚡ {{ ws.urgencyLevel() }}
-        </span>
-      }
-    </div>
-
-    <!-- ── TAB: COACH ── -->
-    @if (chatTab() === 'coach') {
-
-      <div class="chat-messages">
-        @for (msg of messages(); track msg.id) {
-          <div class="chat-msg" [class.chat-msg--user]="msg.role === 'user'">
-
-            @if (msg.role === 'coach') {
-              <div class="msg-avatar msg-avatar--coach"
-                   [class.msg-avatar--urgent]="msg.urgency === 'high'"
-                   [class.msg-avatar--medium]="msg.urgency === 'medium'">
-                IA
-              </div>
-            }
-
-            <div class="msg-bubble"
-                 [class.msg-bubble--user]="msg.role === 'user'"
-                 [class.msg-bubble--urgent]="msg.urgency === 'high'"
-                 [class.msg-bubble--medium]="msg.urgency === 'medium'">
-
-              @if (msg.typing) {
-                <div class="typing-dots">
-                  <span></span><span></span><span></span>
-                </div>
-              } @else {
-
-                <!-- Badge urgence -->
-                @if (msg.urgency === 'high' && msg.role === 'coach') {
-                  <div class="msg-urgency-badge">🚨 Urgence haute</div>
-                } @else if (msg.urgency === 'medium' && msg.role === 'coach') {
-                  <div class="msg-urgency-badge msg-urgency-badge--med">⚡ Action requise</div>
-                }
-
-                <p class="msg-text" style="white-space:pre-line">{{ msg.text }}</p>
-
-                <!-- Sources RAG -->
-                @if (msg.sources?.length && msg.role === 'coach') {
-                  <div class="msg-sources-row">
-                    @for (src of msg.sources; track src) {
-                      <span class="msg-src-tag"
-                            [class.msg-src-tag--rag]="src === 'RAG Milvus'"
-                            [class.msg-src-tag--agent]="src.includes('Agent')">
-                        {{ src }}
-                      </span>
-                    }
-                    @if (msg.rag_used) {
-                      <span class="msg-src-tag msg-src-tag--rag">⚡ RAG</span>
-                    }
-                  </div>
-                }
-
-                @if (msg.time) {
-                  <span class="msg-time mono">{{ msg.time }}</span>
-                }
+      <div class="adv-products-grid">
+        @for (prod of priorityProducts; track prod.id) {
+          <div class="adv-product-card">
+            <div class="adv-product-img" [style.background]="prod.accentColor + '18'">
+              @if (prod.category === 'SMARTPHONE') {
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" [attr.stroke]="prod.accentColor" stroke-width="1.8" stroke-linecap="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+              }
+              @if (prod.category === 'FORFAIT') {
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" [attr.stroke]="prod.accentColor" stroke-width="1.8" stroke-linecap="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+              }
+              @if (prod.category === 'ACCESSOIRE') {
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" [attr.stroke]="prod.accentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6"/></svg>
+              }
+              @if (prod.category === 'BUNDLE') {
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" [attr.stroke]="prod.accentColor" stroke-width="1.8" stroke-linecap="round"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>
               }
             </div>
-
-            @if (msg.role === 'user') {
-              <div class="msg-avatar msg-avatar--user">
-                {{ selected()?.initials ?? 'U' }}
-              </div>
-            }
-          </div>
-        }
-
-        @if (messages().length === 0) {
-          <div class="chat-msg">
-            <div class="msg-avatar msg-avatar--coach">IA</div>
-            <div class="msg-bubble">
-              <p class="msg-text">Coach IA actif · Sélectionnez un conseiller pour démarrer le coaching personnalisé.</p>
-              <span class="msg-time mono">{{ ws.lastUpdated() || '--:--' }}</span>
+            <div class="adv-product-name">{{ prod.name }}</div>
+            <div class="adv-product-cat">{{ prod.category | titlecase }}</div>
+            <div class="adv-product-marge">
+              Marge <span class="adv-marge-tag" [style.background]="prod.marginColor + '22'" [style.color]="prod.marginColor">Élevée</span>
             </div>
+            <div class="adv-product-price">{{ prod.price }}<span class="adv-product-unit"> {{ prod.unit }}</span></div>
           </div>
         }
-
-        <div #chatBottom></div>
       </div>
+    </div>
 
-      <!-- Quick prompts -->
-      <div class="quick-prompts">
-        @for (p of quickPrompts; track p) {
-          <button class="quick-btn" (click)="sendQuick(p)">{{ p }}</button>
-        }
+    <!-- Actions IA en temps réel -->
+    <div class="adv-card adv-ia-card">
+      <div class="adv-card-head">
+        <h2 class="adv-card-title">Actions IA en temps réel</h2>
       </div>
-
-      <!-- Input -->
-      <div class="chat-input-wrap">
-        <textarea
-          class="chat-input"
-          rows="2"
-          placeholder="Posez votre question… (↵ Envoyer)"
-          [value]="chatInput()"
-          (input)="updateInput($event)"
-          (keydown)="onKey($event)">
-        </textarea>
-        <button class="send-btn"
-                [disabled]="!chatInput().trim() || isTyping()"
-                (click)="sendMessage()">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-               stroke="currentColor" stroke-width="2">
-            <line x1="22" y1="2" x2="11" y2="13"/>
-            <polygon points="22,2 15,22 11,13 2,9"/>
-          </svg>
-        </button>
-      </div>
-
-    }
-
-    <!-- ── TAB: ALERTS ── -->
-    @if (chatTab() === 'alertes') {
-      <div class="alerts-panel">
-        @if (alerts().length === 0) {
-          <div class="no-alerts">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none"
-                 stroke="var(--text-tertiary)" stroke-width="1.5">
-              <polyline points="20,6 9,17 4,12"/>
-            </svg>
-            <p>Aucune alerte active</p>
-          </div>
-        }
-        @for (alert of alerts(); track alert.id) {
-          <div class="alert-card"
-               [style.border-left-color]="alert.color"
-               [style.background]="alert.bg">
-            <div class="alert-card__body">
-              <p class="alert-card__label" [style.color]="alert.color">{{ alert.label }}</p>
-              <p class="alert-card__detail">{{ alert.detail }}</p>
+      <div class="adv-ia-list">
+        @for (act of iaActions(); track act.title) {
+          <div class="adv-ia-row">
+            <div class="adv-ia-icon" [class]="'adv-ia-icon--' + act.icon">
+              @if (act.icon === 'rocket') {
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 00-2.91-.09z"/><path d="M12 15l-3-3a22 22 0 012-3.95A12.88 12.88 0 0122 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 01-4 2z"/></svg>
+              } @else if (act.icon === 'chart') {
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+              } @else {
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 12V22H4V12"/><path d="M22 7H2v5h20V7z"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 010-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 000-5C13 2 12 7 12 7z"/></svg>
+              }
             </div>
-            <div class="alert-card__actions">
-              <button class="alert-ask-btn"
-                      [style.background]="alert.color"
-                      (click)="alertToChat(alert)">
-                <svg width="11" height="11" viewBox="0 0 24 24"
-                     fill="none" stroke="white" stroke-width="2">
-                  <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
-                </svg>
-                Demander au coach
-              </button>
+            <div class="adv-ia-body">
+              <div class="adv-ia-title">{{ act.title }}</div>
+              <div class="adv-ia-desc">{{ act.desc }}</div>
             </div>
+            <span class="adv-ia-badge" [style.background]="act.badgeBg" [style.color]="act.badgeColor">{{ act.badge }}</span>
           </div>
         }
       </div>
-    }
+    </div>
 
-  </aside>
-
-  <!-- FAB when chat is closed -->
-  @if (!chatOpen()) {
-    <button class="chat-toggle-fab" (click)="openChat()">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
-           stroke="white" stroke-width="2">
-        <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
-      </svg>
-      @if (alerts().length > 0) {
-        <span class="fab-pulse"></span>
-      }
-    </button>
-  }
+  </div>
 
 </div>

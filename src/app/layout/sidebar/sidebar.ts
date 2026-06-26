@@ -1,6 +1,6 @@
 import { Component, signal, computed, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Router, RouterLink } from '@angular/router';
+import { Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { Agent } from '../../core/models/agent';
 import { StoreMetrics } from '../../core/models/store';
 import { MockDataService } from '../../core/services/mock-data';
@@ -10,7 +10,7 @@ import { WebSocketService } from '../../core/services/websocket.service';
 @Component({
   selector:    'app-sidebar',
   standalone:  true,
-  imports:     [CommonModule, RouterLink],
+  imports:     [CommonModule, RouterLink, RouterLinkActive],
   templateUrl: './sidebar.html',
   styleUrl:    './sidebar.scss'
 })

@@ -21,6 +21,7 @@ interface NavItem {
 export class NavbarComponent implements OnInit {
 
   currentTime = signal(this.getTime());
+  currentDate = signal(this.getDate());
   storeName   = signal('Lac 2');
 
   navItems: NavItem[] = [
@@ -60,13 +61,18 @@ export class NavbarComponent implements OnInit {
   ) {}
 
   ngOnInit() {
-    setInterval(() => this.currentTime.set(this.getTime()), 60_000);
+    setInterval(() => {
+      this.currentTime.set(this.getTime());
+      this.currentDate.set(this.getDate());
+    }, 60_000);
   }
 
   private getTime(): string {
-    return new Date().toLocaleTimeString('fr-FR', {
-      hour: '2-digit', minute: '2-digit'
-    });
+    return new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  private getDate(): string {
+    return new Date().toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' });
   }
 
   // ── SafeHtml pour éviter le warning sanitizer ─────────

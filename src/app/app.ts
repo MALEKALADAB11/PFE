@@ -1,42 +1,54 @@
-// 
 import { Component, inject } from '@angular/core';
 import { Router, RouterOutlet } from '@angular/router';
+import { CommonModule } from '@angular/common';
 import { NavbarComponent } from './layout/navbar/navbar';
 import { SidebarComponent } from './layout/sidebar/sidebar';
+import { WebSocketService } from './core/services/websocket.service';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet, NavbarComponent, SidebarComponent],
+  imports: [RouterOutlet, NavbarComponent, SidebarComponent, CommonModule],
   template: `
     @if (!isLoginPage()) {
-      <app-navbar />
-      <div class="app-body">
+      <div class="app-shell">
         <app-sidebar />
-        <main class="app-main">
-          <router-outlet />
-        </main>
+        <div class="app-center">
+          <app-navbar />
+          <main class="app-main">
+            <router-outlet />
+          </main>
+        </div>
       </div>
     } @else {
       <router-outlet />
     }
   `,
   styles: [`
-    .app-body {
+    .app-shell {
       display: flex;
-      height: calc(100vh - 56px);
+      height: 100vh;
+      overflow: hidden;
+      background: #EEF2F7;
+    }
+    .app-center {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
       overflow: hidden;
     }
     .app-main {
       flex: 1;
       overflow-y: auto;
-      padding: 24px;
-      background: var(--color-bg);
+      background: #EEF2F7;
     }
+
   `]
 })
 export class AppComponent {
   private router = inject(Router);
+  public  ws     = inject(WebSocketService);
 
   isLoginPage(): boolean {
     return this.router.url.startsWith('/login');

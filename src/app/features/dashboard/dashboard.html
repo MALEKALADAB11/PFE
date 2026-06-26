@@ -1,12 +1,15 @@
 <div class="dashboard">
 
+  <!-- ══ PAGE HEADER ══ -->
   <div class="page-header">
     <div class="page-header__left">
-      <h1 class="page-title">Dashboard</h1>
-      <p class="page-sub">
-        <span class="status-dot"></span>
-        System nominal · APP06 Agent LIVE · Updated {{ ws.lastUpdated() || '...' }}
-      </p>
+      <h1 class="page-title">
+        Retail Command Center
+        <span class="page-live-pill">
+          <span class="page-live-dot"></span>LIVE
+        </span>
+      </h1>
+      <p class="page-sub">Vue en direct du magasin</p>
     </div>
     <div class="page-header__right">
       <button class="btn-outline" (click)="simulatePOS()">
@@ -30,53 +33,162 @@
     </div>
   </div>
 
-  <!-- KPI Flip Cards -->
-  <div class="kpi-grid">
-    @for (card of flipCards(); track card.label) {
-      <app-flip-kpi-card [data]="card" [height]="148" />
-    }
-  </div>
+  <!-- ══ KPI ROW ══ -->
+  <div class="dash-kpi-row">
 
-  <div class="main-grid">
-
-    <div class="main-grid__left">
-
-      <!-- Hourly Performance -->
-      <div class="card perf-card">
-        <div class="card-header">
-          <div>
-            <h2 class="card-title">
-              Hourly Performance · Target vs Actual vs Forecast
-            </h2>
-            <p class="card-sub">Red zones = risk hours</p>
+    <!-- CA Hero Card -->
+    <div class="dash-ca-card">
+      <div class="dash-ca-main">
+        <div class="dash-ca-left">
+          <p class="dash-ca-label">CHIFFRE D'AFFAIRES AUJOURD'HUI</p>
+          <div class="dash-ca-value">
+            {{ caToday() | number:'1.0-0' }}
+            <span class="dash-ca-unit">DT</span>
           </div>
-          <div class="perf-filter">
-            <button class="perf-filter-btn"
-                    [class.is-active]="hourlyPerfFilter() === 'all'"
-                    (click)="hourlyPerfFilter.set('all')">All</button>
-            <button class="perf-filter-btn"
-                    [class.is-active]="hourlyPerfFilter() === 'risk'"
-                    (click)="hourlyPerfFilter.set('risk')">Risk only</button>
+          <p class="dash-ca-obj">Objectif {{ caTarget() | number:'1.0-0' }} DT</p>
+          <div class="dash-ca-pills">
+            <span class="dash-ca-pill"
+                  [style.background]="attainment() >= 100 ? '#E0FAF4' : '#FFF8E1'"
+                  [style.color]="attainment() >= 100 ? '#007A63' : '#92400E'">
+              {{ attainment() >= 100 ? 'Objectif atteint' : 'En cours' }}
+            </span>
+            <span class="dash-ca-pct"
+                  [style.color]="attainment() >= 100 ? '#27AE60' : '#F9A825'">
+              {{ attainment() }}%
+            </span>
           </div>
         </div>
+        @if (sparklinePoints()) {
+          <svg class="dash-ca-sparkline" viewBox="0 0 110 48" preserveAspectRatio="none">
+            <polyline [attr.points]="sparklinePoints()"
+                      fill="none" stroke="#E2001A" stroke-width="1.8"
+                      stroke-linecap="round" stroke-linejoin="round"/>
+            <circle [attr.cx]="sparklineEndX()" [attr.cy]="sparklineEndY()"
+                    r="3" fill="#E2001A"/>
+          </svg>
+        }
+      </div>
+      <div class="dash-ca-footer">
+        <div class="dash-ca-foot-item">
+          <span class="dash-ca-foot-lbl">Prévision fin de journée</span>
+          <span class="dash-ca-foot-val">{{ forecastEodAgent() | number:'1.0-0' }} DT</span>
+        </div>
+        <div class="dash-ca-foot-sep"></div>
+        <div class="dash-ca-foot-item">
+          <span class="dash-ca-foot-lbl">Écart vs objectif</span>
+          <span class="dash-ca-foot-val"
+                [style.color]="ecartObjectif() <= 5 ? '#27AE60' : '#E74C3C'">
+            {{ ecartObjectif() <= 5 ? '+' : '' }}{{ (caToday() - caTarget()) | number:'1.0-0' }} DT
+            ({{ ecartObjectif() }}%)
+          </span>
+        </div>
+        <div class="dash-ca-foot-sep"></div>
+        <div class="dash-ca-foot-item">
+          <span class="dash-ca-foot-lbl">MAJ</span>
+          <span class="dash-ca-foot-val dash-ca-foot-val--dim">
+            {{ ws.lastUpdated() || '...' }}
+          </span>
+        </div>
+      </div>
+    </div>
 
-        <div class="perf-legend">
-          <span class="perf-leg">
-            <span class="perf-leg__rect perf-leg__rect--blue"></span>Actual
-          </span>
-          <span class="perf-leg">
-            <span class="perf-leg__line perf-leg__line--dashed"></span>Target
-          </span>
-          <span class="perf-leg">
-            <span class="perf-leg__line perf-leg__line--green"></span>Forecast
-          </span>
+    <!-- VISITEURS / HEURE -->
+    <div class="dash-kpi-sm">
+      <p class="kpi-sm-label">VISITEURS / HEURE</p>
+      <div class="kpi-sm-value">
+        {{ visitorsH() }}
+      </div>
+      <p class="kpi-sm-sub">visiteurs/h</p>
+      <p class="kpi-sm-trend"
+         [class.kpi-sm-trend--up]="isLive()"
+         [class.kpi-sm-trend--neutral]="!isLive()">
+        {{ isLive() ? '▲ Trafic en direct' : '○ Polling traffic' }}
+      </p>
+      <p class="kpi-sm-maj">MAJ : {{ ws.lastUpdated() || '...' }}</p>
+    </div>
+
+    <!-- SANTÉ STOCK -->
+    <div class="dash-kpi-sm">
+      <p class="kpi-sm-label">SANTÉ STOCK</p>
+      <div class="kpi-sm-value">{{ stockKpi().critical }}</div>
+      <p class="kpi-sm-sub">critique</p>
+      <p class="kpi-sm-trend"
+         [class.kpi-sm-trend--up]="stockKpi().critical === 0"
+         [class.kpi-sm-trend--down]="stockKpi().critical > 0">
+        {{ stockKpi().okCount }} / {{ stockKpi().total }} SKUs optimal
+      </p>
+      <p class="kpi-sm-maj">MAJ : {{ ws.lastUpdated() || '...' }}</p>
+    </div>
+
+    <!-- OBJECTIF JOURNALIER -->
+    <div class="dash-kpi-sm">
+      <p class="kpi-sm-label">OBJECTIF JOURNALIER</p>
+      <div class="kpi-sm-value">
+        {{ attainment() }}<span class="kpi-sm-suffix">%</span>
+      </div>
+      <p class="kpi-sm-sub">atteint</p>
+      <p class="kpi-sm-trend"
+         [class.kpi-sm-trend--up]="ecartObjectif() <= 5"
+         [class.kpi-sm-trend--down]="ecartObjectif() > 15">
+        {{ ecartObjectif() <= 5 ? '+' : '' }}{{ ecartObjectif() }}% vs objectif
+        · Gap : {{ (caTarget() - caToday()) | number:'1.0-0' }} DT
+      </p>
+      <p class="kpi-sm-maj">MAJ : {{ ws.lastUpdated() || '...' }}</p>
+    </div>
+
+    <!-- ÉQUIPE ACTIVE -->
+    <div class="dash-kpi-sm">
+      <p class="kpi-sm-label">ÉQUIPE ACTIVE</p>
+      <div class="kpi-sm-value">{{ advisors.length }}</div>
+      <p class="kpi-sm-sub">conseillers</p>
+      <p class="kpi-sm-trend kpi-sm-trend--neutral">Lac 2</p>
+      <p class="kpi-sm-maj">MAJ : {{ ws.lastUpdated() || '...' }}</p>
+    </div>
+
+  </div>
+
+  <!-- ══ MAIN 2-COL GRID ══ -->
+  <div class="dash-main">
+
+    <!-- ══════ GAUCHE ══════ -->
+    <div class="dash-left">
+
+      <!-- ── Performance horaire ── -->
+      <div class="card perf-card">
+        <div class="perf-card-header">
+          <div>
+            <h2 class="card-title">Performance horaire</h2>
+            <p class="card-sub">CA par heure · Aujourd'hui</p>
+          </div>
+          <div class="perf-header-right">
+            <div class="perf-legend">
+              <span class="perf-leg">
+                <span class="perf-leg__bar"></span>Réel
+              </span>
+              <span class="perf-leg perf-leg--dash">
+                <span class="perf-leg__line--obj"></span>Objectif
+              </span>
+              <span class="perf-leg perf-leg--dash2">
+                <span class="perf-leg__line--prev"></span>Prévision
+              </span>
+            </div>
+            <div class="perf-filter">
+              <button class="perf-filter-btn"
+                      [class.is-active]="hourlyPerfFilter() === 'all'"
+                      (click)="hourlyPerfFilter.set('all')">Heure</button>
+              <button class="perf-filter-btn"
+                      [class.is-active]="hourlyPerfFilter() === 'risk'"
+                      (click)="hourlyPerfFilter.set('risk')">Cumul</button>
+            </div>
+          </div>
         </div>
 
         <div class="perf-chart-wrap">
           <div class="perf-yaxis">
-            <span>160</span><span>140</span><span>120</span>
-            <span>100</span><span>80</span><span>60</span>
-            <span>40</span><span>20</span><span>0</span>
+            <span>DT</span>
+            @for (tick of [160,140,120,100,80,60,40,20,0]; track tick) {
+              <span>{{ tick }}</span>
+            }
           </div>
           <div class="perf-chart">
             <div class="perf-grid">
@@ -84,24 +196,32 @@
                 <div class="perf-grid-line"></div>
               }
             </div>
+
+            <!-- Current time marker -->
+            @if (hourlyPerf().length > 1) {
+              @let nowIdx = hourlyPerf().findIndex(h => h.actual === 0) - 1;
+              @if (nowIdx >= 0 && nowIdx < hourlyPerf().length) {
+                <div class="perf-now-marker"
+                     [style.left.%]="(nowIdx / (hourlyPerf().length - 1)) * 100">
+                  <span class="perf-now-label">Maintenant</span>
+                </div>
+              }
+            }
+
             <div class="perf-bars">
               @for (h of hourlyPerf(); track h.hour) {
                 <div class="perf-bar-group"
                      [class.perf-bar-group--risk]="h.risk">
-                  @if (h.risk) {
-                    <div class="risk-zone-bg"></div>
-                  }
+                  @if (h.risk) { <div class="risk-zone-bg"></div> }
                   <div class="perf-bar-wrap">
-                    <span class="perf-bar-val">
-                      {{ h.actual > 0 ? (h.actual | number:'1.0-0') : '' }}
-                    </span>
                     @if (h.actual > 0) {
+                      <span class="perf-bar-val">{{ h.actual | number:'1.0-0' }}</span>
                       <div class="perf-bar"
                            [class.perf-bar--risk]="h.risk"
                            [style.height.%]="perfBarHeight(h.actual)">
                       </div>
                     } @else {
-                      <div class="perf-bar perf-bar--forecast-only"
+                      <div class="perf-bar perf-bar--ghost"
                            [style.height.%]="perfBarHeight(h.forecast)">
                       </div>
                     }
@@ -111,527 +231,345 @@
               }
             </div>
 
-            <!-- SVG sécurisé — guard sur length > 1 -->
             @if (hourlyPerf().length > 1) {
-              <svg class="perf-lines-svg"
-                   viewBox="0 0 1200 200"
-                   preserveAspectRatio="none">
-                <polyline
-                  [attr.points]="targetPoints()"
-                  fill="none" stroke="#C0392B"
-                  stroke-width="2" stroke-dasharray="6,4" opacity="0.85"/>
-                <polyline
-                  [attr.points]="forecastPoints()"
-                  fill="none" stroke="#27AE60"
-                  stroke-width="2.5" opacity="0.9"/>
+              <svg class="perf-lines-svg" viewBox="0 0 1200 200" preserveAspectRatio="none">
+                <polyline [attr.points]="targetPoints()"
+                          fill="none" stroke="#94A3B8"
+                          stroke-width="1.5" stroke-dasharray="6,4" opacity="0.7"/>
+                <polyline [attr.points]="forecastPoints()"
+                          fill="none" stroke="#E74C3C"
+                          stroke-width="1.5" stroke-dasharray="5,4" opacity="0.8"/>
                 @for (h of hourlyPerf(); track h.hour; let i = $index) {
                   @if (h.forecast > 0) {
-                    <circle
-                      [attr.cx]="circleX(i)"
-                      [attr.cy]="circleY(h)"
-                      r="4" fill="white"
-                      stroke="#27AE60" stroke-width="2"/>
+                    <circle [attr.cx]="circleX(i)" [attr.cy]="circleY(h)"
+                            r="4" fill="white" stroke="#E74C3C" stroke-width="1.5"/>
                   }
                 }
               </svg>
             }
+          </div>
+        </div>
 
+        <!-- Stats footer -->
+        <div class="perf-stats-row">
+          <div class="perf-stat">
+            <span class="perf-stat__label">CA matin (8h–12h)</span>
+            <span class="perf-stat__val">{{ caMatinTotal() | number:'1.0-0' }} DT</span>
+          </div>
+          <div class="perf-stat perf-stat--sep">
+            <span class="perf-stat__label">Meilleure heure</span>
+            <span class="perf-stat__val">
+              {{ meilleureHeure()?.hour || '—' }}
+              @if (meilleureHeure()) { · {{ meilleureHeure()!.actual | number:'1.0-0' }} DT }
+            </span>
+          </div>
+          <div class="perf-stat perf-stat--sep">
+            <span class="perf-stat__label">CA après-midi (12h–20h)</span>
+            <span class="perf-stat__val">
+              {{ caApresMidiTotal() | number:'1.0-0' }} DT
+              <span class="perf-stat__muted">(prévu)</span>
+            </span>
+          </div>
+          <div class="perf-stat perf-stat--sep">
+            <span class="perf-stat__label">Prévision fin de journée</span>
+            <span class="perf-stat__val perf-stat__val--accent">
+              {{ forecastEodAgent() | number:'1.0-0' }} DT
+            </span>
           </div>
         </div>
 
         <!-- Risk hours -->
-        <div class="perf-risk-section">
-          <div class="perf-risk-title">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                 stroke="#F9A825" stroke-width="2">
-              <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
-              <line x1="12" y1="9"  x2="12"    y2="13"/>
-              <line x1="12" y1="17" x2="12.01" y2="17"/>
-            </svg>
-            <span>Risk hours detected</span>
-          </div>
-          <div class="perf-risk-rows">
+        @if (riskHours().length > 0) {
+          <div class="perf-risk-section">
+            <div class="perf-risk-title">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                   stroke="#F9A825" stroke-width="2">
+                <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+              </svg>
+              Heures à risque détectées
+            </div>
             @for (r of riskHours(); track r.hour) {
               <div class="perf-risk-row">
                 <span class="perf-risk-hour mono">{{ r.hour }}</span>
                 <div class="perf-risk-bar-track">
                   <div class="perf-risk-bar"
                        [style.width.%]="riskBarWidth(r.actualPct)"
-                       [style.background]="gapColor(r.gap)">
-                  </div>
+                       [style.background]="gapColor(r.gap)"></div>
                 </div>
                 <span class="perf-risk-pct" [style.color]="gapColor(r.gap)">
-                  {{ r.actualPct }}% target
-                </span>
-                <span class="perf-risk-gap" [style.color]="gapColor(r.gap)">
-                  {{ r.gap }} units
+                  {{ r.actualPct }}% objectif
                 </span>
               </div>
             }
-            @if (riskHours().length === 0) {
-              <p class="no-risk">Aucune heure à risque détectée ✓</p>
-            }
           </div>
-        </div>
+        }
       </div>
 
-      <!-- Lead time tracker -->
-      <div class="card lead-card">
-        <div class="card-header">
-          <div>
-            <h2 class="card-title">Replenishment lead time tracker</h2>
-            <p class="card-sub">
-              Days from alert triggered → stock received · Target = 5 days
-            </p>
-          </div>
-        </div>
-        <div class="lt-legend">
-          <span class="lt-leg">
-            <span class="lt-leg__dash"></span>Target (5d)
-          </span>
-          <span class="lt-leg">
-            <span class="lt-leg__dot" style="background:#2D9CDB"></span>
-            Within target
-          </span>
-          <span class="lt-leg">
-            <span class="lt-leg__dot" style="background:#F9A825"></span>
-            Slightly late
-          </span>
-          <span class="lt-leg">
-            <span class="lt-leg__dot" style="background:#E74C3C"></span>
-            Too late
-          </span>
-        </div>
-        <div class="lt-chart">
-          <div class="lt-yaxis">
-            <span>12d</span><span>10d</span><span>8d</span>
-            <span>6d</span><span>4d</span><span>2d</span><span>0d</span>
-          </div>
-          <div class="lt-bars-area">
-            <div class="lt-target-line" [style.bottom.%]="targetLineBottom()"></div>
-            @for (item of leadTimeData; track item.label) {
-              <div class="lt-bar-group">
-                <div class="lt-bar-wrap">
-                  <div class="lt-bar-bg"
-                       [style.background]="leadTimeBg(item.status)"></div>
-                  <div class="lt-bar"
-                       [style.height.%]="leadTimeBarHeight(item.days)"
-                       [style.background]="leadTimeColor(item.status)"></div>
-                  <span class="lt-bar-val"
-                        [style.color]="leadTimeColor(item.status)">
-                    {{ item.days }}d
-                  </span>
-                </div>
-                <span class="lt-bar-label">{{ item.label }}</span>
-              </div>
-            }
-          </div>
-        </div>
-      </div>
+      <!-- ── Bottom row: Heatmap + Alertes ── -->
+      <div class="dash-bottom-row">
 
-      <!-- Product Mix -->
-      <div class="card product-mix-card">
-        <div class="card-header">
-          <div>
-            <h2 class="card-title">Product Mix</h2>
-            <p class="card-sub">APP01 POS · Sales vs Forecast · LIVE</p>
+        <!-- Carte des Risques & Contexte -->
+        <div class="card heatmap-card">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title">Carte des Risques &amp; Contexte</h2>
+            </div>
+            <div class="heat-legend">
+              <span class="heat-leg" style="background:#D4EDDA;color:#155724">Bon</span>
+              <span class="heat-leg" style="background:#C0DD97;color:#27500A">Attention</span>
+              <span class="heat-leg" style="background:#EF9F27;color:#633806">Risque</span>
+              <span class="heat-leg" style="background:#E74C3C;color:white">Critique</span>
+            </div>
           </div>
-          <div class="mix-legend">
-            <span class="mix-leg">
-              <span class="mix-leg__dot mix-leg__dot--actual"></span>Actual
-            </span>
-            <span class="mix-leg">
-              <span class="mix-leg__dot mix-leg__dot--forecast"></span>Forecast
-            </span>
-          </div>
-        </div>
 
-        <div class="mix-col-headers">
-          <span class="mix-col-h">Product</span>
-          <span class="mix-col-h">Sales vs Forecast</span>
-          <span class="mix-col-h mix-col-h--right">Attainment</span>
-          <span class="mix-col-h">Stock level</span>
-          <span class="mix-col-h mix-col-h--right">Revenue</span>
-          <span class="mix-col-h"></span>
-        </div>
-
-        <div class="product-mix-list">
-          @for (p of productMix(); track $index) {
-            <div class="mix-row" [class.mix-row--alert]="p.alert">
-              @if (p.alert) {
-                <div class="mix-alert-dot"></div>
+          <div class="heatmap-grid">
+            <div class="heat-row heat-row--header">
+              <span class="heat-row-label"></span>
+              @for (h of heatHours; track h) {
+                <span class="heat-cell heat-cell--header">{{ h }}</span>
               }
-              <div class="mix-name-col">
-                <div class="mix-color-bar" [style.background]="p.color"></div>
-                <div class="mix-name-info">
-                  <span class="mix-name">{{ p.name }}</span>
-                  <span class="mix-units mono">
-                    {{ p.unitsSold }} / {{ p.unitsForecast }} units
-                  </span>
-                </div>
-              </div>
-              <div class="mix-bars-col">
-                <div class="mix-bar-track">
-                  <div class="mix-bar mix-bar--forecast"
-                       [style.width.%]="forecastBarWidth(p.salesForecast)"></div>
-                  <div class="mix-bar mix-bar--actual"
-                       [style.width.%]="actualBarWidth(p.salesActual)"
-                       [style.background]="attainmentColor(p.salesActual, p.salesForecast)">
+            </div>
+            @for (row of heatRows; track row.key) {
+              <div class="heat-row">
+                <span class="heat-row-label">{{ row.label }}</span>
+                @for (h of heatHours; track h; let i = $index) {
+                  <div class="heat-cell"
+                       [style.background]="heatColor(heatVal(row.key, i))"
+                       [title]="row.label + ' ' + h + ' : ' + heatLabel(heatVal(row.key, i))">
                   </div>
-                </div>
-              </div>
-              <div class="mix-pct-col">
-                <span class="mix-pct-actual"
-                      [style.color]="attainmentColor(p.salesActual, p.salesForecast)">
-                  {{ p.salesActual }}%
-                </span>
-                <span class="mix-pct-sep">/</span>
-                <span class="mix-pct-forecast">{{ p.salesForecast }}%</span>
-              </div>
-              <div class="mix-stock-col">
-                <div class="mix-stock-header">
-                  <span class="mix-stock-units"
-                        [style.color]="stockRiskColor(p.stockRisk)">
-                    @if (p.stockUnits >= 999) { ∞ } @else { {{ p.stockUnits }} }
-                  </span>
-                  <span class="mix-stock-badge"
-                        [style.background]="stockRiskBg(p.stockRisk)"
-                        [style.color]="stockRiskColor(p.stockRisk)">
-                    {{ stockRiskLabel(p.stockRisk) }}
-                  </span>
-                </div>
-                @if (p.stockUnits < 999) {
-                  <div class="mix-stock-bar-track">
-                    <div class="mix-stock-bar"
-                         [style.width.%]="stockBarWidth(p.stockUnits, p.stockMin)"
-                         [style.background]="stockRiskColor(p.stockRisk)"></div>
-                    <div class="mix-stock-min-marker"
-                         [style.left.%]="stockBarWidth(p.stockMin, p.stockMin)"
-                         [title]="'Min: ' + p.stockMin"></div>
-                  </div>
-                  <span class="mix-stock-min-label">Min: {{ p.stockMin }}</span>
-                } @else {
-                  <div class="mix-stock-bar-track">
-                    <div class="mix-stock-bar"
-                         style="width:100%;background:#00B894"></div>
-                  </div>
-                  <span class="mix-stock-min-label">Digital — no limit</span>
                 }
               </div>
-              <div class="mix-revenue-col">
-                <span class="mix-revenue">
-                  {{ p.revenue | number:'1.0-0' }} DT
-                </span>
-                <span class="mix-trend"
-                      [class.mix-trend--up]="p.trend === 'up'"
-                      [class.mix-trend--down]="p.trend === 'down'">
-                  @if (p.trend === 'up') {
-                    <svg width="9" height="9" viewBox="0 0 24 24"
-                         fill="none" stroke="currentColor" stroke-width="3">
-                      <polyline points="18,15 12,9 6,15"/>
-                    </svg>
-                  } @else {
-                    <svg width="9" height="9" viewBox="0 0 24 24"
-                         fill="none" stroke="currentColor" stroke-width="3">
-                      <polyline points="6,9 12,15 18,9"/>
-                    </svg>
-                  }
-                  {{ p.trendVal }}
-                </span>
-              </div>
-              <div class="mix-attainment"
-                   [style.color]="attainmentColor(p.salesActual, p.salesForecast)">
-                <svg width="32" height="32" viewBox="0 0 32 32">
-                  <circle cx="16" cy="16" r="12"
-                          fill="none" stroke="var(--color-border)" stroke-width="3"/>
-                  <circle cx="16" cy="16" r="12"
-                          fill="none"
-                          [attr.stroke]="attainmentColor(p.salesActual, p.salesForecast)"
-                          stroke-width="3" stroke-linecap="round"
-                          stroke-dasharray="75.4"
-                          [attr.stroke-dashoffset]="75.4 - (75.4 * attainmentPct(p.salesActual, p.salesForecast) / 100)"
-                          transform="rotate(-90 16 16)"/>
-                </svg>
-                <span class="mix-attainment__val">
-                  {{ attainmentPct(p.salesActual, p.salesForecast) }}%
-                </span>
-              </div>
-            </div>
-          }
-          @if (productMix().length === 0) {
-            <p class="no-data">Chargement des données produit...</p>
-          }
-        </div>
+            }
+          </div>
 
-        <div class="mix-footer">
-          <div class="mix-footer__item">
-            <span class="mix-footer__label">Total revenue</span>
-            <span class="mix-footer__val">
-              {{ caToday() | number:'1.0-0' }} DT
-            </span>
-          </div>
-          <div class="mix-footer__item">
-            <span class="mix-footer__label">Forecast EOD</span>
-            <span class="mix-footer__val mix-footer__val--muted">
-              {{ forecastEodAgent() | number:'1.0-0' }} DT
-            </span>
-          </div>
-          <div class="mix-footer__item">
-            <span class="mix-footer__label">Gap objectif</span>
-            <span class="mix-footer__val mix-footer__val--alert">
-              {{ ecartObjectif() }}%
-              <svg width="11" height="11" viewBox="0 0 24 24"
-                   fill="none" stroke="currentColor" stroke-width="2">
+          @if (causeRacine() || analystSummary()) {
+            <div class="heat-alert">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+                   stroke="#E74C3C" stroke-width="2">
                 <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
               </svg>
-            </span>
-          </div>
+              {{ causeRacine() || analystSummary() }}
+            </div>
+          }
         </div>
-      </div>
 
+        <!-- Alertes Actives -->
+        <div class="card alerts-card">
+          <div class="card-header">
+            <h2 class="card-title">Alertes Actives</h2>
+            <button class="card-link">Voir toutes</button>
+          </div>
+
+          <div class="alerts-list">
+            @if (realTimeAlerts().length === 0 && riskHours().length === 0) {
+              <!-- Synthetic alert: no stockouts -->
+              <div class="alert-item alert-item--ok">
+                <div class="alert-item__icon alert-item__icon--ok">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                       stroke="currentColor" stroke-width="2.5">
+                    <polyline points="20,6 9,17 4,12"/>
+                  </svg>
+                </div>
+                <div class="alert-item__body">
+                  <p class="alert-item__title">Aucun SKU critique</p>
+                  <p class="alert-item__sub">Bon niveau de stock.</p>
+                </div>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                     stroke="#CBD5E0" stroke-width="2">
+                  <polyline points="9,18 15,12 9,6"/>
+                </svg>
+              </div>
+
+              @if (attainment() >= 100) {
+                <div class="alert-item alert-item--ok">
+                  <div class="alert-item__icon alert-item__icon--ok">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="2.5">
+                      <polyline points="20,6 9,17 4,12"/>
+                    </svg>
+                  </div>
+                  <div class="alert-item__body">
+                    <p class="alert-item__title">Objectif journalier atteint</p>
+                    <p class="alert-item__sub">Félicitations ! Gardez le rythme.</p>
+                  </div>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                       stroke="#CBD5E0" stroke-width="2">
+                    <polyline points="9,18 15,12 9,6"/>
+                  </svg>
+                </div>
+              }
+
+              @if (visitorsH() > 20) {
+                <div class="alert-item alert-item--warn">
+                  <div class="alert-item__icon alert-item__icon--warn">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="2">
+                      <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+                    </svg>
+                  </div>
+                  <div class="alert-item__body">
+                    <p class="alert-item__title">Trafic élevé en cours</p>
+                    <p class="alert-item__sub">Préparez l'équipe en conséquence.</p>
+                  </div>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                       stroke="#CBD5E0" stroke-width="2">
+                    <polyline points="9,18 15,12 9,6"/>
+                  </svg>
+                </div>
+              }
+            }
+
+            @for (alert of realTimeAlerts().slice(0, 5); track $index) {
+              <div class="alert-item"
+                   [class.alert-item--crit]="alert.level === 'critical'"
+                   [class.alert-item--warn]="alert.level === 'high' || alert.level === 'medium'"
+                   [class.alert-item--ok]="alert.level === 'low' || alert.level === 'info'">
+                <div class="alert-item__icon"
+                     [class.alert-item__icon--crit]="alert.level === 'critical'"
+                     [class.alert-item__icon--warn]="alert.level === 'high'"
+                     [class.alert-item__icon--ok]="alert.level === 'low' || alert.level === 'info'">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                       stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="12" y1="8" x2="12" y2="12"/>
+                    <line x1="12" y1="16" x2="12.01" y2="16"/>
+                  </svg>
+                </div>
+                <div class="alert-item__body">
+                  <p class="alert-item__title">{{ alert.title || alert.message }}</p>
+                  @if (alert.detail || alert.action) {
+                    <p class="alert-item__sub">{{ alert.detail || alert.action }}</p>
+                  }
+                </div>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                     stroke="#CBD5E0" stroke-width="2">
+                  <polyline points="9,18 15,12 9,6"/>
+                </svg>
+              </div>
+            }
+          </div>
+
+          <p class="alerts-footer">
+            <span class="status-dot"></span>
+            Les données sont mises à jour en temps réel.
+            Dernier rafraîchissement : {{ ws.lastUpdated() || '...' }}
+          </p>
+        </div>
+
+      </div>
     </div>
 
-    <div class="main-grid__right">
+    <!-- ══════ DROITE ══════ -->
+    <div class="dash-right">
 
-      <!-- Active Coaching Cards -->
-      <div class="card coaching-card-wrap">
+      <!-- ── Prochaine Meilleure Action (NBA) ── -->
+      <div class="card nba-card">
         <div class="card-header">
-          <div>
-            <h2 class="card-title">Active Coaching Cards</h2>
-            <p class="card-sub">APP07 Coaching Agent · DSPy · vLLM Mistral-7B</p>
-          </div>
-          <span class="live-badge">
-            <span class="live-badge__dot"></span>Agent Running
+          <p class="nba-eyebrow">PROCHAINE MEILLEURE ACTION</p>
+          <span class="nba-priority-badge">
+            Priorité {{ bestNba()?.priorite ?? 1 }}
           </span>
         </div>
 
-        <div class="coaching-list">
-          @for (card of cards(); track card.id ?? $index) {
-            <div class="coaching-item"
-                 [class.coaching-item--high]="card.priority === 'HIGH'"
-                 [class.coaching-item--med]="card.priority === 'MED'"
-                 [class.coaching-item--ok]="card.priority === 'OK'">
-              <div class="coaching-strip"
-                   [style.background]="priorityColor(card.priority)"></div>
-              <div class="coaching-body">
-                <div class="coaching-head">
-                  <div class="advisor-avatar"
-                       [style.background]="card.avatarColor">
-                    {{ card.advisorInitials }}
-                  </div>
-                  <div class="coaching-meta">
-                    <span class="coaching-name">{{ card.advisorName }}</span>
-                    <span class="coaching-target">
-                      ADV · {{ card.target }}% target
-                    </span>
-                  </div>
-                  <div class="coaching-priority-badge"
-                       [style.background]="priorityBg(card.priority)"
-                       [style.color]="priorityColor(card.priority)">
-                    {{ card.priority }}
-                  </div>
-                  <span class="coaching-time mono">{{ card.time }}</span>
-                </div>
+        <div class="nba-body">
+          <div class="nba-hero">
+            <div class="nba-rocket">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+                   stroke="#6C5CE7" stroke-width="2">
+                <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 00-2.91-.09z"/>
+                <path d="M12 15l-3-3a22 22 0 012-3.95A12.88 12.88 0 0122 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 01-4 2z"/>
+                <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/>
+                <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/>
+              </svg>
+            </div>
+            <div>
+              <h3 class="nba-title">
+                {{ bestNba()?.action || 'Analyse en cours...' }}
+              </h3>
+              @if (bestNba()?.produit_cible) {
+                <p class="nba-product">{{ bestNba()!.produit_cible }}</p>
+              }
+            </div>
+          </div>
 
-                <p class="coaching-context">
-                  Gap {{ card.gap }}% · {{ card.context }}
-                </p>
-                <p class="coaching-advice">"{{ card.advice }}"</p>
+          @if (bestNba()?.argument_vente) {
+            <p class="nba-desc">{{ bestNba()!.argument_vente }}</p>
+          } @else if (analystSummary()) {
+            <p class="nba-desc">{{ analystSummary() }}</p>
+          }
 
-                <!-- Actions Stratège inline -->
-                @if (strateActions().length > 0 && $index === 0) {
-                  <div class="stratege-actions">
-                    <div class="stratege-actions__title">
-                      <svg width="10" height="10" viewBox="0 0 24 24"
-                           fill="none" stroke="#6C5CE7" stroke-width="2.5">
-                        <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/>
-                      </svg>
-                      Stratégie Agent
-                    </div>
-                    @for (action of strateActions().slice(0, 2); track action.priorite) {
-                      <div class="stratege-action-item">
-                        <span class="stratege-action-num">{{ action.priorite }}</span>
-                        <div class="stratege-action-content">
-                          <span class="stratege-action-text">{{ action.action }}</span>
-                          <span class="stratege-action-produit">
-                            → {{ action.produit_cible }}
-                          </span>
-                        </div>
-                      </div>
-                    }
-                  </div>
-                }
-
-                @if (card.status === 'pending') {
-                  <div class="coaching-actions">
-                    <button class="btn-escalate" (click)="escalate(card.id)">
-                      Escalate
-                    </button>
-                    <button class="btn-approve" (click)="approve(card.id)">
-                      Approve
-                    </button>
-                  </div>
-                } @else {
-                  <div class="coaching-status-row">
-                    <svg width="12" height="12" viewBox="0 0 24 24"
-                         fill="none" stroke="currentColor" stroke-width="2.5">
-                      <polyline points="20,6 9,17 4,12"/>
-                    </svg>
-                    <span>{{ statusLabel(card.status) }}</span>
-                    @if (card.status === 'approved') {
-                      <span class="auto-label">Auto-approved</span>
-                    }
-                  </div>
-                }
-              </div>
+          @if (bestNba()?.impact_estime) {
+            <div class="nba-impact-row">
+              <span class="nba-pill nba-pill--green">{{ bestNba()!.impact_estime }}</span>
             </div>
           }
 
-          <!-- Si pas de cards → actions Stratège directement -->
-          @if (cards().length === 0) {
-            @if (strateActions().length > 0) {
-              <div class="stratege-direct">
-                @if (causeRacine()) {
-                  <div class="stratege-cause-banner">
-                    <svg width="11" height="11" viewBox="0 0 24 24"
-                         fill="none" stroke="#F9A825" stroke-width="2">
-                      <circle cx="12" cy="12" r="10"/>
-                      <line x1="12" y1="8" x2="12" y2="12"/>
-                      <line x1="12" y1="16" x2="12.01" y2="16"/>
-                    </svg>
-                    <span>{{ causeRacine() }}</span>
-                  </div>
-                }
-                @for (action of strateActions(); track action.priorite) {
-                  <div class="stratege-action-row">
-                    <span class="stratege-priority-badge"
-                          [style.background]="action.priorite === 1 ? '#FDEDEC' : action.priorite === 2 ? '#FFF8E1' : '#EAF4FE'"
-                          [style.color]="action.priorite === 1 ? '#E74C3C' : action.priorite === 2 ? '#F9A825' : '#2D9CDB'">
-                      P{{ action.priorite }}
-                    </span>
-                    <div class="stratege-action-body">
-                      <p class="stratege-action-main">{{ action.action }}</p>
-                      <p class="stratege-action-sub">
-                        <strong>{{ action.produit_cible }}</strong>
-                        @if (action.argument_vente) {
-                          — {{ action.argument_vente }}
-                        }
-                      </p>
-                      @if (action.impact_estime) {
-                        <span class="stratege-action-impact">
-                          📈 {{ action.impact_estime }}
-                        </span>
-                      }
-                    </div>
-                  </div>
-                }
-                @if (messageManager()) {
-                  <div class="stratege-manager-msg">
-                    <svg width="11" height="11" viewBox="0 0 24 24"
-                         fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
-                    </svg>
-                    {{ messageManager() }}
-                  </div>
-                }
-              </div>
-            } @else {
-              <p class="no-data">Chargement des coaching cards...</p>
-            }
-          }
-        </div>
-      </div>
+          <div class="nba-checks">
+            <span class="nba-check">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+                   stroke="#E2001A" stroke-width="2.5">
+                <polyline points="20,6 9,17 4,12"/>
+              </svg>
+              {{ attainment() >= 100 ? 'Objectif atteint' : 'En progression' }}
+            </span>
+            <span class="nba-check">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+                   stroke="#E2001A" stroke-width="2.5">
+                <polyline points="20,6 9,17 4,12"/>
+              </svg>
+              Stock disponible
+            </span>
+            <span class="nba-check">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+                   stroke="#E2001A" stroke-width="2.5">
+                <polyline points="20,6 9,17 4,12"/>
+              </svg>
+              Marge attractive
+            </span>
+          </div>
 
-      <!-- Context Risk Heatmap -->
-      <div class="card heatmap-card">
-        <div class="card-header">
-          <div>
-            <h2 class="card-title">Context Risk Heatmap</h2>
-            <p class="card-sub">
-              APP02 Feature Eng. · APP12 Data Sources · LIVE
-            </p>
-            <!-- <p class="card-sub">
-              APP02 Feature Eng. · APP12 Data Sources · LIVE
-            </p> -->
-          </div>
-          <div class="heat-legend">
-            <span class="heat-leg" style="background:#EAF3DE;color:#3B6D11">Low</span>
-            <span class="heat-leg" style="background:#C0DD97;color:#27500A">Med</span>
-            <span class="heat-leg" style="background:#EF9F27;color:#633806">High</span>
-            <span class="heat-leg" style="background:#E74C3C;color:white">Crit</span>
-          </div>
-        </div>
-
-        <!-- Signaux contextuels réels -->
-        @if (ws.contextSignals().length > 0) {
-          <div class="context-signals-bar">
-            @for (sig of ws.contextSignals(); track sig.type) {
-              <div class="context-signal-chip"
-                   [class.context-signal-chip--low]="sig.level === 'low'"
-                   [class.context-signal-chip--med]="sig.level === 'med'"
-                   [class.context-signal-chip--high]="sig.level === 'high'"
-                   [class.context-signal-chip--crit]="sig.level === 'crit'">
-                {{ sig.label }}
-              </div>
-            }
-          </div>
-        }
-
-        <div class="heatmap-grid heatmap-grid--compact">
-          <div class="heat-row heat-row--header">
-            <span class="heat-row-label"></span>
-            @for (h of heatHours; track h) {
-              <span class="heat-cell heat-cell--header">{{ h }}</span>
-            }
-          </div>
-          @for (row of heatRows; track row.key) {
-            <div class="heat-row">
-              <span class="heat-row-label">{{ row.label }}</span>
-              @for (h of heatHours; track h; let i = $index) {
-                <div class="heat-cell"
-                     [style.background]="heatColor(heatVal(row.key, i))"
-                     [title]="row.label + ' ' + h + ' : ' + heatLabel(heatVal(row.key, i))">
+          @if (strateActions().length > 1) {
+            <div class="nba-more-actions">
+              @for (action of strateActions().slice(1, 3); track action.priorite) {
+                <div class="nba-more-item">
+                  <span class="nba-more-num">P{{ action.priorite }}</span>
+                  <span class="nba-more-text">{{ action.action }}</span>
                 </div>
               }
             </div>
           }
-        </div>
 
-        <!-- Alert cause racine -->
-        <div class="heat-alert">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-               stroke="#E74C3C" stroke-width="2">
-            <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
-            <line x1="12" y1="9"  x2="12"    y2="13"/>
-            <line x1="12" y1="17" x2="12.01" y2="17"/>
-          </svg>
-          {{ causeRacine() || analystSummary() || 'Analyse en cours...' }}
+          <button class="nba-link">
+            Voir l'argumentaire
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2">
+              <line x1="5" y1="12" x2="19" y2="12"/>
+              <polyline points="12,5 19,12 12,19"/>
+            </svg>
+          </button>
         </div>
-
-        <!-- Focus produits -->
-        <!-- Focus produits
-        @if (focusProduits().length > 0) {
-          <div class="heat-focus">
-            <span class="heat-focus__label">Focus produits :</span>
-            @for (p of focusProduits(); track $index) {
-              <span class="heat-focus__chip">{{ p }}</span>
-            }
-          </div>
-        }
-        } -->
       </div>
 
-      <!-- Team Ranking -->
+      <!-- ── Classement Équipe ── -->
       <div class="card team-card">
         <div class="card-header">
           <div>
-            <h2 class="card-title">Team Ranking</h2>
-            <p class="card-sub">Today's performance · LIVE</p>
+            <h2 class="card-title">Classement Équipe</h2>
+            <p class="card-sub">Performance du jour · LIVE</p>
           </div>
-          <span class="ws-badge" [class.ws-badge--on]="ws.connected()">
-            <span class="ws-dot"></span>
-            {{ ws.connected() ? 'Live' : 'Polling' }}
-          </span>
+          <div class="team-header-right">
+            <span class="ws-badge" [class.ws-badge--on]="ws.connected()">
+              <span class="ws-dot"></span>
+              {{ ws.connected() ? 'Live' : 'Polling' }}
+            </span>
+            <button class="card-link">Voir tout</button>
+          </div>
+        </div>
+
+        <div class="team-thead">
+          <span></span>
+          <span class="team-th">CA RÉALISÉ</span>
+          <span class="team-th">ATTEINTE</span>
         </div>
 
         <div class="team-list">
@@ -650,26 +588,21 @@
                   {{ adv.role ?? ((adv.nbVentes ?? adv.nb_ventes ?? 0) + ' ventes') }}
                 </span>
               </div>
+              <span class="team-ca">
+                {{ (adv.caRealized ?? adv.revenue ?? 0) | number:'1.0-0' }} DT
+              </span>
               <div class="team-perf">
-                <div class="team-values">
-                  <span class="team-ca">
-                    {{ (adv.caRealized ?? adv.revenue ?? 0) | number:'1.0-0' }} DT
-                  </span>
-                  <span class="team-pct"
-                        [style.color]="perfColor(adv.performance ?? adv.attainment ?? 0)">
-                    {{ adv.performance ?? adv.attainment ?? 0 }}%
-                  </span>
-                </div>
                 <div class="progress-track">
                   <div class="progress-fill"
                        [style.width.%]="adv.performance ?? adv.attainment ?? 0"
                        [style.background]="perfColor(adv.performance ?? adv.attainment ?? 0)">
                   </div>
                 </div>
+                <span class="team-pct"
+                      [style.color]="perfColor(adv.performance ?? adv.attainment ?? 0)">
+                  {{ adv.performance ?? adv.attainment ?? 0 }}%
+                </span>
               </div>
-              <span class="badge" [class]="statusBadge(adv.status ?? 'ok')">
-                {{ statusText(adv.status ?? 'ok') }}
-              </span>
             </div>
           }
           @if (advisors.length === 0) {
@@ -678,18 +611,18 @@
         </div>
 
         <div class="team-avg">
-          <span class="team-avg__label">Team avg.</span>
+          <span class="team-avg__label">Moy. équipe</span>
           <div class="progress-track" style="flex:1">
-            <div class="progress-fill amber"
-                 [style.width.%]="attainment()"></div>
+            <div class="progress-fill amber" [style.width.%]="attainment()"></div>
           </div>
           <span class="team-avg__val">{{ attainment() }}%</span>
           <span class="team-avg__obj">
-            target {{ caTarget() | number:'1.0-0' }} DT
+            objectif {{ caTarget() | number:'1.0-0' }} DT
           </span>
         </div>
       </div>
 
     </div>
   </div>
+
 </div>

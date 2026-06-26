@@ -3,7 +3,6 @@ import {
   OnInit, OnDestroy
 } from '@angular/core';
 import { CommonModule }     from '@angular/common';
-import { RouterLink }       from '@angular/router';
 import { HttpClientModule } from '@angular/common/http';
 import { Subject }          from 'rxjs';
 import { takeUntil }        from 'rxjs/operators';
@@ -13,11 +12,6 @@ import { StoreMetrics }   from '../../core/models/store';
 import { MockDataService } from '../../core/services/mock-data';
 import { ApiService }      from '../../core/services/api';
 import { WebSocketService } from '../../core/services/websocket.service';
-import {
-  FlipKpiCardComponent,
-  FlipCardData
-} from '../../shared/components/flip-kpi-card/flip-kpi-card';
-import { MetricCardComponent } from '../../shared/components/metric-card/metric-card';
 import {
   InventoryApiService,
   InventoryApiItem,
@@ -46,7 +40,7 @@ interface RiskHour {
 @Component({
   selector:    'app-dashboard',
   standalone:  true,
-  imports:     [CommonModule, FlipKpiCardComponent, HttpClientModule],
+  imports:     [CommonModule, HttpClientModule],
   templateUrl: './dashboard.html',
   styleUrl:    './dashboard.scss'
 })
@@ -230,7 +224,7 @@ export class Dashboard implements OnInit, OnDestroy {
   inventoryItems = signal<InventoryApiItem[]>([]);
 
   // ── Flip Cards ────────────────────────────────────────
-  flipCards = computed((): FlipCardData[] => {
+  flipCards = computed((): any[] => {
     const att      = this.attainment();
     const ca       = this.caToday();
     const target   = this.caTarget();
@@ -368,11 +362,11 @@ export class Dashboard implements OnInit, OnDestroy {
   // ── Heatmap ───────────────────────────────────────────
   heatHours = ['11AM','12PM','1PM','2PM','3PM','4PM','5PM','6PM'];
   heatRows  = [
-    { key: 'traffic', label: 'Traffic' },
-    { key: 'weather', label: 'Weather' },
-    { key: 'stock',   label: 'Stock'   },
-    { key: 'event',   label: 'Event'   },
-    { key: 'risk',    label: 'Risk'    },
+    { key: 'traffic', label: 'Traffic'     },
+    { key: 'stock',   label: 'Stock'       },
+    { key: 'event',   label: 'Événements'  },
+    { key: 'risk',    label: 'Réseau'      },
+    { key: 'weather', label: 'Météo'       },
   ];
 
   heatData: Record<string, number[]> = {
@@ -862,6 +856,60 @@ export class Dashboard implements OnInit, OnDestroy {
       };
     });
   }
+
+  // ── Performance chart stats ──────────────────────────────
+  caMatinTotal = computed(() =>
+    this.hourlyPerf()
+      .filter(h => { const n = this._parseHourToInt(h.hour); return n !== null && n >= 8 && n < 12; })
+      .reduce((s, h) => s + (h.actual || 0), 0)
+  );
+
+  caApresMidiTotal = computed(() =>
+    this.hourlyPerf()
+      .filter(h => { const n = this._parseHourToInt(h.hour); return n !== null && n >= 12; })
+      .reduce((s, h) => s + (h.actual || 0), 0)
+  );
+
+  meilleureHeure = computed(() => {
+    const arr = this.hourlyPerf().filter(h => h.actual > 0);
+    if (!arr.length) return null;
+    return arr.reduce((best, h) => h.actual > best.actual ? h : best, arr[0]);
+  });
+
+  sparklinePoints = computed(() => {
+    const arr = this.hourlyPerf().filter(h => h.actual > 0);
+    if (arr.length < 2) return '';
+    const max = Math.max(...arr.map(h => h.actual), 1);
+    const W = 110, H = 48;
+    return arr.map((h, i) => {
+      const x = Math.round((i / (arr.length - 1)) * W);
+      const y = Math.round(H - (h.actual / max) * H);
+      return `${x},${y}`;
+    }).join(' ');
+  });
+
+  sparklineEndX = computed(() => {
+    const pts = this.sparklinePoints();
+    if (!pts) return 0;
+    const last = pts.split(' ').at(-1) ?? '';
+    return Number(last.split(',')[0] ?? 0);
+  });
+
+  sparklineEndY = computed(() => {
+    const pts = this.sparklinePoints();
+    if (!pts) return 0;
+    const last = pts.split(' ').at(-1) ?? '';
+    return Number(last.split(',')[1] ?? 0);
+  });
+
+  realTimeAlerts = computed(() =>
+    (this.ws.liveMetrics()?.real_time_alerts ?? []) as any[]
+  );
+
+  bestNba = computed(() => {
+    const actions = this.strateActions();
+    return actions.length ? actions[0] : null;
+  });
 
   // ── Heatmap helpers ───────────────────────────────────
   private applyHeatmapFromWs(data: any) {

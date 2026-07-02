@@ -1,8 +1,9 @@
 import { Component, signal, computed, OnInit } from '@angular/core';
-import { RouterLink, RouterLinkActive } from '@angular/router';
+import { RouterLink, RouterLinkActive,  } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { WebSocketService } from '../../core/services/websocket.service';
+import { LayoutService } from '../../core/services/layout.service';
 
 interface NavItem {
   label:  string;
@@ -57,6 +58,7 @@ export class NavbarComponent implements OnInit {
 
   constructor(
     public  ws:        WebSocketService,
+    public  layout:    LayoutService,
     private sanitizer: DomSanitizer
   ) {}
 

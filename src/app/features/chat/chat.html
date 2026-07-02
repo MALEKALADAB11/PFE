@@ -196,10 +196,47 @@
                       <div class="typing-dots"><span></span><span></span><span></span></div>
                     </div>
                   } @else {
-                    <div class="msg-bubble msg-bubble--coach">
-                      <p class="msg-text" style="white-space: pre-line">{{ msg.text }}</p>
+                    <div class="msg-bubble msg-bubble--coach" [class.msg-bubble--streaming]="msg.streaming">
+                      <p class="msg-text" style="white-space: pre-line">{{ msg.text }}@if (msg.streaming) {<span class="stream-cursor">▋</span>}</p>
 
-                      @if (msg.sources?.length) {
+                      @if (!msg.streaming && msg.guardrail_status && msg.guardrail_status !== 'APPROVE') {
+                        <div class="guardrail-badge"
+                             [class.guardrail-badge--block]="msg.guardrail_status === 'BLOCK'"
+                             [class.guardrail-badge--escalate]="msg.guardrail_status === 'ESCALATE'"
+                             [class.guardrail-badge--rewrite]="msg.guardrail_status === 'REWRITE'">
+                          <span class="guardrail-badge__icon">
+                            @if (msg.guardrail_status === 'BLOCK') { 🚫 }
+                            @else if (msg.guardrail_status === 'ESCALATE') { ⚠️ }
+                            @else { ✏️ }
+                          </span>
+                          <span class="guardrail-badge__label">
+                            Guardrail {{ msg.guardrail_status }}
+                            @if (msg.guardrail_issues?.length) {
+                              · {{ msg.guardrail_issues![0].rule }}
+                            }
+                          </span>
+                          @if (msg.requires_hitl) {
+                            <span class="guardrail-badge__hitl">Manager notifié</span>
+                          }
+                        </div>
+                      }
+
+                      @if (!msg.streaming && msg.scored_products?.length) {
+                        <div class="scored-products">
+                          @for (p of msg.scored_products!; track p.sku) {
+                            <div class="scored-product-chip"
+                                 [title]="p.recommendation_reason">
+                              <span class="spc-score"
+                                    [style.color]="p.final_score >= 0.75 ? '#10B981' : p.final_score >= 0.5 ? '#F59E0B' : '#94A3B8'">
+                                {{ (p.final_score * 100).toFixed(0) }}%
+                              </span>
+                              <span class="spc-name">{{ p.name || p.sku }}</span>
+                            </div>
+                          }
+                        </div>
+                      }
+
+                      @if (!msg.streaming && msg.sources?.length) {
                         <div class="msg-sources">
                           @for (src of msg.sources; track src) {
                             <span class="source-tag">{{ src }}</span>

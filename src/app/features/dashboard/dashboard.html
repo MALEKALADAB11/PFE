@@ -1,5 +1,37 @@
 <div class="dashboard">
 
+  <!-- ══ SKELETON — visible seulement avant la première donnée WS ══ -->
+  @if (!ws.liveMetrics()) {
+    <div class="dash-skeleton">
+      <div class="dash-skeleton__header">
+        <div class="skel skel--title"></div>
+        <div class="skel skel--btn"></div>
+      </div>
+      <div class="dash-skeleton__kpi-row">
+        @for (_ of [1,2,3,4,5]; track $index) {
+          <div class="skel skel--kpi-card"></div>
+        }
+      </div>
+      <div class="dash-skeleton__main">
+        <div class="dash-skeleton__left">
+          <div class="skel skel--chart"></div>
+          <div class="skel skel--alerts"></div>
+        </div>
+        <div class="dash-skeleton__right">
+          <div class="skel skel--nba"></div>
+          <div class="skel skel--team"></div>
+        </div>
+      </div>
+      <div class="dash-skeleton__status">
+        <div class="skel-pulse"></div>
+        <span>Connexion aux agents en cours...</span>
+      </div>
+    </div>
+  }
+
+  <!-- ══ CONTENU PRINCIPAL (caché pendant le chargement) ══ -->
+  @if (ws.liveMetrics()) {
+
   <!-- ══ PAGE HEADER ══ -->
   <div class="page-header">
     <div class="page-header__left">
@@ -12,6 +44,7 @@
       <p class="page-sub">Vue en direct du magasin</p>
     </div>
     <div class="page-header__right">
+      <app-hitl-panel />
       <button class="btn-outline" (click)="simulatePOS()">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
              stroke="currentColor" stroke-width="2">
@@ -77,9 +110,9 @@
         <div class="dash-ca-foot-item">
           <span class="dash-ca-foot-lbl">Écart vs objectif</span>
           <span class="dash-ca-foot-val"
-                [style.color]="ecartObjectif() <= 5 ? '#27AE60' : '#E74C3C'">
-            {{ ecartObjectif() <= 5 ? '+' : '' }}{{ (caToday() - caTarget()) | number:'1.0-0' }} DT
-            ({{ ecartObjectif() }}%)
+                [style.color]="caToday() >= caTarget() ? '#27AE60' : '#E74C3C'">
+            {{ caToday() >= caTarget() ? '+' : '-' }}{{ caAbsDiff() | number:'1.0-0' }} DT
+            ({{ ecartPct() }}%)
           </span>
         </div>
         <div class="dash-ca-foot-sep"></div>
@@ -110,12 +143,16 @@
     <!-- SANTÉ STOCK -->
     <div class="dash-kpi-sm">
       <p class="kpi-sm-label">SANTÉ STOCK</p>
-      <div class="kpi-sm-value">{{ stockKpi().critical }}</div>
-      <p class="kpi-sm-sub">critique</p>
+      <div class="kpi-sm-value">
+        {{ stockHealthPct() }}<span class="kpi-sm-suffix">%</span>
+      </div>
+      <p class="kpi-sm-sub">
+        {{ stockKpi().critical === 0 ? 'Stock optimal' : stockKpi().critical + ' SKU critique' + (stockKpi().critical > 1 ? 's' : '') }}
+      </p>
       <p class="kpi-sm-trend"
          [class.kpi-sm-trend--up]="stockKpi().critical === 0"
          [class.kpi-sm-trend--down]="stockKpi().critical > 0">
-        {{ stockKpi().okCount }} / {{ stockKpi().total }} SKUs optimal
+        {{ stockKpi().okCount }} / {{ stockKpi().total }} SKUs OK
       </p>
       <p class="kpi-sm-maj">MAJ : {{ ws.lastUpdated() || '...' }}</p>
     </div>
@@ -128,10 +165,10 @@
       </div>
       <p class="kpi-sm-sub">atteint</p>
       <p class="kpi-sm-trend"
-         [class.kpi-sm-trend--up]="ecartObjectif() <= 5"
-         [class.kpi-sm-trend--down]="ecartObjectif() > 15">
-        {{ ecartObjectif() <= 5 ? '+' : '' }}{{ ecartObjectif() }}% vs objectif
-        · Gap : {{ (caTarget() - caToday()) | number:'1.0-0' }} DT
+         [class.kpi-sm-trend--up]="attainment() >= 100"
+         [class.kpi-sm-trend--down]="attainment() < 80">
+        {{ ecartPct() }}% vs objectif
+        · {{ caToday() >= caTarget() ? 'Surplus' : 'Gap' }} : {{ caAbsDiff() | number:'1.0-0' }} DT
       </p>
       <p class="kpi-sm-maj">MAJ : {{ ws.lastUpdated() || '...' }}</p>
     </div>
@@ -304,6 +341,70 @@
           </div>
         }
       </div>
+
+      <!-- ── Inventaire Top Risques ── -->
+      @if (inventoryVsSales.length > 0) {
+        <div class="card inv-quick-card">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title">Inventaire · Top Risques</h2>
+              <p class="card-sub">SKUs triés par risque de rupture</p>
+            </div>
+            <span class="inv-health-badge"
+                  [style.background]="stockKpi().critical > 0 ? '#FDEDEC' : '#E0FAF4'"
+                  [style.color]="stockKpi().critical > 0 ? '#E74C3C' : '#007A63'">
+              {{ stockHealthPct() }}% santé
+            </span>
+          </div>
+          <div class="inv-quick-list">
+            @for (item of inventoryVsSales.slice(0, 5); track item.sku) {
+              <div class="inv-quick-row">
+                <div class="inv-quick-dot" [style.background]="item.color"></div>
+                <span class="inv-quick-name">{{ item.shortName }}</span>
+                <div class="inv-quick-bar-track">
+                  <div class="inv-quick-bar"
+                       [style.width.%]="item.stockMax > 0 ? (item.stock / item.stockMax * 100) : 0"
+                       [style.background]="item.risk === 'critical' ? '#E74C3C' : item.risk === 'high' ? '#F9A825' : item.color">
+                  </div>
+                </div>
+                <span class="inv-quick-stock"
+                      [style.color]="item.risk === 'critical' ? '#E74C3C' : item.risk === 'high' ? '#F9A825' : '#27AE60'">
+                  {{ item.stock }} u
+                </span>
+              </div>
+            }
+          </div>
+          @if (stockBackLines().length > 0) {
+            <div class="inv-quick-footer">{{ stockBackLines()[0] }}</div>
+          }
+        </div>
+      }
+
+      <!-- ── Lead Time par catégorie ── -->
+      @if (leadTimeData.length > 0) {
+        <div class="card lead-quick-card">
+          <div class="card-header">
+            <h2 class="card-title">Délais de Réapprovisionnement</h2>
+          </div>
+          <div class="lead-list">
+            @for (row of leadTimeData.slice(0, 4); track row.label) {
+              <div class="lead-row">
+                <span class="lead-label">{{ row.label }}</span>
+                <div class="lead-bar-track">
+                  <div class="lead-bar"
+                       [style.width.%]="row.days >= 30 ? 100 : row.days / 30 * 100"
+                       [style.background]="row.status === 'crit' ? '#E74C3C' : row.status === 'late' ? '#F9A825' : '#00B894'">
+                  </div>
+                </div>
+                <span class="lead-days"
+                      [style.color]="row.status === 'crit' ? '#E74C3C' : row.status === 'late' ? '#F9A825' : '#27AE60'">
+                  {{ row.days }}j
+                </span>
+              </div>
+            }
+          </div>
+        </div>
+      }
 
       <!-- ── Bottom row: Heatmap + Alertes ── -->
       <div class="dash-bottom-row">
@@ -550,6 +651,63 @@
         </div>
       </div>
 
+      <!-- ── Plan Stratégique (Agent Stratège) ── -->
+      @if (strateActions().length > 0 || focusProduits().length > 0) {
+        <div class="card strate-card">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title">Plan Stratégique</h2>
+              <p class="card-sub">{{ strateActions().length }} action(s) · Agent Stratège</p>
+            </div>
+            @if (ws.ragUsed()) {
+              <span class="strate-rag-badge">✦ RAG {{ ws.nbRagScripts() }}</span>
+            }
+          </div>
+
+          @if (strategie()) {
+            <p class="strate-headline">{{ strategie() }}</p>
+          }
+
+          @if (focusProduits().length) {
+            <div class="strate-focus-row">
+              <span class="strate-focus-label">Produits prioritaires</span>
+              <div class="strate-chips">
+                @for (p of focusProduits().slice(0, 5); track p) {
+                  <span class="strate-chip">{{ p }}</span>
+                }
+              </div>
+            </div>
+          }
+
+          <div class="strate-actions">
+            @for (a of strateActions().slice(0, 4); track a.priorite) {
+              <div class="strate-action">
+                <span class="strate-action__num">P{{ a.priorite }}</span>
+                <div class="strate-action__body">
+                  <span class="strate-action__text">{{ a.action }}</span>
+                  @if (a.produit_cible) {
+                    <span class="strate-action__prod">{{ a.produit_cible }}</span>
+                  }
+                </div>
+                @if (a.impact_estime) {
+                  <span class="strate-action__impact">{{ a.impact_estime }}</span>
+                }
+              </div>
+            }
+          </div>
+
+          @if (messageManager()) {
+            <div class="strate-manager-msg">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                   stroke="#6C5CE7" stroke-width="2">
+                <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+              </svg>
+              {{ messageManager() }}
+            </div>
+          }
+        </div>
+      }
+
       <!-- ── Classement Équipe ── -->
       <div class="card team-card">
         <div class="card-header">
@@ -624,5 +782,48 @@
 
     </div>
   </div>
+
+  <!-- ══ PRIORITÉS DE COACHING (Agent Coach) ══ -->
+  @if (ws.coachingCards().length > 0) {
+    <div class="dash-coaching-section">
+      <div class="dash-coaching-header">
+        <div>
+          <h2 class="card-title">Priorités de Coaching</h2>
+          <p class="card-sub">{{ ws.pendingCards().length }} en attente · MAJ {{ ws.lastUpdated() }}</p>
+        </div>
+        <span class="nba-pill nba-pill--green">{{ ws.coachingCards().length }} conseillers</span>
+      </div>
+      <div class="dash-coaching-grid">
+        @for (card of ws.coachingCards().slice(0, 4); track card.id) {
+          <div class="coaching-card"
+               [class.coaching-card--high]="card.urgency === 'HIGH'"
+               [class.coaching-card--medium]="card.urgency === 'MEDIUM'">
+            <div class="coaching-card__top">
+              <div class="coaching-card__avatar"
+                   [style.background]="card.urgency === 'HIGH' ? '#FDEDEC' : '#FFF8E1'"
+                   [style.color]="card.urgency === 'HIGH' ? '#E74C3C' : '#92400E'">
+                {{ card.initials }}
+              </div>
+              <div class="coaching-card__meta">
+                <span class="coaching-card__name">{{ card.advisor }}</span>
+                <span class="coaching-card__ctx">{{ card.context }}</span>
+              </div>
+              <span class="coaching-card__gap"
+                    [style.color]="card.urgency === 'HIGH' ? '#E74C3C' : '#F9A825'">
+                -{{ card.gap }}%
+              </span>
+            </div>
+            <p class="coaching-card__advice">{{ card.advice }}</p>
+            <div class="coaching-card__foot">
+              <span class="coaching-card__action">→ {{ card.action }}</span>
+              <span class="coaching-card__prod">{{ card.produit }}</span>
+            </div>
+          </div>
+        }
+      </div>
+    </div>
+  }
+
+  } <!-- end @if (ws.liveMetrics()) -->
 
 </div>

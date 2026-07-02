@@ -1099,6 +1099,154 @@
   background: #FDEDEC; color: #C0392B;
 }
 
+// ── Plan Stratégique Card ─────────────────────────────────────────────────────
+
+.strate-card { padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
+
+.strate-rag-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 10px; border-radius: 20px;
+  font-size: 11px; font-weight: 600;
+  background: #F0EDFF; color: #6C5CE7;
+  white-space: nowrap;
+}
+
+.strate-headline {
+  font-size: 12.5px; color: #2D3748; line-height: 1.5;
+  padding: 8px 10px; background: #F7F8FA;
+  border-left: 3px solid #6C5CE7; border-radius: 0 6px 6px 0;
+  margin: 0;
+}
+
+.strate-focus-row {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+
+.strate-focus-label {
+  font-size: 11px; font-weight: 600; color: #718096;
+  text-transform: uppercase; letter-spacing: 0.4px; white-space: nowrap;
+}
+
+.strate-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.strate-chip {
+  padding: 3px 10px; border-radius: 20px;
+  background: #EBF8FF; color: #2B6CB0;
+  font-size: 11px; font-weight: 600;
+  border: 1px solid #BEE3F8;
+}
+
+.strate-actions { display: flex; flex-direction: column; gap: 6px; }
+
+.strate-action {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 8px 10px; border-radius: 8px;
+  background: #F7F8FA; border: 1px solid #E8EAF0;
+  transition: background 0.15s;
+  &:hover { background: #EDF2F7; }
+}
+
+.strate-action__num {
+  font-size: 11px; font-weight: 700; color: #fff;
+  background: #6C5CE7; border-radius: 4px;
+  padding: 2px 6px; flex-shrink: 0; margin-top: 1px;
+}
+
+.strate-action__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+
+.strate-action__text { font-size: 12.5px; color: #2D3748; font-weight: 500; line-height: 1.4; }
+
+.strate-action__prod {
+  font-size: 11px; color: #718096;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.strate-action__impact {
+  font-size: 11px; font-weight: 600; color: #276749;
+  background: #E0FAF4; padding: 2px 8px; border-radius: 20px;
+  flex-shrink: 0; white-space: nowrap;
+}
+
+.strate-manager-msg {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 10px 12px; border-radius: 8px;
+  background: #F0EDFF; border: 1px solid #D6CCFF;
+  font-size: 12px; color: #4A3B89; line-height: 1.5;
+  svg { flex-shrink: 0; margin-top: 2px; }
+}
+
+// ── Coaching Cards Section ────────────────────────────────────────────────────
+
+.dash-coaching-section {
+  display: flex; flex-direction: column; gap: 12px;
+}
+
+.dash-coaching-header {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  flex-wrap: wrap;
+}
+
+.dash-coaching-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.coaching-card {
+  background: #fff; border-radius: 12px;
+  border: 1px solid #E2E8F0;
+  padding: 14px;
+  display: flex; flex-direction: column; gap: 10px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+  transition: box-shadow 0.15s;
+  &:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.10); }
+
+  &--high { border-left: 3px solid #E74C3C; }
+  &--medium { border-left: 3px solid #F9A825; }
+}
+
+.coaching-card__top {
+  display: flex; align-items: center; gap: 10px;
+}
+
+.coaching-card__avatar {
+  width: 36px; height: 36px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700; flex-shrink: 0;
+}
+
+.coaching-card__meta {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; gap: 1px;
+}
+
+.coaching-card__name {
+  font-size: 13px; font-weight: 600; color: #1A1D2E;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.coaching-card__ctx { font-size: 11px; color: #718096; }
+
+.coaching-card__gap { font-size: 13px; font-weight: 700; flex-shrink: 0; }
+
+.coaching-card__advice {
+  font-size: 12px; color: #4A5568; line-height: 1.5;
+  margin: 0;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.coaching-card__foot {
+  display: flex; flex-direction: column; gap: 3px;
+  padding-top: 8px; border-top: 1px solid #EDF2F7;
+}
+
+.coaching-card__action { font-size: 11.5px; color: #6C5CE7; font-weight: 500; }
+.coaching-card__prod { font-size: 11px; color: #718096; }
+
+@media (max-width: 1280px) { .dash-coaching-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 768px)  { .dash-coaching-grid { grid-template-columns: 1fr; } }
+
 // ── Responsive ────────────────────────────────────────────────────────────────
 
 @media (max-width: 1280px) {
@@ -1106,9 +1254,257 @@
   .dash-main { grid-template-columns: 1fr 290px; }
 }
 
+// ── Inventory Quick Card ──────────────────────────────────────────────────────
+
+.inv-health-badge {
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.inv-quick-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 16px 12px;
+}
+
+.inv-quick-row {
+  display: grid;
+  grid-template-columns: 10px 1fr 120px 36px;
+  align-items: center;
+  gap: 8px;
+}
+
+.inv-quick-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.inv-quick-name {
+  font-size: 12px;
+  color: #1A1D2E;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.inv-quick-bar-track {
+  background: #F1F3F7;
+  border-radius: 3px;
+  height: 6px;
+  overflow: hidden;
+}
+
+.inv-quick-bar {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+
+.inv-quick-stock {
+  font-size: 11px;
+  font-weight: 600;
+  text-align: right;
+}
+
+.inv-quick-footer {
+  padding: 6px 16px 10px;
+  font-size: 11px;
+  color: #6B7280;
+  border-top: 1px solid #F1F3F7;
+}
+
+// ── Lead Time Quick Card ──────────────────────────────────────────────────────
+
+.lead-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 16px 14px;
+}
+
+.lead-row {
+  display: grid;
+  grid-template-columns: 90px 1fr 30px;
+  align-items: center;
+  gap: 8px;
+}
+
+.lead-label {
+  font-size: 11px;
+  color: #6B7280;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lead-bar-track {
+  background: #F1F3F7;
+  border-radius: 3px;
+  height: 6px;
+  overflow: hidden;
+}
+
+.lead-bar {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+
+.lead-days {
+  font-size: 11px;
+  font-weight: 600;
+  text-align: right;
+}
+
 @media (max-width: 1024px) {
   .dash-kpi-row { grid-template-columns: 1fr 1fr 1fr; }
   .dash-ca-card { grid-column: 1 / -1; }
   .dash-main { grid-template-columns: 1fr; }
   .dash-bottom-row { grid-template-columns: 1fr; }
+}
+
+// ── Skeleton Loading ──────────────────────────────────────────────────────────
+
+@keyframes skel-shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+.skel {
+  background: linear-gradient(90deg, #F1F5F9 25%, #E2E8F0 50%, #F1F5F9 75%);
+  background-size: 800px 100%;
+  animation: skel-shimmer 1.4s ease infinite;
+  border-radius: 10px;
+}
+
+.skel--title   { height: 24px; width: 220px; }
+.skel--btn     { height: 34px; width: 120px; border-radius: 8px; }
+.skel--kpi-card { height: 120px; }
+.skel--chart   { height: 260px; }
+.skel--alerts  { height: 180px; }
+.skel--nba     { height: 200px; }
+.skel--team    { height: 280px; }
+
+.dash-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
+  animation: fadeIn 0.3s ease;
+
+  &__header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    justify-content: space-between;
+  }
+
+  &__kpi-row {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
+    gap: 12px;
+  }
+
+  &__main {
+    display: grid;
+    grid-template-columns: 1fr 290px;
+    gap: 16px;
+  }
+
+  &__left, &__right {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  &__status {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: #94A3B8;
+    font-size: 13px;
+    padding: 4px 0;
+  }
+}
+
+.skel-pulse {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #E2001A;
+  animation: skel-pulse 1s ease infinite;
+  flex-shrink: 0;
+}
+
+@keyframes skel-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.4; transform: scale(0.8); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@media (max-width: 768px) {
+  .dashboard { padding: 12px; gap: 12px; }
+
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .page-header__right {
+    width: 100%;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .page-header__right .btn-outline,
+  .page-header__right .btn-primary {
+    flex: 1;
+    min-width: 0;
+    font-size: 12px;
+    padding: 8px 12px;
+    justify-content: center;
+  }
+
+  .dash-kpi-row {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .dash-ca-card { grid-column: 1 / -1; }
+
+  .dash-ca-footer {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .dash-ca-foot-sep { display: none; }
+
+  .perf-chart-wrap { overflow-x: auto; }
+  .perf-chart { min-width: 480px; }
+
+  .nba-card .nba-body { padding: 12px 14px; }
+
+  .strate-actions { gap: 8px; }
+  .strate-action { flex-direction: column; align-items: flex-start; gap: 4px; }
+
+  .team-thead { display: none; }
+  .team-row {
+    grid-template-columns: 24px 28px 1fr auto;
+    gap: 6px;
+  }
+  .team-perf { display: none; }
+
+  .heatmap-grid { overflow-x: auto; }
+  .heat-row { min-width: 480px; }
+
+  .dash-coaching-header { flex-direction: column; align-items: flex-start; gap: 6px; }
 }

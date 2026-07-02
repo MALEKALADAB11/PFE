@@ -17,6 +17,7 @@ import {
   InventoryApiItem,
   InventorySummary
 } from '../../core/services/inventory-api.service';
+import { HitlPanelComponent } from '../../shared/components/hitl-panel/hitl-panel';
 
 // ── Store ID réel depuis les données Ooredoo ─────────────────────
 const REAL_STORE_ID   = 'I63';
@@ -40,7 +41,7 @@ interface RiskHour {
 @Component({
   selector:    'app-dashboard',
   standalone:  true,
-  imports:     [CommonModule, HttpClientModule],
+  imports:     [CommonModule, HttpClientModule, HitlPanelComponent],
   templateUrl: './dashboard.html',
   styleUrl:    './dashboard.scss'
 })
@@ -161,6 +162,23 @@ export class Dashboard implements OnInit, OnDestroy {
     this.ws.gapPct()
     ?? this.ws.liveMetrics()?.ecart_objectif
     ?? this.forecastEOD()?.gap_pct ?? 0
+  );
+
+  caAbsDiff = computed(() => Math.abs(this.caToday() - this.caTarget()));
+
+  ecartPct = computed(() => {
+    if (this.caToday() >= this.caTarget()) {
+      const surplus = this.attainment() - 100;
+      return surplus > 0 ? `+${surplus}` : '+0';
+    }
+    const gap = this.ecartObjectif();
+    return gap > 0 ? `-${gap}` : `${gap}`;
+  });
+
+  stockHealthPct = computed(() =>
+    this.stockKpi().total > 0
+      ? Math.round(this.stockKpi().okCount / this.stockKpi().total * 100)
+      : 0
   );
 
   analystSummary = computed(() => {

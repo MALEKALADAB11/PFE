@@ -4,6 +4,7 @@ import { CommonModule } from '@angular/common';
 import { NavbarComponent } from './layout/navbar/navbar';
 import { SidebarComponent } from './layout/sidebar/sidebar';
 import { WebSocketService } from './core/services/websocket.service';
+import { LayoutService } from './core/services/layout.service';
 
 @Component({
   selector: 'app-root',
@@ -13,6 +14,10 @@ import { WebSocketService } from './core/services/websocket.service';
     @if (!isLoginPage()) {
       <div class="app-shell">
         <app-sidebar />
+        <!-- Mobile overlay -->
+        @if (layout.mobileSidebarOpen()) {
+          <div class="app-mobile-overlay" (click)="layout.closeMobileSidebar()"></div>
+        }
         <div class="app-center">
           <app-navbar />
           <main class="app-main">
@@ -43,12 +48,23 @@ import { WebSocketService } from './core/services/websocket.service';
       overflow-y: auto;
       background: #EEF2F7;
     }
-
+    .app-mobile-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.45);
+      z-index: 290;
+      animation: overlay-in 0.2s ease;
+    }
+    @keyframes overlay-in {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
   `]
 })
 export class AppComponent {
   private router = inject(Router);
   public  ws     = inject(WebSocketService);
+  public  layout = inject(LayoutService);
 
   isLoginPage(): boolean {
     return this.router.url.startsWith('/login');

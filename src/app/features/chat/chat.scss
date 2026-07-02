@@ -702,6 +702,20 @@ $txt2:   #64748B;
   30% { transform: translateY(-5px); }
 }
 
+.msg-bubble--streaming { background: #F0EDFF; }
+
+.stream-cursor {
+  display: inline-block;
+  margin-left: 1px;
+  color: #6C5CE7;
+  animation: blink-cursor 0.8s step-end infinite;
+}
+
+@keyframes blink-cursor {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+
 /* Action cards (suggestions) */
 .action-cards {
   display: grid;
@@ -1120,4 +1134,112 @@ $txt2:   #64748B;
   height: 7px;
   border-radius: 50%;
   background: #94A3B8;
+}
+
+// ── Scored products chips (S8.3) ─────────────────────────────────────────────
+.scored-products {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 6px 0 2px;
+}
+
+.scored-product-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 16px;
+  background: rgba(#6C5CE7, 0.08);
+  border: 1px solid rgba(#6C5CE7, 0.2);
+  font-size: 11px;
+  cursor: default;
+
+  &:hover { background: rgba(#6C5CE7, 0.14); }
+
+  .spc-score {
+    font-weight: 700;
+    font-size: 10px;
+  }
+
+  .spc-name {
+    color: #374151;
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+// ── Guardrail badge (S7.1) ───────────────────────────────────────────────────
+.guardrail-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0 2px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background: rgba(#F9A825, 0.12);
+  color: #B45309;
+  border: 1px solid rgba(#F9A825, 0.4);
+
+  &--block {
+    background: rgba(#E74C3C, 0.10);
+    color: #B91C1C;
+    border-color: rgba(#E74C3C, 0.35);
+  }
+
+  &--escalate {
+    background: rgba(#6C5CE7, 0.10);
+    color: #4C1D95;
+    border-color: rgba(#6C5CE7, 0.35);
+  }
+
+  &__icon { font-size: 13px; }
+
+  &__hitl {
+    margin-left: 4px;
+    padding: 1px 6px;
+    border-radius: 10px;
+    background: rgba(#E74C3C, 0.15);
+    color: #B91C1C;
+    font-size: 10px;
+  }
+}
+
+// ── Mobile responsive (S7.3) ─────────────────────────────────────────────────
+
+@media (max-width: 900px) {
+  .chat-page {
+    grid-template-columns: 220px 1fr;
+
+    .chat-panel-right { display: none; }
+  }
+}
+
+@media (max-width: 640px) {
+  .chat-page {
+    grid-template-columns: 1fr;
+
+    .chat-sidebar { display: none; }
+  }
+
+  .msg-bubble {
+    max-width: 92%;
+    font-size: 13px;
+  }
+
+  .chat-input-row {
+    padding: 8px 10px;
+    gap: 6px;
+  }
+
+  .chat-input { font-size: 13px; }
+
+  .suggested-prompts {
+    display: none;
+  }
 }

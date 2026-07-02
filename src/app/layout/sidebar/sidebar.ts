@@ -1,11 +1,13 @@
 import { Component, signal, computed, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Router, RouterLink, RouterLinkActive } from '@angular/router';
+import { Router, RouterLink, RouterLinkActive, NavigationEnd } from '@angular/router';
+import { filter } from 'rxjs/operators';
 import { Agent } from '../../core/models/agent';
 import { StoreMetrics } from '../../core/models/store';
 import { MockDataService } from '../../core/services/mock-data';
 import { ApiService } from '../../core/services/api';
 import { WebSocketService } from '../../core/services/websocket.service';
+import { LayoutService } from '../../core/services/layout.service';
 
 @Component({
   selector:    'app-sidebar',
@@ -133,20 +135,24 @@ export class SidebarComponent implements OnInit, OnDestroy {
   showAgentStatus = computed(() => this.router.url === '/monitoring');
 
   constructor(
-    private data:   MockDataService,
-    private api:    ApiService,
-    public  ws:     WebSocketService,
-    private router: Router
+    private data:    MockDataService,
+    private api:     ApiService,
+    public  ws:      WebSocketService,
+    public  layout:  LayoutService,
+    private router:  Router
   ) {
     this.store.set(this.data.getStoreMetrics());
     this.agents.set(this.data.getAgents());
   }
 
   ngOnInit() {
-  this.loadData();
-  // ── La sidebar ne gère PAS la connexion WS ────────────
-  this._refreshInterval = setInterval(() => this.loadData(), 60_000);
-}
+    this.loadData();
+    this._refreshInterval = setInterval(() => this.loadData(), 60_000);
+    // Fermer le menu mobile à chaque navigation
+    this.router.events
+      .pipe(filter(e => e instanceof NavigationEnd))
+      .subscribe(() => this.layout.closeMobileSidebar());
+  }
 
   ngOnDestroy() {
     if (this._refreshInterval) clearInterval(this._refreshInterval);

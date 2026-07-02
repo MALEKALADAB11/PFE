@@ -10,6 +10,7 @@ import { InventoryItem, InventoryAlert } from '../../core/models/inventory';
 import { MockDataService } from '../../core/services/mock-data';
 import { InventoryApiService, InventoryApiItem, StorePayload } from '../../core/services/inventory-api.service';
 import { WebSocketService } from '../../core/services/websocket.service';
+import { environment }      from '../../../environments/environment';
 
 type FilterRisk = 'all' | 'critical' | 'high' | 'medium' | 'ok';
 type SortKey    = 'risk' | 'stock' | 'coverage' | 'name';
@@ -321,7 +322,7 @@ export class InventoryComponent implements OnInit, OnDestroy {
 
   private _loadAvailableStores(): void {
     this.http.get<{ stores: { id: string; name: string }[] }>(
-      'http://localhost:8000/api/inventory/stores'
+      `${environment.apiUrl}/api/inventory/stores`
     ).subscribe({
       next: res => {
         if (res.stores?.length) {
@@ -626,7 +627,7 @@ export class InventoryComponent implements OnInit, OnDestroy {
       .set('page_size', '0');
 
     return this.http.get<StorePayload>(
-      `http://localhost:8000/api/inventory/store/${storeId}`,
+      `${environment.apiUrl}/api/inventory/store/${storeId}`,
       { params }
     ).pipe(
       timeout(60_000)  // 60s — if it takes longer the backend has a real problem
@@ -687,14 +688,16 @@ export class InventoryComponent implements OnInit, OnDestroy {
           }
 
           return {
-            id:      a.id,
-            sku:     a.sku,
+            id:       a.id,
+            sku:      a.sku,
+            name,
+            category: a.category ?? a.product_category ?? '',
             type,
             urgency,
             title,
-            message: title,
-            action:  a.recommended_action ?? a.action ?? '',
-            time:    a.triggered_at ?? a.created_at ?? a.time ?? '',
+            message:  title,
+            action:   a.recommended_action ?? a.action ?? '',
+            time:     a.triggered_at ?? a.created_at ?? a.time ?? '',
           };
         });
 
@@ -1329,6 +1332,7 @@ export class InventoryComponent implements OnInit, OnDestroy {
   }
 
   alertProductName(alert: InventoryAlert): string {
+    if (alert.name) return alert.name;
     const item = this.items().find(i => i.sku === alert.sku);
     if (item?.name) return item.name;
     const msg = String(alert.message ?? '');
@@ -1338,15 +1342,40 @@ export class InventoryComponent implements OnInit, OnDestroy {
 
   alertSubFr(alert: InventoryAlert): string {
     const item = this.items().find(i => i.sku === alert.sku);
-    if (!item) return alert.sku ?? '';
-    if (alert.type === 'rupture') return `Stock disponible : ${item.stock} unité${item.stock !== 1 ? 's' : ''}`;
-    if (alert.type === 'overstock') return `Surstock : ${item.stock} unités`;
-    return `Couverture : ${this.coverageDays(item)}`;
+    if (item) {
+      if (alert.type === 'rupture') return `Stock : ${item.stock} unité${item.stock !== 1 ? 's' : ''}`;
+      if (alert.type === 'overstock') return `Surstock : ${item.stock} unités`;
+      return `Couverture : ${this.coverageDays(item)}`;
+    }
+    if (alert.type === 'rupture') return 'Rupture imminente';
+    if (alert.type === 'overstock') return 'Surstock détecté';
+    return 'Stock faible';
   }
 
   productInitials(item: InventoryItem): string {
     const name = String(item.name ?? item.sku ?? '?');
-    return name.split(' ').slice(0, 2).map((w: string) => w[0] ?? '').join('').toUpperCase();
+    return name.split(' ').slice(0, 2).map((w: string) => w[0] ?? '').join('').toUpperCase() || '??';
+  }
+
+  productInitialsFromAlert(alert: InventoryAlert): string {
+    const name = this.alertProductName(alert);
+    return name.split(' ').slice(0, 2).map((w: string) => w[0] ?? '').join('').toUpperCase() || '??';
+  }
+
+  productCategoryColor(category: string): string {
+    const c = (category ?? '').toLowerCase();
+    if (c.includes('forfait') || c.includes('mobile') || c.includes('flexi') || c.includes('data')) return '#3498DB';
+    if (c.includes('terminal') || c.includes('smartphone') || c.includes('device'))                  return '#6C5CE7';
+    if (c.includes('recharge') || c.includes('voucher') || c.includes('vouch'))                      return '#27AE60';
+    if (c.includes('box') || c.includes('fibre') || c.includes('internet'))                          return '#00B894';
+    if (c.includes('sim') || c.includes('ligne') || c.includes('kit'))                               return '#E67E22';
+    if (c.includes('postpay') || c.includes('facture') || c.includes('avance'))                      return '#E74C3C';
+    return '#8E98A8';
+  }
+
+  alertCategory(alert: InventoryAlert): string {
+    if (alert.category) return alert.category;
+    return this.items().find(i => i.sku === alert.sku)?.category ?? '';
   }
 
   // ── New design helpers ──────────────────────────────────────────────────────

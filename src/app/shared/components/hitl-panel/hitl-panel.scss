@@ -1,0 +1,304 @@
+// ── Trigger button ──────────────────────────────────────────────────────────
+
+.hitl-trigger {
+  position: relative;
+  display:  inline-flex;
+  align-items: center;
+  justify-content: center;
+  width:  40px;
+  height: 40px;
+  border: none;
+  border-radius: 50%;
+  background: #F4F6FA;
+  cursor: pointer;
+  transition: background 0.2s;
+
+  &:hover,
+  &--active {
+    background: #EEF0FF;
+  }
+
+  &__icon { font-size: 18px; }
+
+  &__badge {
+    position:   absolute;
+    top:        2px;
+    right:      2px;
+    min-width:  18px;
+    height:     18px;
+    padding:    0 4px;
+    border-radius: 9px;
+    background: #E84040;
+    color:      #fff;
+    font-size:  11px;
+    font-weight: 700;
+    line-height: 18px;
+    text-align: center;
+  }
+}
+
+// ── Backdrop ────────────────────────────────────────────────────────────────
+
+.hitl-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+// ── Panel ───────────────────────────────────────────────────────────────────
+
+.hitl-panel {
+  position:  fixed;
+  top:       0;
+  right:     0;
+  height:    100vh;
+  width:     420px;
+  max-width: 95vw;
+  z-index:   1001;
+  background: #fff;
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.12);
+  display:   flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+  &--open {
+    transform: translateX(0);
+  }
+
+  &__header {
+    display:         flex;
+    align-items:     center;
+    justify-content: space-between;
+    padding:         20px 20px 16px;
+    border-bottom:   1px solid #E8ECF4;
+    flex-shrink:     0;
+  }
+
+  &__title {
+    display:     flex;
+    align-items: center;
+    gap:         8px;
+    font-size:   16px;
+    font-weight: 700;
+    color:       #1A1D2E;
+  }
+
+  &__icon { font-size: 20px; }
+
+  &__count {
+    min-width:   22px;
+    height:      22px;
+    padding:     0 6px;
+    border-radius: 11px;
+    background:  #E84040;
+    color:       #fff;
+    font-size:   12px;
+    font-weight: 700;
+    line-height: 22px;
+    text-align:  center;
+  }
+
+  &__close {
+    border:  none;
+    background: transparent;
+    font-size:  20px;
+    color:      #8B93A5;
+    cursor:     pointer;
+    padding:    4px;
+    line-height: 1;
+
+    &:hover { color: #1A1D2E; }
+  }
+
+  &__body {
+    flex: 1;
+    overflow-y: auto;
+    padding:    16px 20px;
+    display:    flex;
+    flex-direction: column;
+    gap:        12px;
+  }
+}
+
+// ── Empty state ──────────────────────────────────────────────────────────────
+
+.hitl-empty {
+  display:         flex;
+  flex-direction:  column;
+  align-items:     center;
+  justify-content: center;
+  padding:         48px 16px;
+  color:           #8B93A5;
+  text-align:      center;
+
+  &__icon {
+    font-size: 40px;
+    margin-bottom: 12px;
+  }
+
+  p { font-size: 14px; margin: 0; }
+}
+
+// ── Review card ──────────────────────────────────────────────────────────────
+
+.hitl-card {
+  border:        1px solid #E8ECF4;
+  border-radius: 12px;
+  padding:       16px;
+  background:    #FAFBFF;
+  transition:    opacity 0.2s;
+
+  &--validating { opacity: 0.5; pointer-events: none; }
+
+  &__meta {
+    display:     flex;
+    align-items: center;
+    gap:         8px;
+    margin-bottom: 10px;
+  }
+
+  &__store {
+    font-size:   12px;
+    color:       #5A6273;
+    font-weight: 600;
+  }
+
+  &__time {
+    margin-left: auto;
+    font-size:   11px;
+    color:       #8B93A5;
+  }
+
+  &__summary {
+    font-size:   14px;
+    color:       #1A1D2E;
+    margin:      0 0 10px;
+    line-height: 1.5;
+  }
+
+  &__feedback {
+    font-size:   12px;
+    color:       #C55A00;
+    background:  #FFF4EA;
+    border-radius: 6px;
+    padding:     6px 10px;
+    margin:      0 0 12px;
+    line-height: 1.4;
+  }
+
+  &__stats {
+    display: flex;
+    gap:     16px;
+    margin-bottom: 10px;
+  }
+
+  &__actions {
+    display: flex;
+    gap:     10px;
+  }
+}
+
+// ── Stats ────────────────────────────────────────────────────────────────────
+
+.hitl-stat {
+  display:        flex;
+  flex-direction: column;
+  gap:            2px;
+
+  &__label {
+    font-size:  10px;
+    color:      #8B93A5;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  &__value {
+    font-size:   14px;
+    font-weight: 700;
+    color:       #1A1D2E;
+
+    &--red { color: #E84040; }
+  }
+}
+
+// ── Action list ──────────────────────────────────────────────────────────────
+
+.hitl-actions {
+  list-style: none;
+  margin:     0 0 10px;
+  padding:    0;
+  display:    flex;
+  flex-direction: column;
+  gap:        6px;
+}
+
+.hitl-action {
+  display:     flex;
+  align-items: flex-start;
+  gap:         8px;
+  font-size:   12px;
+  color:       #3A4560;
+
+  &__num {
+    width:       20px;
+    height:      20px;
+    border-radius: 50%;
+    background:  #EEF0FF;
+    color:       #4A51E0;
+    font-weight: 700;
+    font-size:   11px;
+    display:     flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  &__text { line-height: 1.4; }
+}
+
+// ── Urgency badges ───────────────────────────────────────────────────────────
+
+.hitl-badge {
+  display:       inline-flex;
+  align-items:   center;
+  padding:       2px 8px;
+  border-radius: 6px;
+  font-size:     11px;
+  font-weight:   700;
+  letter-spacing: 0.5px;
+
+  &--critical { background: #FFEBEB; color: #C52B2B; }
+  &--high     { background: #FFF3E0; color: #C15C00; }
+  &--medium   { background: #E8F5E9; color: #2E7D32; }
+}
+
+// ── CTA buttons ──────────────────────────────────────────────────────────────
+
+.hitl-btn {
+  flex:          1;
+  height:        36px;
+  border:        none;
+  border-radius: 8px;
+  font-size:     13px;
+  font-weight:   600;
+  cursor:        pointer;
+  transition:    background 0.15s;
+
+  &:disabled { cursor: not-allowed; opacity: 0.6; }
+
+  &--approve {
+    background: #E8F5E9;
+    color:      #2E7D32;
+
+    &:hover:not(:disabled) { background: #C8E6C9; }
+  }
+
+  &--reject {
+    background: #FFEBEB;
+    color:      #C52B2B;
+
+    &:hover:not(:disabled) { background: #FFCDD2; }
+  }
+}

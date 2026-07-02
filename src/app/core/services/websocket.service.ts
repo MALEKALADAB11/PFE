@@ -1,6 +1,7 @@
 import { isPlatformBrowser } from '@angular/common';
 import { Injectable, signal, computed, inject } from '@angular/core';
 import { PLATFORM_ID } from '@angular/core';
+import { environment } from '../../../environments/environment';
 
 // ── Interfaces ─────────────────────────────────
 
@@ -101,6 +102,24 @@ export class WebSocketService {
   coachingCards  = signal<CoachingCard[]>([]);
   ragUsed        = signal<boolean>(false);
   nbRagScripts   = signal<number>(0);
+
+  // ── Guardrail events (S7.2) ───────────────────────────────────────────────
+  guardrailEvent = signal<{
+    status:    string;
+    store_id:  string;
+    advisor:   string;
+    issues:    { rule: string; message: string }[];
+    urgency:   string;
+    timestamp: string;
+  } | null>(null);
+
+  guardrailHistory = signal<{
+    status:    string;
+    advisor:   string;
+    issues:    { rule: string; message: string }[];
+    urgency:   string;
+    timestamp: string;
+  }[]>([]);
 
   // ── Computed ───────────────────────────────────────────────────────────────
   urgencyColor = computed(() => {
@@ -205,10 +224,10 @@ export class WebSocketService {
     if (!this.isBrowser || this._isConnecting) return;
 
     this._isConnecting = true;
-    console.log(`[WS] → Connexion ws://localhost:8000/ws/store/${storeId}`);
+    console.log(`[WS] → Connexion ${environment.wsUrl}/ws/store/${storeId}`);
 
     try {
-      const ws = new WebSocket(`ws://localhost:8000/ws/store/${storeId}`);
+      const ws = new WebSocket(`${environment.wsUrl}/ws/store/${storeId}`);
       this.storeWs = ws;
 
       const timeout = setTimeout(() => {
@@ -237,6 +256,23 @@ export class WebSocketService {
           const data = JSON.parse(event.data);
           if (data.type === 'metrics_update') {
             this._handleMetricsUpdate(data);
+          } else if (data.type === 'guardrail_event') {
+            // S7.2 — real-time guardrail push from backend
+            this.guardrailEvent.set(data);
+            this.guardrailHistory.update(h => [
+              { status: data.status, advisor: data.advisor, issues: data.issues ?? [],
+                urgency: data.urgency, timestamp: data.timestamp },
+              ...h.slice(0, 19),   // keep last 20
+            ]);
+          } else if (data.type === 'inventory_alerts') {
+            // S7.5 — real-time critical stock alerts from inventory module
+            this.liveInventory.set({
+              ...this.liveInventory(),
+              alerts:      data.alerts      ?? [],
+              nb_critical: data.nb_critical ?? 0,
+              nb_warning:  data.nb_warning  ?? 0,
+              timestamp:   data.timestamp,
+            });
           }
         } catch (e) {
           console.warn('[WS] Parse error', e);
@@ -419,7 +455,7 @@ export class WebSocketService {
     }
 
     try {
-      const ws = new WebSocket(`ws://localhost:8000/ws/advisor/${advisorId}`);
+      const ws = new WebSocket(`${environment.wsUrl}/ws/advisor/${advisorId}`);
       this.advisorWs = ws;
 
       ws.onmessage = (event) => {
@@ -472,7 +508,7 @@ export class WebSocketService {
     this.inventoryObjective = objective;
 
     try {
-      const url = `ws://localhost:8000/api/inventory/ws/${storeId}?business_objective=${objective}`;
+      const url = `${environment.wsUrl}/api/inventory/ws/${storeId}?business_objective=${objective}`;
       const ws  = new WebSocket(url);
       this.inventoryWs = ws;
 

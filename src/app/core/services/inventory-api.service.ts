@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
 import { Observable, map, of } from 'rxjs';
 import { InventoryItem, InventoryAlert } from '../models/inventory';
+import { environment } from '../../../environments/environment';
 
 export interface InventoryApiItem extends InventoryItem {
   store_id:               string;
@@ -72,7 +73,7 @@ export interface SingleAnalysisPayload {
 export class InventoryApiService {
 
   private readonly http = inject(HttpClient);
-  private readonly base = 'http://localhost:8000/api/inventory';
+  private readonly base = `${environment.apiUrl}/api/inventory`;
 
   private _headers(): HttpHeaders {
     const token = sessionStorage.getItem('ooredoo_token');

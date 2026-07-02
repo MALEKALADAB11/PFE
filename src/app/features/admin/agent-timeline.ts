@@ -2,6 +2,7 @@ import { Component, computed, inject } from '@angular/core';
 import { CommonModule, JsonPipe } from '@angular/common';
 import { BrainRealtimeStore } from '../../core/state/brain-realtime.store';
 import { DashboardSocketService } from '../../core/realtime/dashboard-socket.service';
+import { environment } from '../../../environments/environment';
 
 @Component({
   selector: 'app-agent-timeline',
@@ -44,7 +45,7 @@ export class AgentTimelineComponent {
   trackByTs = (_: number, x: { ts: number }) => x.ts;
 
   async sendTest() {
-    await fetch('http://localhost:8000/dev/trigger', {
+    await fetch(`${environment.apiUrl}/dev/trigger`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ transactions: [{ id: 1 }, { id: 2 }, { id: 3 }] }),

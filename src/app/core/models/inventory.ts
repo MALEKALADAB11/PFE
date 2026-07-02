@@ -28,6 +28,8 @@ export interface InventoryAlert {
   id: string;
   type: 'rupture' | 'redistribution' | 'overstock' | 'demand_spike';
   sku: string;
+  name: string;
+  category: string;
   urgency: 'critical' | 'high' | 'medium' | 'low';
   message: string;
   action: string;

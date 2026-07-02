@@ -2,6 +2,9 @@ import { Injectable, signal, computed, inject } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
+import { environment } from '../../../environments/environment';
+
+const TOKEN_VERIFY_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
 
 export type UserRole = 'manager' | 'vendeur';
 
@@ -17,7 +20,7 @@ export interface StoreUser {
   advisorId?: string;
 }
 
-const API = 'http://localhost:8000/api/auth';
+const API = `${environment.apiUrl}/api/auth`;
 const TOKEN_KEY = 'ooredoo_token';
 const USER_KEY  = 'ooredoo_user';
 
@@ -26,9 +29,10 @@ export class AuthService {
   private http   = inject(HttpClient);
   private router = inject(Router);
 
-  private _user    = signal<StoreUser | null>(null);
-  private _token   = signal<string | null>(null);
-  private _loading = signal(false);
+  private _user       = signal<StoreUser | null>(null);
+  private _token      = signal<string | null>(null);
+  private _loading    = signal(false);
+  private _refreshTimer: ReturnType<typeof setInterval> | null = null;
 
   currentUser  = computed(() => this._user());
   isLoggedIn   = computed(() => !!this._user());
@@ -50,8 +54,8 @@ export class AuthService {
       if (token && user) {
         this._token.set(token);
         this._user.set(JSON.parse(user));
-        // Vérifier que le token est toujours valide en arrière-plan
         this._verifyToken(token);
+        this._startTokenRefresh();
       }
     } catch { /* ignore */ }
   }
@@ -68,8 +72,27 @@ export class AuthService {
         sessionStorage.setItem(USER_KEY, JSON.stringify(resp.user));
       }
     } catch {
-      // Token expiré → logout silencieux
       this._clearSession();
+      await this.router.navigate(['/login']);
+    }
+  }
+
+  private _startTokenRefresh() {
+    if (this._refreshTimer) return;
+    this._refreshTimer = setInterval(async () => {
+      const token = this._token();
+      if (token) {
+        await this._verifyToken(token);
+      } else {
+        this._stopTokenRefresh();
+      }
+    }, TOKEN_VERIFY_INTERVAL_MS);
+  }
+
+  private _stopTokenRefresh() {
+    if (this._refreshTimer) {
+      clearInterval(this._refreshTimer);
+      this._refreshTimer = null;
     }
   }
 
@@ -97,6 +120,9 @@ export class AuthService {
       sessionStorage.setItem(TOKEN_KEY, resp.token);
       sessionStorage.setItem(USER_KEY, JSON.stringify(resp.user));
 
+      // Démarrer le refresh périodique du token
+      this._startTokenRefresh();
+
       // Rediriger selon le rôle
       if (resp.user.role === 'manager') {
         await this.router.navigate(['/dashboard']);
@@ -118,6 +144,7 @@ export class AuthService {
 
   // ── Logout ────────────────────────────────────────────────────────────────
   async logout() {
+    this._stopTokenRefresh();
     const token = this._token();
     if (token) {
       try {

@@ -2,12 +2,13 @@ import { Injectable, signal, computed } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { interval } from 'rxjs';
 import { timeout } from 'rxjs/operators';
+import { environment } from '../../../environments/environment';
 
 @Injectable({
   providedIn: 'root'
 })
 export class MonitoringService {
-  private baseUrl = 'http://localhost:8000/api/monitoring';
+  private baseUrl = `${environment.apiUrl}/api/monitoring`;
   private requestTimeout = 10000;
 
   // ── Signals for reactive state ──

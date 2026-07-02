@@ -1,10 +1,11 @@
 import {
   Component, signal, computed, AfterViewInit,
-  ViewChild, ElementRef, OnDestroy, OnInit
+  ViewChild, ElementRef, OnDestroy, OnInit, inject
 } from '@angular/core';
 
 import { CommonModule } from '@angular/common';
 import { MonitoringService } from '../../core/services/monitoring.service';
+import { WebSocketService } from '../../core/services/websocket.service';
 import { Chart, registerables } from 'chart.js'; // Regroupé ici
 import { SankeyController, Flow } from 'chartjs-chart-sankey';
 
@@ -434,6 +435,21 @@ export class Monitoring implements OnInit, AfterViewInit, OnDestroy {
     { key: 'inventory', label: 'Inventory', color: '#00B894' },
     { key: 'support', label: 'Support', color: '#888780' },
   ];
+
+  // ── Guardrail history (S8.4) ─────────────────────────────────────────────
+  private ws = inject(WebSocketService);
+
+  guardrailHistory = computed(() => this.ws.guardrailHistory());
+
+  guardrailStats = computed(() => {
+    const h = this.guardrailHistory();
+    return {
+      total:    h.length,
+      blocks:   h.filter(e => e.status === 'BLOCK').length,
+      escalates:h.filter(e => e.status === 'ESCALATE').length,
+      rewrites: h.filter(e => e.status === 'REWRITE').length,
+    };
+  });
 
   constructor(private monitoringService: MonitoringService) {
     this.monitoringKPIs = this.monitoringService.kpis;

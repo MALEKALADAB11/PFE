@@ -2,8 +2,9 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable, of } from 'rxjs';
 import { catchError, timeout } from 'rxjs/operators';
+import { environment } from '../../../environments/environment';
 
-const API = 'http://localhost:8000';
+const API = environment.apiUrl;
 
 @Injectable({ providedIn: 'root' })
 export class ApiService {

@@ -11,6 +11,7 @@ import { takeUntil, timeout }        from 'rxjs/operators';
 import { MockDataService }  from '../../core/services/mock-data';
 import { WebSocketService } from '../../core/services/websocket.service';
 import { ApiService }       from '../../core/services/api';
+import { environment }      from '../../../environments/environment';
 
 interface Product {
   id: string; name: string; category: string;
@@ -21,7 +22,7 @@ interface Product {
 
 interface ChatMessage {
   id: string; role: 'user' | 'coach'; text: string; time: string;
-  sources?: string[]; rag_used?: boolean; typing?: boolean;
+  sources?: string[]; rag_used?: boolean; typing?: boolean; streaming?: boolean;
   urgency?: 'high' | 'medium' | 'low';
 }
 
@@ -347,7 +348,7 @@ export class ConseillerComponent implements AfterViewChecked, OnInit, OnDestroy 
     const hours = Math.max(0, 20 - new Date().getHours());
     const prompt = `Message de coaching pour ${adv.name} à ${perf}% objectif (${adv.caRealized}/${adv.caObjectif} DT), ${hours}h restantes. Météo: ${weather}. Urgence: ${this.ws.urgencyLevel()}.`;
 
-    this.http.post<any>('http://localhost:8000/api/v1/coach/chat', {
+    this.http.post<any>(`${environment.apiUrl}/api/v1/coach/chat`, {
       message: prompt, advisor_name: adv.name, store_id: 'store-lac2',
       context: {
         current_revenue: adv.caRealized, daily_target: adv.caObjectif,
@@ -395,12 +396,12 @@ export class ConseillerComponent implements AfterViewChecked, OnInit, OnDestroy 
     this._callBackend(msg);
   }
 
-  private _callBackend(userMsg: string) {
+  private async _callBackend(userMsg: string) {
     const adv     = this.selected();
     const actions = this.ws.strateActions() ?? [];
     const metrics = this.ws.liveMetrics();
 
-    this.http.post<any>('http://localhost:8000/api/v1/coach/chat', {
+    const body = JSON.stringify({
       message: userMsg, advisor_name: adv?.name ?? 'Conseiller', store_id: 'store-lac2',
       context: {
         current_revenue:   adv?.caRealized ?? 0,
@@ -416,30 +417,83 @@ export class ConseillerComponent implements AfterViewChecked, OnInit, OnDestroy 
         forecast_eod:      metrics?.forecast_eod ?? 0,
         nb_ventes:         adv?.nbVentes ?? 0,
       },
-    }).pipe(timeout(25000))
-    .subscribe({
-      next: (resp) => {
-        this._removeTyping();
-        this.messages.update(list => [...list, {
-          id: 'c' + Date.now(), role: 'coach' as const,
-          text: resp.reply, time: this._now(),
-          sources: this._buildSources(userMsg, resp.source, resp.rag_used),
-          rag_used: resp.rag_used ?? false, urgency: 'low',
-        }]);
-        this.isTyping.set(false);
-        this.shouldScroll = true;
-      },
-      error: () => {
-        this._removeTyping();
-        this.messages.update(list => [...list, {
+    });
+
+    const streamId = 'stream-' + Date.now();
+
+    // Insert streaming placeholder
+    this._removeTyping();
+    this.messages.update(list => [...list, {
+      id: streamId, role: 'coach' as const,
+      text: '', time: this._now(), streaming: true,
+    }]);
+
+    try {
+      const resp = await fetch(`${environment.apiUrl}/api/v1/coach/stream`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+        signal: AbortSignal.timeout(35_000),
+      });
+
+      if (!resp.ok || !resp.body) throw new Error(`HTTP ${resp.status}`);
+
+      const reader  = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer    = '';
+      let accText   = '';
+      let ragUsed   = false;
+      let source    = '';
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const payload = line.slice(6).trim();
+          if (!payload) continue;
+          try {
+            const evt = JSON.parse(payload);
+            if (evt.done) {
+              ragUsed = evt.rag_used ?? false;
+              source  = evt.source  ?? '';
+            } else if (evt.token) {
+              accText += evt.token;
+              this.messages.update(list =>
+                list.map(m => m.id === streamId ? { ...m, text: accText } : m)
+              );
+              this.shouldScroll = true;
+            }
+          } catch { /* ignore malformed SSE lines */ }
+        }
+      }
+
+      // Finalise message
+      this.messages.update(list =>
+        list.map(m => m.id === streamId ? {
+          ...m, streaming: false,
+          sources: this._buildSources(userMsg, source, ragUsed),
+          rag_used: ragUsed, urgency: 'low' as const,
+        } : m)
+      );
+
+    } catch {
+      this.messages.update(list =>
+        list.filter(m => m.id !== streamId).concat({
           id: 'c' + Date.now(), role: 'coach' as const,
           text: this._localFallback(userMsg), time: this._now(),
-          sources: ['Règles métier', 'POS live'], urgency: 'low',
-        }]);
-        this.isTyping.set(false);
-        this.shouldScroll = true;
-      },
-    });
+          sources: ['Règles métier', 'POS live'], urgency: 'low' as const,
+        })
+      );
+    } finally {
+      this.isTyping.set(false);
+      this.shouldScroll = true;
+    }
   }
 
   private _removeTyping() {

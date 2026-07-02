@@ -1,0 +1,102 @@
+<!-- ── HITL badge button ── -->
+<button
+  class="hitl-trigger"
+  (click)="togglePanel()"
+  [class.hitl-trigger--active]="panelOpen()"
+  title="Validations manager requises"
+>
+  <span class="hitl-trigger__icon">🔔</span>
+  @if (pendingCount() > 0) {
+    <span class="hitl-trigger__badge">{{ pendingCount() }}</span>
+  }
+</button>
+
+<!-- ── Backdrop ── -->
+@if (panelOpen()) {
+  <div class="hitl-backdrop" (click)="closePanel()"></div>
+}
+
+<!-- ── Slide-out panel ── -->
+<div class="hitl-panel" [class.hitl-panel--open]="panelOpen()">
+
+  <div class="hitl-panel__header">
+    <div class="hitl-panel__title">
+      <span class="hitl-panel__icon">🛡️</span>
+      Validations manager
+      @if (pendingCount() > 0) {
+        <span class="hitl-panel__count">{{ pendingCount() }}</span>
+      }
+    </div>
+    <button class="hitl-panel__close" (click)="closePanel()">✕</button>
+  </div>
+
+  <div class="hitl-panel__body">
+
+    @if (reviews().length === 0) {
+      <div class="hitl-empty">
+        <span class="hitl-empty__icon">✅</span>
+        <p>Aucune stratégie en attente de validation</p>
+      </div>
+    }
+
+    @for (review of reviews(); track review.id) {
+      <div class="hitl-card" [class.hitl-card--validating]="validating() === review.id">
+
+        <div class="hitl-card__meta">
+          <span class="hitl-badge" [class]="urgencyClass(review.urgency_level)">
+            {{ review.urgency_level }}
+          </span>
+          <span class="hitl-card__store">{{ review.store_id }}</span>
+          <span class="hitl-card__time">{{ relativeTime(review.created_at) }}</span>
+        </div>
+
+        <p class="hitl-card__summary">{{ review.strategie_summary }}</p>
+
+        <div class="hitl-card__stats">
+          <span class="hitl-stat">
+            <span class="hitl-stat__label">Gap</span>
+            <span class="hitl-stat__value hitl-stat__value--red">{{ review.gap_pct | number:'1.0-0' }}%</span>
+          </span>
+          <span class="hitl-stat">
+            <span class="hitl-stat__label">Score critique</span>
+            <span class="hitl-stat__value">{{ review.critique_score | number:'1.2-2' }}</span>
+          </span>
+        </div>
+
+        @if (review.actions.length > 0) {
+          <ul class="hitl-actions">
+            @for (action of review.actions.slice(0, 2); track $index) {
+              <li class="hitl-action">
+                <span class="hitl-action__num">{{ action.priorite }}</span>
+                <span class="hitl-action__text">
+                  {{ action.produit_cible }} — {{ action.action }}
+                </span>
+              </li>
+            }
+          </ul>
+        }
+
+        <p class="hitl-card__feedback">⚠️ {{ review.critique_feedback }}</p>
+
+        <div class="hitl-card__actions">
+          <button
+            class="hitl-btn hitl-btn--approve"
+            (click)="validate(review.id, 'approved')"
+            [disabled]="validating() === review.id"
+          >
+            {{ validating() === review.id ? '…' : '✓ Approuver' }}
+          </button>
+          <button
+            class="hitl-btn hitl-btn--reject"
+            (click)="validate(review.id, 'rejected')"
+            [disabled]="validating() === review.id"
+          >
+            ✕ Rejeter
+          </button>
+        </div>
+
+      </div>
+    }
+
+  </div>
+</div>

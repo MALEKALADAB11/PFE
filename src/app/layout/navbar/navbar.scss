@@ -115,3 +115,64 @@
   0%, 100% { opacity: 1; }
   50%       { opacity: 0.4; }
 }
+
+// ── Hamburger (mobile only) ───────────────────────────────────────────────────
+
+.rc-hamburger {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: #1A1D2E;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 8px;
+  margin-right: auto;
+  &:hover { background: #F1F5F9; }
+}
+
+// ── Offline Banner ────────────────────────────────────────────────────────────
+
+.rc-offline-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 20px;
+  background: #FFF3CD;
+  border-bottom: 1px solid #F9A825;
+  color: #92400E;
+  font-size: 12px;
+  font-weight: 500;
+  animation: fadeIn 0.3s ease;
+
+  svg { flex-shrink: 0; color: #F9A825; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+// ── Mobile Responsive ─────────────────────────────────────────────────────────
+
+@media (max-width: 768px) {
+  .rc-topbar {
+    padding: 0 16px;
+    justify-content: flex-start;
+    gap: 8px;
+  }
+
+  .rc-hamburger { display: flex; }
+
+  .rc-topbar-pill { display: none; }
+
+  .rc-coach-btn {
+    margin-left: auto;
+    padding: 8px 12px;
+    font-size: 12px;
+    gap: 6px;
+  }
+
+  .rc-coach-live { display: none; }
+}

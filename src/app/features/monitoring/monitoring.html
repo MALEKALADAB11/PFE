@@ -305,6 +305,41 @@
       </div>
 
       <!-- RIGHT PANEL: LangGraph State -->
+      <!-- ── Guardrail History Panel (S8.4) ────────────────────────────── -->
+      <div class="guardrail-panel">
+        <div class="guardrail-panel__header">
+          <h2 class="guardrail-panel__title">Guardrail Events</h2>
+          <div class="guardrail-panel__stats">
+            <span class="gp-stat gp-stat--block">🚫 {{ guardrailStats().blocks }} Blocks</span>
+            <span class="gp-stat gp-stat--escalate">⚠️ {{ guardrailStats().escalates }} Escalates</span>
+            <span class="gp-stat gp-stat--rewrite">✏️ {{ guardrailStats().rewrites }} Rewrites</span>
+          </div>
+        </div>
+
+        @if (guardrailHistory().length === 0) {
+          <p class="gp-empty">Aucun incident guardrail — session propre ✅</p>
+        }
+
+        @for (evt of guardrailHistory(); track evt.timestamp) {
+          <div class="gp-event"
+               [class.gp-event--block]="evt.status === 'BLOCK'"
+               [class.gp-event--escalate]="evt.status === 'ESCALATE'"
+               [class.gp-event--rewrite]="evt.status === 'REWRITE'">
+            <div class="gp-event__meta">
+              <span class="gp-event__badge">{{ evt.status }}</span>
+              <span class="gp-event__advisor">{{ evt.advisor }}</span>
+              <span class="gp-event__urgency">{{ evt.urgency }}</span>
+              <span class="gp-event__time">{{ evt.timestamp | date:'HH:mm:ss' }}</span>
+            </div>
+            @for (issue of evt.issues; track issue.rule) {
+              <p class="gp-event__issue">
+                <strong>{{ issue.rule }}</strong> — {{ issue.message }}
+              </p>
+            }
+          </div>
+        }
+      </div>
+
       <div class="state-panel">
         <div class="state-panel__header">
           <h2 class="state-panel__title">LangGraph State</h2>

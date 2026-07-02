@@ -1,5 +1,14 @@
 <header class="rc-topbar">
 
+  <!-- Hamburger (mobile only) -->
+  <button class="rc-hamburger" (click)="layout.toggleMobileSidebar()" aria-label="Menu">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+      <line x1="3" y1="6" x2="21" y2="6"/>
+      <line x1="3" y1="12" x2="21" y2="12"/>
+      <line x1="3" y1="18" x2="21" y2="18"/>
+    </svg>
+  </button>
+
   <!-- Weather -->
   <div class="rc-topbar-pill">
     <span class="rc-topbar-pill__icon">{{ ws.weatherIcon() || '⛅' }}</span>
@@ -41,3 +50,13 @@
   </button>
 
 </header>
+
+<!-- Bannière reconnexion (hors header pour flotter en dessous) -->
+@if (!isConnected()) {
+  <div class="rc-offline-banner">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <path d="M1 1l22 22M16.72 11.06A10.94 10.94 0 0119 12.55M5 12.55a10.94 10.94 0 015.17-2.39M10.71 5.05A16 16 0 0122.56 9M1.42 9a15.91 15.91 0 014.7-2.88M8.53 16.11a6 6 0 016.95 0M12 20h.01"/>
+    </svg>
+    Connexion au serveur interrompue — reconnexion automatique en cours...
+  </div>
+}

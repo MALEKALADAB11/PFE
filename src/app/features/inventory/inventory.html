@@ -4,29 +4,15 @@
   <div class="page-header">
     <div class="page-header__left">
       <h1 class="page-title">
-        Stock &amp; Inventaire
+        Stock &amp; Inventory
         <span class="page-live-pill">
           <span class="page-live-dot"></span>
-          {{ isLiveData() ? 'LIVE' : 'MOCK' }}
+          LIVE
         </span>
       </h1>
-      <p class="page-sub">
-        Inventory Agent · Risk Scorer · NL Recommendations · {{ lastUpdateTime() }}
-      </p>
+      <p class="page-sub">Vue d'ensemble en temps réel de votre stock et des risques</p>
     </div>
     <div class="page-header__right">
-
-      <!-- Store selector -->
-      @if (availableStores().length > 1) {
-        <select class="store-select"
-                [value]="selectedStore()"
-                (change)="changeStore($any($event.target).value)">
-          @for (s of availableStores(); track s.id) {
-            <option [value]="s.id">{{ s.name || s.id }}</option>
-          }
-        </select>
-      }
-
       @if (agentLoading()) {
         <span class="loading-badge">
           <span class="loading-spinner"></span>Agent…
@@ -35,23 +21,16 @@
       @if (agentError()) {
         <span class="error-badge">{{ agentError() }}</span>
       }
-
-      <button class="btn-outline" (click)="loadAgentOverlay()">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2">
-          <polyline points="1,4 1,10 7,10"/>
-          <path d="M3.51 15a9 9 0 102.13-9.36L1 10"/>
-        </svg>
-        Actualiser
-      </button>
-      <button class="btn-primary">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2">
+      <button class="btn-export" (click)="loadAgentOverlay()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
           <polyline points="7,10 12,15 17,10"/>
           <line x1="12" y1="15" x2="12" y2="3"/>
         </svg>
-        Exporter
+        Exporter rapport
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <polyline points="6,9 12,15 18,9"/>
+        </svg>
       </button>
     </div>
   </div>
@@ -59,70 +38,55 @@
   <!-- ══ KPI ROW ══ -->
   <div class="inv-kpi-row">
 
-    <!-- Ruptures critiques -->
     <div class="inv-kpi-card" [class.inv-kpi-card--alert]="criticalCount() > 0">
       <div class="inv-kpi-icon inv-kpi-icon--red">
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
           <line x1="12" y1="9" x2="12" y2="13"/>
           <line x1="12" y1="17" x2="12.01" y2="17"/>
         </svg>
       </div>
       <div class="inv-kpi-body">
-        <span class="inv-kpi-val" [style.color]="kpiStatus('critical').color">
-          {{ criticalCount() }}
-        </span>
+        <span class="inv-kpi-val" [style.color]="criticalCount() > 0 ? '#E74C3C' : '#1A1D2E'">{{ criticalCount() }}</span>
         <span class="inv-kpi-label">Ruptures critiques</span>
-        <span class="inv-kpi-status" [style.color]="kpiStatus('critical').color">
-          {{ kpiStatus('critical').label }}
-        </span>
+        <span class="inv-kpi-sub">{{ criticalCount() }} SKUs en rupture</span>
+        <span class="inv-kpi-status" [style.color]="kpiStatus('critical').color">{{ kpiStatus('critical').label }}</span>
       </div>
     </div>
 
-    <!-- Risque élevé -->
     <div class="inv-kpi-card" [class.inv-kpi-card--warn]="highCount() > 0">
       <div class="inv-kpi-icon inv-kpi-icon--amber">
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="12" cy="12" r="10"/>
           <line x1="12" y1="8" x2="12" y2="12"/>
           <line x1="12" y1="16" x2="12.01" y2="16"/>
         </svg>
       </div>
       <div class="inv-kpi-body">
-        <span class="inv-kpi-val" [style.color]="kpiStatus('high').color">
-          {{ highCount() }}
-        </span>
-        <span class="inv-kpi-label">Risque élevé</span>
-        <span class="inv-kpi-status" [style.color]="kpiStatus('high').color">
-          {{ kpiStatus('high').label }}
-        </span>
+        <span class="inv-kpi-val" [style.color]="highCount() > 0 ? '#F9A825' : '#1A1D2E'">{{ highCount() }}</span>
+        <span class="inv-kpi-label">Haut risque</span>
+        <span class="inv-kpi-sub">{{ highCount() }} SKUs à risque</span>
+        <span class="inv-kpi-status" [style.color]="kpiStatus('high').color">{{ kpiStatus('high').label }}</span>
       </div>
     </div>
 
-    <!-- Stock optimal -->
-    <div class="inv-kpi-card inv-kpi-card--ok">
+    <div class="inv-kpi-card">
       <div class="inv-kpi-icon inv-kpi-icon--green">
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polyline points="20,6 9,17 4,12"/>
         </svg>
       </div>
       <div class="inv-kpi-body">
         <span class="inv-kpi-val" style="color:#27AE60">{{ okCount() }}</span>
         <span class="inv-kpi-label">Stock optimal</span>
-        <span class="inv-kpi-status" style="color:#27AE60">
-          {{ kpiStatus('ok').label }}
-        </span>
+        <span class="inv-kpi-sub">{{ okCount() }} SKUs bien couverts</span>
+        <span class="inv-kpi-status" style="color:#27AE60">{{ kpiStatus('ok').label }}</span>
       </div>
     </div>
 
-    <!-- Couverture moy. -->
     <div class="inv-kpi-card">
       <div class="inv-kpi-icon inv-kpi-icon--blue">
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <rect x="2" y="3" width="20" height="14" rx="2"/>
           <line x1="8" y1="21" x2="16" y2="21"/>
           <line x1="12" y1="17" x2="12" y2="21"/>
@@ -130,72 +94,76 @@
       </div>
       <div class="inv-kpi-body">
         <span class="inv-kpi-val">{{ avgCoverage() }}x</span>
-        <span class="inv-kpi-label">Couverture moy.</span>
-        <span class="inv-kpi-status" [style.color]="kpiStatus('coverage').color">
-          {{ kpiStatus('coverage').label }}
-        </span>
+        <span class="inv-kpi-label">Couverture moyenne</span>
+        <span class="inv-kpi-sub">Sur les SKU suivis</span>
+        <span class="inv-kpi-status" [style.color]="kpiStatus('coverage').color">{{ kpiStatus('coverage').label }}</span>
       </div>
     </div>
 
-    <!-- SKUs surveillés -->
     <div class="inv-kpi-card">
-      <div class="inv-kpi-icon inv-kpi-icon--purple">
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2">
-          <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+      <div class="inv-kpi-icon inv-kpi-icon--gray">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <polyline points="12,6 12,12 16,14"/>
         </svg>
       </div>
       <div class="inv-kpi-body">
-        <span class="inv-kpi-val">{{ totalItems() }}</span>
-        <span class="inv-kpi-label">SKUs surveillés</span>
-        <span class="inv-kpi-status" [style.color]="wsConnected() ? '#27AE60' : '#94A3B8'">
-          {{ wsConnected() ? 'Connecté' : 'Polling' }}
-        </span>
+        <span class="inv-kpi-val" style="color:#1A1D2E">{{ totalItems() }}</span>
+        <span class="inv-kpi-label">SKU(s) suivis</span>
+        <span class="inv-kpi-sub">Portefeuille actif</span>
+        <span class="inv-kpi-status" style="color:#6C5CE7">100%</span>
       </div>
     </div>
 
   </div>
 
-  <!-- ══ MAIN LAYOUT ══ -->
+  <!-- ══ MAIN 2-COLUMN LAYOUT ══ -->
   <div class="inv-main-layout">
 
-    <!-- ══════ GAUCHE : Quadrant + Grid ══════ -->
+    <!-- LEFT: Quadrant Chart -->
     <div class="inv-main-left">
-
-      <!-- Quadrant Chart -->
       <div class="card inv-quadrant-card">
         <div class="card-header">
           <div>
-            <h2 class="card-title">Quadrant Stock × Ventes</h2>
-            <p class="card-sub">Axe X : stock · Axe Y : demande 24h · taille : score risque</p>
+            <h2 class="card-title">
+              Stock × Demande (24h)
+              <button class="info-btn" title="Analyse du niveau de stock vs demande sur 24h">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"/>
+                  <line x1="12" y1="16" x2="12" y2="12"/>
+                  <line x1="12" y1="8" x2="12.01" y2="8"/>
+                </svg>
+              </button>
+            </h2>
+            <p class="card-sub">Analyse du niveau de stock vs demande sur 24h</p>
           </div>
           <div class="inv-quadrant-legend">
-            <span class="inv-qleg inv-qleg--star"><span class="inv-qleg__dot"></span>Meilleur combo</span>
+            <span class="inv-qleg inv-qleg--star"><span class="inv-qleg__dot"></span>Meilleure combinaison</span>
             <span class="inv-qleg inv-qleg--rupture"><span class="inv-qleg__dot"></span>Risque rupture</span>
-            <span class="inv-qleg inv-qleg--ok"><span class="inv-qleg__dot"></span>Faible / lent</span>
-            <span class="inv-qleg inv-qleg--overstock"><span class="inv-qleg__dot"></span>Surstock</span>
+            <span class="inv-qleg inv-qleg--ok"><span class="inv-qleg__dot"></span>Faible vente / Faible stock</span>
+            <span class="inv-qleg inv-qleg--overstock"><span class="inv-qleg__dot"></span>Risque surstock</span>
           </div>
         </div>
 
         <div class="inv-quadrant-wrap">
           <div class="inv-quadrant-yaxis">
-            <span class="inv-quadrant-yaxis__top">Forte demande</span>
-            <span class="inv-quadrant-yaxis__label">Demande 24h →</span>
-            <span class="inv-quadrant-yaxis__bottom">Faible demande</span>
+            <span class="inv-quadrant-yaxis__top">Élevée</span>
+            <span class="inv-quadrant-yaxis__label">Demande 24h</span>
+            <span class="inv-quadrant-yaxis__bottom">Faible</span>
           </div>
 
           <div class="inv-quadrant-plot">
-            <div class="inv-q-bg inv-q-bg--tl" title="Forte demande, faible stock → Risque rupture">
-              <span class="inv-q-bg__label">⚠ Risque rupture</span>
+            <div class="inv-q-bg inv-q-bg--tl">
+              <span class="inv-q-bg__label">⚠ Risque de rupture</span>
             </div>
-            <div class="inv-q-bg inv-q-bg--tr" title="Forte demande, fort stock → Meilleur combo">
-              <span class="inv-q-bg__label">★ Meilleur combo</span>
+            <div class="inv-q-bg inv-q-bg--tr">
+              <span class="inv-q-bg__label">☆ Zone optimale</span>
             </div>
-            <div class="inv-q-bg inv-q-bg--bl" title="Faible demande, faible stock → OK / lent">
-              <span class="inv-q-bg__label">✓ OK / lent</span>
+            <div class="inv-q-bg inv-q-bg--bl">
+              <span class="inv-q-bg__label">✓ Faible vente / Faible stock</span>
             </div>
-            <div class="inv-q-bg inv-q-bg--br" title="Faible demande, fort stock → Surstock">
-              <span class="inv-q-bg__label">↑ Surstock</span>
+            <div class="inv-q-bg inv-q-bg--br">
+              <span class="inv-q-bg__label">⊙ Risque de surstock</span>
             </div>
 
             <div class="inv-q-divider inv-q-divider--v"></div>
@@ -209,8 +177,8 @@
                    [style.bottom.%]="quadrantY(p)"
                    [style.width.px]="quadrantSize(p)"
                    [style.height.px]="quadrantSize(p)"
-                   [style.background]="riskColor(p.riskLevel)"
-                   [style.border-color]="riskColor(p.riskLevel)"
+                   [style.background]="quadrantDotColor(p)"
+                   [style.border-color]="quadrantDotColor(p)"
                    [title]="p.name + ' — Stock: ' + p.stock + ' · Demande: ' + p.demandForecast24h + '/j'"
                    (click)="toggleFlip(p.id)">
                 <span class="inv-q-dot__label">
@@ -221,455 +189,104 @@
           </div>
 
           <div class="inv-quadrant-xaxis">
-            <span>Faible stock</span>
-            <span class="inv-quadrant-xaxis__label">Niveau de stock →</span>
-            <span>Fort stock</span>
+            <span>Faible</span>
+            <span class="inv-quadrant-xaxis__label">Niveau de stock</span>
+            <span>Élevé</span>
           </div>
         </div>
 
-        <div class="inv-quadrant-footer">
-          <div class="inv-q-foot-zone inv-q-foot-zone--rupture">
-            <span class="inv-q-foot-zone__count">{{ quadrantCounts().stockout }}</span>
-            <span class="inv-q-foot-zone__label">⚠ Risque rupture</span>
-          </div>
-          <div class="inv-q-foot-zone inv-q-foot-zone--star">
-            <span class="inv-q-foot-zone__count">{{ quadrantCounts().star }}</span>
-            <span class="inv-q-foot-zone__label">★ Meilleur combo</span>
-          </div>
-          <div class="inv-q-foot-zone inv-q-foot-zone--ok">
-            <span class="inv-q-foot-zone__count">{{ quadrantCounts().ok }}</span>
-            <span class="inv-q-foot-zone__label">✓ OK / lents</span>
-          </div>
-          <div class="inv-q-foot-zone inv-q-foot-zone--overstock">
-            <span class="inv-q-foot-zone__count">{{ quadrantCounts().overstock }}</span>
-            <span class="inv-q-foot-zone__label">↑ Surstock</span>
-          </div>
+        <div class="inv-quadrant-update-bar">
+          <span class="inv-quadrant-update-dot"></span>
+          Dernière mise à jour : Aujourd'hui à {{ lastUpdateTime() }}
         </div>
-      </div>
-
-      <!-- Filter + Sort Toolbar -->
-      <div class="toolbar">
-        <div class="filter-tabs">
-          @for (f of ([
-            { key: 'all',      label: 'Tous'      },
-            { key: 'critical', label: 'Critique' },
-            { key: 'high',     label: 'Élevé'    },
-            { key: 'medium',   label: 'Moyen'    },
-            { key: 'ok',       label: 'OK'       }
-          ]); track f.key) {
-            <button class="filter-tab"
-                    [class.is-active]="filterRisk() === f.key"
-                    [class]="'filter-tab--' + f.key"
-                    (click)="setFilter(f.key)">
-              {{ f.label }}
-              <span class="filter-tab__count">{{ getFilterCount(f.key) }}</span>
-            </button>
-          }
-        </div>
-        <div class="toolbar-right">
-          <div class="search-box">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-                 stroke="currentColor" stroke-width="2" class="search-icon">
-              <circle cx="11" cy="11" r="8"/>
-              <path d="M21 21l-4.35-4.35"/>
-            </svg>
-            <input type="text" class="search-input"
-                   placeholder="Rechercher produit, SKU..."
-                   [value]="searchText()"
-                   (input)="setSearch($any($event.target).value)">
-            @if (searchText()) {
-              <button class="search-clear" (click)="clearSearch()">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
-                     stroke="currentColor" stroke-width="2.5">
-                  <line x1="18" y1="6" x2="6" y2="18"/>
-                  <line x1="6" y1="6" x2="18" y2="18"/>
-                </svg>
-              </button>
-            }
-          </div>
-          <div class="sort-group">
-            <span class="sort-label">Trier</span>
-            @for (s of ([
-              { key: 'risk',     label: 'Risque'    },
-              { key: 'stock',    label: 'Stock'     },
-              { key: 'coverage', label: 'Couverture'},
-              { key: 'name',     label: 'Nom'       }
-            ]); track s.key) {
-              <button class="sort-btn"
-                      [class.is-active]="sortKey() === s.key"
-                      (click)="setSort(s.key)">
-                {{ s.label }}
-              </button>
-            }
-          </div>
-        </div>
-      </div>
-
-      <!-- Flip Grid -->
-      <div class="inv-grid">
-        @for (item of displayItems(); track trackById($index, item)) {
-          <div class="flip-card"
-               [class.flipped]="isFlipped(item.id)"
-               (click)="toggleFlip(item.id)">
-            <div class="flip-inner">
-
-              <!-- FRONT -->
-              <div class="flip-front">
-                <div class="risk-badge"
-                     [style.background]="riskBg(item.riskLevel)"
-                     [style.color]="riskColor(item.riskLevel)">
-                  <span class="risk-dot" [style.background]="riskColor(item.riskLevel)"></span>
-                  {{ riskLabel(item.riskLevel) }}
-                </div>
-                <div class="item-meta">
-                  <span class="item-category">{{ item.category }}</span>
-                  <span class="item-trend" [style.color]="trendColor(item.trend)">
-                    {{ trendIcon(item.trend) }}
-                  </span>
-                </div>
-                <h3 class="item-name">{{ item.name }}</h3>
-                <p class="item-sku mono">{{ item.sku }}</p>
-                <div class="stock-gauge">
-                  <div class="stock-gauge__numbers">
-                    <div class="stock-num">
-                      <span class="stock-val" [style.color]="riskColor(item.riskLevel)">{{ item.stock }}</span>
-                      <span class="stock-unit">en stock</span>
-                    </div>
-                    <div class="stock-num stock-num--right">
-                      <span class="stock-val stock-val--sm">{{ item.demandForecast24h }}</span>
-                      <span class="stock-unit">dem. 24h</span>
-                    </div>
-                  </div>
-                  <div class="coverage-track">
-                    <div class="coverage-fill"
-                         [style.width.%]="coverageWidth(item.coverageRatio)"
-                         [style.background]="coverageColor(item.coverageRatio)">
-                    </div>
-                    <div class="coverage-min-marker" [style.left.%]="33" title="Seuil minimum"></div>
-                  </div>
-                  <div class="coverage-labels">
-                    <span>Couverture {{ coverageDays(item) }}</span>
-                    <span [style.color]="coverageColor(item.coverageRatio)">Min: {{ item.stockMin }}</span>
-                  </div>
-                </div>
-                <div class="risk-score">
-                  <div class="risk-score__track">
-                    <div class="risk-score__fill"
-                         [style.width.%]="item.riskScore * 100"
-                         [style.background]="riskColor(item.riskLevel)">
-                    </div>
-                  </div>
-                  <span class="risk-score__val mono" [style.color]="riskColor(item.riskLevel)">
-                    {{ ($any(item.riskScore) * 100 || 0).toFixed(0) }}%
-                  </span>
-                </div>
-                <div class="flip-hint">
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
-                       stroke="currentColor" stroke-width="2">
-                    <polyline points="15,3 21,3 21,9"/>
-                    <polyline points="9,21 3,21 3,15"/>
-                    <line x1="21" y1="3" x2="14" y2="10"/>
-                    <line x1="3" y1="21" x2="10" y2="14"/>
-                  </svg>
-                  Voir la recommandation IA
-                </div>
-              </div>
-
-              <!-- BACK -->
-              <div class="flip-back" [style.--accent]="riskBackColor(item.riskLevel)">
-                <div class="back-header">
-                  <div>
-                    <p class="back-label">Recommandation Inventory Agent</p>
-                    <h3 class="back-name">{{ item.name }}</h3>
-                  </div>
-                  <div style="display:flex;align-items:center;gap:8px">
-                    <button class="btn-view-analysis-corner"
-                            (click)="viewFullAnalysis(item, $event)"
-                            title="Analyse complète">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                           stroke="currentColor" stroke-width="2.5">
-                        <line x1="7" y1="17" x2="17" y2="7"/>
-                        <polyline points="7,7 17,7 17,17"/>
-                      </svg>
-                    </button>
-                    <div class="confidence-ring">
-                      <span class="confidence-val">
-                        {{ ($any(item.confidence) * 100 || 0).toFixed(0) }}%
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="reco-chip-row">
-                  @if (hasDecision(item)) {
-                    <span class="reco-action-chip"
-                          [style.background]="actionBg(item)"
-                          [style.color]="actionColor(item)">
-                      {{ actionLabel(item) }}
-                    </span>
-                    @if ($any(item).finalOrderQty) {
-                      <span class="reco-qty-chip">{{ $any(item).finalOrderQty }} unités</span>
-                    }
-                    <span class="reco-expand-hint">Détail ↗</span>
-                  } @else {
-                    <span class="reco-pending">Recommandation en attente…</span>
-                  }
-                </div>
-
-                <div class="back-stats">
-                  <div class="back-stat">
-                    <span class="back-stat__val">{{ item.stock }}</span>
-                    <span class="back-stat__label">En stock</span>
-                  </div>
-                  <div class="back-stat">
-                    <span class="back-stat__val">{{ item.demandForecast24h }}</span>
-                    <span class="back-stat__label">Demande 24h</span>
-                  </div>
-                  <div class="back-stat">
-                    <span class="back-stat__val">{{ coverageDays(item) }}</span>
-                    <span class="back-stat__label">Couverture</span>
-                  </div>
-                </div>
-
-                <div class="product-decision-zone">
-                  @if (getProductDecision(item.id) === null) {
-                    <div class="product-decision-actions">
-                      <button class="btn-product-approve" (click)="approveProduct(item.id, $event)">
-                        Approuver
-                      </button>
-                      <button class="btn-product-reject" (click)="rejectProduct(item.id, $event)">
-                        Rejeter
-                      </button>
-                    </div>
-                  }
-                  @if (getProductDecision(item.id) === 'approved') {
-                    <div class="product-decision-result product-decision-result--approved">
-                      Approuvé
-                      <button class="btn-product-undo" (click)="undoProductDecision(item.id, $event)">Annuler</button>
-                    </div>
-                  }
-                  @if (getProductDecision(item.id) === 'rejected') {
-                    <div class="product-decision-result product-decision-result--rejected">
-                      Rejeté
-                      <button class="btn-product-undo" (click)="undoProductDecision(item.id, $event)">Annuler</button>
-                    </div>
-                  }
-                </div>
-
-                <p class="back-footer mono">
-                  Inventory Agent · MAJ {{ item.lastUpdated }}
-                </p>
-                <div class="flip-hint flip-hint--back">Retour</div>
-              </div>
-            </div>
-          </div>
-        }
-
-        @if (displayItems().length === 0) {
-          <div class="empty-state">
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none"
-                 stroke="#CBD5E0" stroke-width="1.5">
-              <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
-            </svg>
-            <p>Aucun produit ne correspond à ce filtre</p>
-          </div>
-        }
       </div>
     </div>
 
-    <!-- ══════ DROITE : Top à risque + Alertes ══════ -->
+    <!-- RIGHT: Alerts + Top at risk -->
     <div class="inv-main-right">
-
-      <!-- Top produits à risque -->
-      <div class="card top-risk-card">
-        <div class="card-header">
-          <div>
-            <h2 class="card-title">Top produits à risque</h2>
-            <p class="card-sub">SKUs les plus critiques</p>
-          </div>
-          <span class="badge-count">{{ topAtRisk().length }}</span>
-        </div>
-        <div class="top-risk-list">
-          @for (item of topAtRisk(); track item.id; let i = $index) {
-            <div class="top-risk-row">
-              <div class="top-risk-avatar" [style.background]="riskBg(item.riskLevel)">
-                <span [style.color]="riskColor(item.riskLevel)">{{ productInitials(item) }}</span>
-              </div>
-              <div class="top-risk-info">
-                <p class="top-risk-name">{{ item.name }}</p>
-                <p class="top-risk-sku mono">{{ item.sku }}</p>
-              </div>
-              <div class="top-risk-right">
-                <span class="top-risk-badge"
-                      [style.background]="riskBg(item.riskLevel)"
-                      [style.color]="riskColor(item.riskLevel)">
-                  {{ riskLabel(item.riskLevel) }}
-                </span>
-                <span class="top-risk-cov">{{ coverageDays(item) }}</span>
-              </div>
-            </div>
-          }
-          @if (topAtRisk().length === 0) {
-            <p class="no-data">Aucun SKU à risque détecté.</p>
-          }
-        </div>
-      </div>
 
       <!-- Alertes actives -->
       <div class="card alerts-panel-card">
         <div class="card-header">
-          <div>
-            <h2 class="card-title">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-                   stroke="currentColor" stroke-width="2"
-                   style="display:inline;vertical-align:middle;margin-right:4px">
-                <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-                <path d="M13.73 21a2 2 0 01-3.46 0"/>
-              </svg>
-              Alertes actives
-            </h2>
-            <p class="card-sub">InventoryWatcher · LIVE</p>
-          </div>
-          <div class="alerts-header-right">
+          <h2 class="card-title">
+            Alertes actives
             @if (alerts().length > 0) {
               <span class="alert-count-badge">{{ alerts().length }}</span>
             }
-            @if (approvedCount() > 0) {
-              <span class="decision-badge decision-badge--approved">
-                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-                  <polyline points="20,6 9,17 4,12"/>
-                </svg>
-                {{ approvedCount() }}
-              </span>
-            }
-            @if (rejectedCount() > 0) {
-              <span class="decision-badge decision-badge--rejected">
-                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-                  <line x1="18" y1="6" x2="6" y2="18"/>
-                  <line x1="6" y1="6" x2="18" y2="18"/>
-                </svg>
-                {{ rejectedCount() }}
-              </span>
-            }
-          </div>
+          </h2>
+          <a class="card-link">Voir toutes</a>
         </div>
 
-        <div class="alerts-panel-list">
+        <div class="alerts-simple-list">
           @if (alerts().length === 0) {
             <div class="alerts-empty">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none"
-                   stroke="#CBD5E0" stroke-width="1.5">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#CBD5E0" stroke-width="1.5">
                 <polyline points="20,6 9,17 4,12"/>
               </svg>
               <p>Aucune alerte active</p>
             </div>
           }
 
-          @for (alert of alerts(); track trackById($index, alert)) {
-            <div class="alert-panel-item"
-                 [class.alert-panel-item--approved]="getDecision(alert.id) === 'approved'"
-                 [class.alert-panel-item--rejected]="getDecision(alert.id) === 'rejected'"
-                 [style.border-left-color]="alertColor(alert.urgency)"
-                 [style.background]="alertBg(alert.urgency)">
-
-              <div class="alert-panel-icon" [style.background]="alertColor(alert.urgency)">
-                {{ alertIcon(alert.type) }}
+          @for (alert of alerts().slice(0, 5); track trackById($index, alert)) {
+            <div class="alert-simple-item">
+              <div class="alert-simple-bar" [style.background]="alertUrgencyColor(alert)"></div>
+              <div class="alert-simple-thumb product-avatar"
+                   [style.background]="productCategoryColor(alertCategory(alert))">
+                <span class="product-avatar-text">{{ productInitialsFromAlert(alert) }}</span>
               </div>
-
-              <div class="alert-panel-body">
-                <div class="alert-panel-top">
-                  <span class="alert-panel-type" [style.color]="alertColor(alert.urgency)">
-                    {{ alertBadgeFr(alert) }}
-                  </span>
-                  <span class="alert-panel-sku mono">{{ alert.sku }}</span>
-                  <span class="alert-panel-time mono">{{ formatAlertTime(alert.time) }}</span>
-                  @if (getDecision(alert.id) === null) {
-                    <button class="alert-dismiss-btn" (click)="dismissAlert(alert.id)" title="Ignorer">
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
-                           stroke="currentColor" stroke-width="2.5">
-                        <line x1="18" y1="6" x2="6" y2="18"/>
-                        <line x1="6" y1="6" x2="18" y2="18"/>
-                      </svg>
-                    </button>
-                  }
-                </div>
-
-                <p class="alert-panel-msg">{{ alertProductName(alert) }}</p>
-                <p class="alert-panel-sub">{{ alertSubFr(alert) }}</p>
-
-                @if (alertRecommendation(alert); as reco) {
-                  <div class="alert-panel-reco">
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
-                         stroke="currentColor" stroke-width="2">
-                      <circle cx="12" cy="12" r="10"/>
-                      <path d="M12 16v-4M12 8h.01"/>
-                    </svg>
-                    <span class="alert-panel-reco__label">IA :</span>
-                    <em class="alert-panel-reco__text">{{ reco }}</em>
-                  </div>
-                }
-
-                @if (getDecision(alert.id) === null) {
-                  <button class="btn-ask-chat-alert" (click)="askChatFromAlert(alert, $event)"
-                          title="Discuter dans le Chat">
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
-                         stroke="currentColor" stroke-width="2">
-                      <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
-                    </svg>
-                    Chat IA
-                  </button>
-                }
-
-                <div class="alert-decision-zone">
-                  @if (getDecision(alert.id) === null) {
-                    <div class="decision-actions">
-                      <button class="btn-validate"
-                              [style.border-color]="alertColor(alert.urgency)"
-                              [style.color]="alertColor(alert.urgency)"
-                              (click)="approveAlert(alert.id, $event)">
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
-                             stroke="currentColor" stroke-width="2.5">
-                          <polyline points="20,6 9,17 4,12"/>
-                        </svg>
-                        Valider
-                      </button>
-                      <button class="btn-reject-small" (click)="rejectAlert(alert.id, $event)">
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
-                             stroke="currentColor" stroke-width="2.5">
-                          <line x1="18" y1="6" x2="6" y2="18"/>
-                          <line x1="6" y1="6" x2="18" y2="18"/>
-                        </svg>
-                        Rejeter
-                      </button>
-                    </div>
-                  }
-                  @if (getDecision(alert.id) === 'approved') {
-                    <div class="decision-result decision-result--approved">
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
-                           stroke="currentColor" stroke-width="2.5">
-                        <polyline points="20,6 9,17 4,12"/>
-                      </svg>
-                      Validé
-                      <button class="btn-undo" (click)="undoDecision(alert.id, $event)">Annuler</button>
-                      <div class="undo-progress"></div>
-                    </div>
-                  }
-                  @if (getDecision(alert.id) === 'rejected') {
-                    <div class="decision-result decision-result--rejected">
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
-                           stroke="currentColor" stroke-width="2.5">
-                        <line x1="18" y1="6" x2="6" y2="18"/>
-                        <line x1="6" y1="6" x2="18" y2="18"/>
-                      </svg>
-                      Rejeté
-                      <button class="btn-undo" (click)="undoDecision(alert.id, $event)">Annuler</button>
-                      <div class="undo-progress undo-progress--rejected"></div>
-                    </div>
-                  }
-                </div>
-
+              <div class="alert-simple-body">
+                <span class="alert-simple-name">{{ alertProductName(alert) }}</span>
+                <span class="alert-simple-sub">{{ alertSubFr(alert) }}</span>
+              </div>
+              <div class="alert-simple-right">
+                <span class="alert-simple-urgency"
+                      [style.color]="alertUrgencyColor(alert)">
+                  {{ alertUrgencyLabel(alert) }}
+                </span>
+                <span class="alert-simple-stock"
+                      [style.color]="alertUrgencyColor(alert)">
+                  {{ alertStockCount(alert) }} unité{{ alertStockCount(alert) !== 1 ? 's' : '' }}
+                </span>
               </div>
             </div>
+          }
+        </div>
+
+        <a class="alerts-see-all">Voir toutes les alertes →</a>
+      </div>
+
+      <!-- Top produits à risque -->
+      <div class="card top-risk-card">
+        <div class="card-header">
+          <h2 class="card-title">Top produits à risque</h2>
+          <a class="card-link">Voir tout</a>
+        </div>
+        <div class="top-risk-table">
+          <div class="top-risk-thead">
+            <span class="thead-produit">PRODUIT</span>
+            <span class="thead-cov">COUVERTURE</span>
+            <span class="thead-risk">RISQUE</span>
+          </div>
+          @for (item of topAtRisk(); track item.id; let i = $index) {
+            <div class="top-risk-row">
+              <span class="top-risk-rank">{{ i + 1 }}</span>
+              <div class="top-risk-thumb product-avatar product-avatar-sm"
+                   [style.background]="productCategoryColor(item.category)">
+                <span class="product-avatar-text">{{ productInitials(item) }}</span>
+              </div>
+              <span class="top-risk-name">{{ item.name }}</span>
+              <span class="top-risk-cov" [style.color]="coverageColor(item.coverageRatio)">
+                {{ item.coverageRatio.toFixed(1) }}x
+              </span>
+              <span class="top-risk-badge"
+                    [style.background]="riskBg(item.riskLevel)"
+                    [style.color]="riskColor(item.riskLevel)">
+                {{ riskBadgeFr(item.riskLevel) }}
+              </span>
+            </div>
+          }
+          @if (topAtRisk().length === 0) {
+            <p class="no-data" style="padding:16px 20px">Aucun SKU à risque.</p>
           }
         </div>
       </div>
@@ -677,65 +294,69 @@
     </div>
   </div>
 
-  <!-- ══ BOTTOM ROW : Couverture + Donut + Recommandations ══ -->
+  <!-- ══ BOTTOM ROW: Couverture + Donut + Recommandations ══ -->
   <div class="inv-bottom-row">
 
     <!-- Couverture par catégorie -->
     <div class="card coverage-card">
       <div class="card-header">
-        <div>
-          <h2 class="card-title">Couverture par catégorie</h2>
-          <p class="card-sub">Jours de stock moyens</p>
-        </div>
+        <h2 class="card-title">Couverture par catégorie</h2>
+        <a class="card-link">Voir tout</a>
       </div>
       <div class="coverage-list">
-        @for (cat of coverageByCategory(); track cat.category) {
+        @for (cat of coverageByCategoryRatio(); track cat.category) {
           <div class="cov-row">
+            <span class="cov-cat-icon">
+              @if (cat.category === 'Mobiles' || cat.category === 'Mobile') { 📱 }
+              @else if (cat.category.startsWith('Forfait')) { 📋 }
+              @else if (cat.category === 'Accessoires' || cat.category === 'Accessoire') { 🎧 }
+              @else if (cat.category.includes('SIM') || cat.category.includes('Carte')) { 💳 }
+              @else { 📦 }
+            </span>
             <span class="cov-cat">{{ cat.category }}</span>
             <div class="cov-bar-track">
               <div class="cov-bar" [style.width.%]="cat.pct" [style.background]="cat.color"></div>
             </div>
-            <span class="cov-days" [style.color]="cat.color">{{ cat.avgDays }}j</span>
+            <span class="cov-ratio" [style.color]="cat.color">{{ cat.r }}x</span>
+            <span class="cov-status" [style.color]="cat.color">{{ cat.statusLabel }}</span>
           </div>
         }
-        @if (coverageByCategory().length === 0) {
-          <p class="no-data">Données de couverture en attente...</p>
+        @if (coverageByCategoryRatio().length === 0) {
+          <p class="no-data">Données en attente...</p>
         }
       </div>
     </div>
 
-    <!-- Donut Chart -->
+    <!-- Statut du stock -->
     <div class="card donut-card">
       <div class="card-header">
-        <div>
-          <h2 class="card-title">Répartition du stock</h2>
-          <p class="card-sub">{{ totalItems() }} SKUs analysés</p>
-        </div>
+        <h2 class="card-title">Statut du stock</h2>
       </div>
       <div class="donut-wrap">
         <svg class="donut-svg" viewBox="0 0 140 140">
-          @for (slice of stockDonut(); track slice.label) {
-            <circle class="donut-arc"
-                    cx="70" cy="70" r="54"
-                    fill="none"
-                    [attr.stroke]="slice.color"
-                    stroke-width="22"
-                    [attr.stroke-dasharray]="slice.dashArray"
-                    [attr.stroke-dashoffset]="slice.dashOffset">
-            </circle>
-          }
+          <g transform="rotate(-90, 70, 70)">
+            @for (slice of stockDonutSimple(); track slice.label) {
+              <circle class="donut-arc"
+                      cx="70" cy="70" r="54"
+                      fill="none"
+                      [attr.stroke]="slice.color"
+                      stroke-width="22"
+                      [attr.stroke-dasharray]="slice.dashArray"
+                      [attr.stroke-dashoffset]="slice.dashOffset">
+              </circle>
+            }
+          </g>
           <circle cx="70" cy="70" r="43" fill="white"/>
-          <text x="70" y="65" text-anchor="middle" class="donut-center-num">{{ totalItems() }}</text>
-          <text x="70" y="78" text-anchor="middle" class="donut-center-lbl">SKUs</text>
+          <text x="70" y="66" text-anchor="middle" class="donut-center-num">{{ totalItems() }}</text>
+          <text x="70" y="80" text-anchor="middle" class="donut-center-lbl">SKU(s)</text>
         </svg>
 
         <div class="donut-legend">
-          @for (slice of stockDonut(); track slice.label) {
+          @for (slice of stockDonutSimple(); track slice.label) {
             <div class="donut-leg-item">
-              <span class="donut-leg-dot" [style.background]="slice.color"></span>
+              <span class="donut-leg-pct" [style.color]="slice.color">{{ slice.pct }}%</span>
               <span class="donut-leg-label">{{ slice.label }}</span>
-              <span class="donut-leg-count">{{ slice.count }}</span>
-              <span class="donut-leg-pct">({{ slice.pct }}%)</span>
+              <span class="donut-leg-count">{{ slice.count }} SKU(s)</span>
             </div>
           }
         </div>
@@ -745,11 +366,13 @@
     <!-- Recommandations IA -->
     <div class="card inv-recs-card">
       <div class="card-header">
-        <div>
-          <h2 class="card-title">Recommandations IA</h2>
-          <p class="card-sub">Actions prioritaires</p>
-        </div>
-        <span class="badge-count">{{ invRecs().length }}</span>
+        <h2 class="card-title">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6C5CE7" stroke-width="2" style="flex-shrink:0">
+            <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/>
+          </svg>
+          Recommandations IA
+        </h2>
+        <a class="card-link">Voir toutes</a>
       </div>
       <div class="recs-list">
         @for (rec of invRecs(); track rec.title) {
@@ -759,8 +382,7 @@
                  [class.rec-icon--reorder]="rec.icon === 'reorder'"
                  [class.rec-icon--promo]="rec.icon === 'promo'">
               @if (rec.icon === 'transfer') {
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                     stroke="currentColor" stroke-width="2">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <polyline points="17,1 21,5 17,9"/>
                   <path d="M3 11V9a4 4 0 014-4h14"/>
                   <polyline points="7,23 3,19 7,15"/>
@@ -768,14 +390,12 @@
                 </svg>
               }
               @if (rec.icon === 'reorder') {
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                     stroke="currentColor" stroke-width="2">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
                 </svg>
               }
               @if (rec.icon === 'promo') {
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                     stroke="currentColor" stroke-width="2">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/>
                   <line x1="7" y1="7" x2="7.01" y2="7"/>
                 </svg>
@@ -785,11 +405,22 @@
               <p class="rec-title">{{ rec.title }}</p>
               <p class="rec-desc">{{ rec.desc }}</p>
             </div>
+            <span class="rec-impact"
+                  [style.color]="recImpact(rec).color"
+                  [style.background]="recImpact(rec).bg">
+              {{ recImpact(rec).label }}
+            </span>
           </div>
         }
       </div>
     </div>
 
+  </div>
+
+  <!-- ══ BOTTOM STATUS BAR ══ -->
+  <div class="inv-status-bar">
+    <span class="inv-status-bar__dot"></span>
+    Les données sont mises à jour en temps réel. Dernier rafraîchissement : Aujourd'hui à {{ lastUpdateTime() }}
   </div>
 
   <!-- ══ ANALYSIS MODAL ══ -->
@@ -802,8 +433,7 @@
             <p class="modal-subtitle">{{ analysisModal()!.name }} ({{ analysisModal()!.sku }})</p>
           </div>
           <button class="modal-close" (click)="closeAnalysisModal()">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-                 stroke="currentColor" stroke-width="2">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="18" y1="6" x2="6" y2="18"/>
               <line x1="6" y1="6" x2="18" y2="18"/>
             </svg>
@@ -824,8 +454,7 @@
           <div class="analysis-section">
             <h3 class="analysis-section-title">Recommandation</h3>
             <div class="analysis-recommendation">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-                   stroke="currentColor" stroke-width="2">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="12" cy="12" r="10"/>
                 <path d="M12 16v-4M12 8h.01"/>
               </svg>
@@ -884,7 +513,7 @@
                 <span class="analysis-metric-value">{{ safetyStockVal(analysisModal()!) }}</span>
               </div>
               <div class="analysis-metric">
-                <span class="analysis-metric-label">Point de recomande</span>
+                <span class="analysis-metric-label">Point de recommande</span>
                 <span class="analysis-metric-value">{{ reorderPointVal(analysisModal()!) }}</span>
               </div>
               <div class="analysis-metric">
@@ -900,27 +529,19 @@
               <p class="analysis-text" style="margin-top:12px">{{ riskRationaleVal(analysisModal()!) }}</p>
             }
           </div>
-
-          <div class="analysis-section">
-            <p class="analysis-text" style="font-size:11px;opacity:.7">
-              Dernière mise à jour : {{ analysisModal()!.lastUpdated }}
-            </p>
-          </div>
         </div>
 
         <div class="modal-footer">
           @if (getProductDecision(analysisModal()!.id) === null) {
             <button class="btn-modal-reject" (click)="rejectProduct(analysisModal()!.id, $event)">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
-                   stroke="currentColor" stroke-width="2.5">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                 <line x1="18" y1="6" x2="6" y2="18"/>
                 <line x1="6" y1="6" x2="18" y2="18"/>
               </svg>
               Rejeter
             </button>
             <button class="btn-modal-approve" (click)="approveProduct(analysisModal()!.id, $event)">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
-                   stroke="currentColor" stroke-width="2.5">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                 <polyline points="20,6 9,17 4,12"/>
               </svg>
               Approuver

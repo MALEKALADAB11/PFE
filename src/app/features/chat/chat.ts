@@ -17,19 +17,25 @@ import { WebSocketService } from '../../core/services/websocket.service';
 import { ApiService }        from '../../core/services/api';
 import { MockDataService }   from '../../core/services/mock-data';
 import { Advisor }           from '../../core/models/advisor';
+import { environment }      from '../../../environments/environment';
 
 type MessageRole = 'user' | 'coach' | 'system';
 type ConvMode    = 'general' | 'advisor' | 'inventory' | 'strategy';
 
 interface Message {
-  id:          string;
-  role:        MessageRole;
-  text:        string;
-  time:        string;
-  typing?:     boolean;
-  sources?:    string[];
-  confidence?: number;
-  rag_used?:   boolean;
+  id:               string;
+  role:             MessageRole;
+  text:             string;
+  time:             string;
+  typing?:          boolean;
+  streaming?:       boolean;
+  sources?:         string[];
+  confidence?:      number;
+  rag_used?:        boolean;
+  guardrail_status?: string;
+  guardrail_issues?: { rule: string; message: string }[];
+  requires_hitl?:   boolean;
+  scored_products?:  { sku: string; name: string; final_score: number; recommendation_reason: string }[];
 }
 
 interface Conversation {
@@ -344,7 +350,7 @@ export class ChatComponent implements OnInit, AfterViewChecked, OnDestroy {
 
     this.http
       .post<InventoryChatResponse>(
-        'http://localhost:8000/api/inventory/chat',
+        `${environment.apiUrl}/api/inventory/chat`,
         payload,
         { headers: { 'Content-Type': 'application/json' } }
       )
@@ -395,18 +401,18 @@ export class ChatComponent implements OnInit, AfterViewChecked, OnDestroy {
     return sources;
   }
 
-  // ── Appel backend /api/v1/coach/chat avec contexte live ─────────
-  private _callCoachBackend(userMsg: string): void {
+  // ── Appel backend /api/v1/coach/stream (SSE) ─────────────────────
+  private async _callCoachBackend(userMsg: string): Promise<void> {
     const metrics = this.liveMetrics();
     const actions = this.liveActions();
 
-    const payload = {
+    const body = JSON.stringify({
       message:      userMsg,
       advisor_name: this.activeConv()?.advisorName ?? 'Conseiller',
       store_id:     'store-lac2',
       context: {
-        current_revenue:   metrics?.ca_today        ?? 0,
-        daily_target:      metrics?.ca_target        ?? 1007,
+        current_revenue:   metrics?.ca_today   ?? 0,
+        daily_target:      metrics?.ca_target   ?? 1007,
         gap_pct:           this.liveGapPct(),
         urgency:           this.liveUrgency(),
         analyst_summary:   this.liveSummary(),
@@ -415,51 +421,97 @@ export class ChatComponent implements OnInit, AfterViewChecked, OnDestroy {
         cause_racine:      this.liveCause(),
         focus_produits:    this.liveFocus(),
         weather:           this.liveWeather(),
-        forecast_eod:      metrics?.forecast_eod     ?? 0,
-        advisors:          metrics?.advisors          ?? [],
+        forecast_eod:      metrics?.forecast_eod ?? 0,
+        advisors:          metrics?.advisors      ?? [],
       },
-    };
+    });
 
-    this.http
-      .post<{ reply: string; source: string; timestamp: string; rag_used?: boolean }>(
-        'http://localhost:8000/api/v1/coach/chat',
-        payload,
-        { headers: { 'Content-Type': 'application/json' } }
-      )
-      .subscribe({
-        next: (resp) => {
-          this._removeTyping();
-          const sources = this._buildSources(userMsg, resp.source, resp.rag_used);
-          this.addMessage({
-            id:         'c' + Date.now(),
-            role:       'coach',
-            text:       resp.reply,
-            time:       this.now(),
-            sources,
-            confidence: resp.rag_used ? 0.91 : 0.82,
-            rag_used:   resp.rag_used ?? false,
-          });
-          this.isTyping.set(false);
-          this.shouldScroll = true;
-        },
-        error: (err) => {
-          console.error('[COACH] Backend error:', err);
-          this._removeTyping();
-          // Fallback local enrichi avec contexte live
-          const fallback = this._localFallback(userMsg);
-          this.addMessage({
-            id:         'c' + Date.now(),
-            role:       'coach',
-            text:       fallback,
-            time:       this.now(),
-            sources:    ['Fallback local', 'POS live'],
-            confidence: 0.65,
-            rag_used:   false,
-          });
-          this.isTyping.set(false);
-          this.shouldScroll = true;
-        },
+    const streamId = 'stream-' + Date.now();
+
+    this._removeTyping();
+    this.addMessage({ id: streamId, role: 'coach', text: '', time: this.now(), streaming: true });
+
+    try {
+      const resp = await fetch(`${environment.apiUrl}/api/v1/coach/stream`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+        signal: AbortSignal.timeout(35_000),
       });
+
+      if (!resp.ok || !resp.body) throw new Error(`HTTP ${resp.status}`);
+
+      const reader  = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer          = '';
+      let accText         = '';
+      let ragUsed         = false;
+      let source          = '';
+      let guardrailStatus = 'APPROVE';
+      let guardrailIssues: { rule: string; message: string }[] = [];
+      let requiresHitl    = false;
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const payload = line.slice(6).trim();
+          if (!payload) continue;
+          try {
+            const evt = JSON.parse(payload);
+            if (evt.done) {
+              ragUsed         = evt.rag_used         ?? false;
+              source          = evt.source            ?? '';
+              guardrailStatus = evt.guardrail_status  ?? 'APPROVE';
+              guardrailIssues = evt.guardrail_issues  ?? [];
+              requiresHitl    = evt.requires_hitl     ?? false;
+            } else if (evt.token) {
+              accText += evt.token;
+              this._patchMessage(streamId, { text: accText });
+              this.shouldScroll = true;
+            }
+          } catch { /* ignore malformed SSE lines */ }
+        }
+      }
+
+      const sources = this._buildSources(userMsg, source, ragUsed);
+      this._patchMessage(streamId, {
+        streaming:        false,
+        sources,
+        confidence:       ragUsed ? 0.91 : 0.82,
+        rag_used:         ragUsed,
+        guardrail_status: guardrailStatus,
+        guardrail_issues: guardrailIssues,
+        requires_hitl:    requiresHitl,
+      });
+
+    } catch (err) {
+      this._patchMessage(streamId, {
+        streaming: false,
+        text: this._localFallback(userMsg),
+        sources: ['Fallback local', 'POS live'],
+        confidence: 0.65, rag_used: false,
+      });
+    } finally {
+      this.isTyping.set(false);
+      this.shouldScroll = true;
+    }
+  }
+
+  private _patchMessage(id: string, patch: Partial<Message>): void {
+    this.conversations.update(convs =>
+      convs.map(c =>
+        c.id === this.activeConvId()
+          ? { ...c, messages: c.messages.map(m => m.id === id ? { ...m, ...patch } : m) }
+          : c
+      )
+    );
   }
 
   // ── Sources selon l'origine de la réponse ──────────────────────

@@ -1,0 +1,46 @@
+Module,Route,Statut module,Type,Priorite,Item,Periode
+Authentification & roles,/login,Stable,Realise,,Page de login,Mai 2026
+Authentification & roles,/login,Stable,Realise,,Guards de role (manager / vendeur) sur toutes les routes,Avril-Mai 2026
+Authentification & roles,/login,Stable,Realise,,Resolution des conflits de routing apres fusions successives,Mai 2026
+Authentification & roles,/login,Stable,Todo,Moyenne,Tests unitaires reels (auth-guard.spec.ts et auth.spec.ts ne couvrent qu'un cas trivial),
+Authentification & roles,/login,Stable,Todo,Basse,Gestion de session expiree / refresh (non visible dans le code actuel),
+Dashboard temps reel,/dashboard,Stable,Realise,,KPIs et graphe Sankey (chart.js),Avril 2026
+Dashboard temps reel,/dashboard,Stable,Realise,,Connexion WebSocket a l'agent analyste,Fin avril 2026
+Dashboard temps reel,/dashboard,Stable,Realise,,Guards anti-NaN sur les advisors dynamiques,Fin avril 2026
+Dashboard temps reel,/dashboard,Stable,Realise,,Panel HITL (human-in-the-loop) integre,Juillet 2026
+Dashboard temps reel,/dashboard,Stable,Todo,Moyenne,"dashboard.html/scss ont double de volume en un commit (+699/+316 lignes) - repasser dessus pour factoriser",
+Dashboard temps reel,/dashboard,Stable,Todo,Moyenne,Etoffer dashboard.spec.ts au-dela du test de creation par defaut,
+Inventaire & recommandations IA,/inventory,En cours,Realise,,Connexion aux donnees reelles Ooredoo (magasin I63),Mai 2026
+Inventaire & recommandations IA,/inventory,En cours,Realise,,Recommandations de reapprovisionnement generees par l'agent stock,Juin 2026
+Inventaire & recommandations IA,/inventory,En cours,Realise,,Passage de stockKpi au format objet (nettoyage architecture),Juin 2026
+Inventaire & recommandations IA,/inventory,En cours,Todo,Haute,Supprimer inventory-deprecated.html (875 lignes mortes encore presentes dans le dossier feature),
+Inventaire & recommandations IA,/inventory,En cours,Todo,Moyenne,Completer inventory.spec.ts (actuellement un test de creation vide),
+Coach IA / Chat (RAG),/chat,Stable,Realise,,API chat branchee sur le RAG,Mai 2026
+Coach IA / Chat (RAG),/chat,Stable,Realise,,ConversationStorageService pour la persistance des echanges,Juin 2026
+Coach IA / Chat (RAG),/chat,Stable,Realise,,"Refactor : suppression des imports inutiles, restauration des proprietes manquantes",Juin 2026
+Coach IA / Chat (RAG),/chat,Stable,Todo,Basse,Historique multi-session (pas de vue pour reprendre une conversation passee),
+Conseiller (assistant vendeur),/conseiller,En cours,Realise,,Ecran conseiller accessible aux roles manager + vendeur,Mai 2026
+Conseiller (assistant vendeur),/conseiller,En cours,Todo,Haute,"Module le moins developpe du projet - conseiller.spec.ts est un squelette de scaffolding (22 lignes, aucun test metier)",
+Conseiller (assistant vendeur),/conseiller,En cours,Todo,Moyenne,Clarifier la difference de perimetre avec le Chat / Coach IA,
+Monitoring des agents,/monitoring,Stable,Realise,,"Timeline des agents LangGraph (receive_pos, compute_gap, call_timesfm, detect_urgency, llm_summary)",Mai 2026
+Monitoring des agents,/monitoring,Stable,Realise,,Provider CSV temps reel (CA progressif depuis transactions_2025_2026_v2.csv),Juin 2026
+Monitoring des agents,/monitoring,Stable,Realise,,Reecriture majeure de monitoring.ts (-1776 lignes nettes),Juin 2026
+Monitoring des agents,/monitoring,Stable,Todo,Haute,Verifier la non-regression apres la grosse reecriture de juin (couverture de test faible : 25 lignes de spec),
+Purchase Board (commandes fournisseurs),/purchase-board,Nouveau,Realise,,Kanban drag & drop (Angular CDK) par statut de commande,Juillet 2026
+Purchase Board (commandes fournisseurs),/purchase-board,Nouveau,Realise,,Machine a etats cote client miroir du backend (ALLOWED_TRANSITIONS),Juillet 2026
+Purchase Board (commandes fournisseurs),/purchase-board,Nouveau,Realise,,Mise a jour optimiste avec rollback sur erreur HTTP,Juillet 2026
+Purchase Board (commandes fournisseurs),/purchase-board,Nouveau,Realise,,WebSocket dedie (PurchaseBoardSocketService) + store d'etat,Juillet 2026
+Purchase Board (commandes fournisseurs),/purchase-board,Nouveau,Todo,Haute,"Aucun fichier .spec.ts pour purchase-board, purchase-order-api.service ou purchase-board.store",
+Purchase Board (commandes fournisseurs),/purchase-board,Nouveau,Todo,Moyenne,"Selecteur de magasin fige sur ""I63"" (selectedStore n'a pas d'UI pour changer de store)",
+Purchase Board (commandes fournisseurs),/purchase-board,Nouveau,Todo,Basse,Gerer l'affichage des colonnes ANNULE / LITIGE en dehors du board principal,
+Socle technique,core/ environments/ e2e/,En cours,Realise,,WebSocketService generique partage entre dashboard et purchase-board,Juillet 2026
+Socle technique,core/ environments/ e2e/,En cours,Realise,,"LayoutService, configuration par environnement",Juillet 2026
+Socle technique,core/ environments/ e2e/,En cours,Realise,,Premier test e2e (smoke.spec.ts),Juillet 2026
+Socle technique,core/ environments/ e2e/,En cours,Todo,Moyenne,"websocket.service.ts a gagne +115 lignes en un commit - verifier qu'il ne melange pas trop de responsabilites",
+Socle technique,core/ environments/ e2e/,En cours,Todo,Basse,e2e/ ne contient qu'un seul smoke test,
+Transverse,,,Todo,Haute,Supprimer inventory-deprecated.html (875 lignes de dette technique morte),
+Transverse,,,Todo,Haute,Tests pour le module Purchase Board (module le plus recent et le plus complexe, zero couverture),
+Transverse,,,Todo,Moyenne,"Etoffer les tests scaffoldes (conseiller, inventory, monitoring, api, auth, mock-data n'ont qu'un test ""should create"")",
+Transverse,,,Todo,Moyenne,Mettre en place une CI (aucun workflow .github/workflows detecte),
+Transverse,,,Todo,Moyenne,Documenter le projet reel dans README.md (encore le README genere par defaut par Angular CLI),
+Transverse,,,Todo,Basse,Etendre les tests e2e au-dela du smoke test (parcours login -> dashboard, drag & drop purchase-board),

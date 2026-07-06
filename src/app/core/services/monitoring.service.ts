@@ -58,8 +58,27 @@ export class MonitoringService {
       .pipe(timeout(this.requestTimeout));
   }
 
+  /** Vue consolidée par agent : statut, latence, logs + input/output réels. */
+  fetchAgents() {
+    return this.http.get(`${this.baseUrl}/agents`)
+      .pipe(timeout(this.requestTimeout));
+  }
+
+  /** Logs détaillés (avec input_state / output_state) — filtrables par agent. */
+  fetchLogs(agent?: string, limit = 100) {
+    let url = `${this.baseUrl}/logs?limit=${limit}`;
+    if (agent) url += `&agent=${encodeURIComponent(agent)}`;
+    return this.http.get(url).pipe(timeout(this.requestTimeout));
+  }
+
   fetchAgentCosts() {
     return this.http.get(`${this.baseUrl}/costs`)
+      .pipe(timeout(this.requestTimeout));
+  }
+
+  /** Historique des incidents guardrail (agent_logs) — pour le panneau Monitoring. */
+  fetchGuardrailEvents(limit = 20) {
+    return this.http.get(`${this.baseUrl}/guardrail-events?limit=${limit}`)
       .pipe(timeout(this.requestTimeout));
   }
 

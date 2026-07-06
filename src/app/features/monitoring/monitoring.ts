@@ -6,18 +6,22 @@ import {
 import { CommonModule } from '@angular/common';
 import { MonitoringService } from '../../core/services/monitoring.service';
 import { WebSocketService } from '../../core/services/websocket.service';
-import { Chart, registerables } from 'chart.js'; // Regroupé ici
+import { Chart, registerables } from 'chart.js';
 import { SankeyController, Flow } from 'chartjs-chart-sankey';
 
 Chart.register(...registerables, SankeyController, Flow);
 
 type AgentStatus = 'LIVE' | 'ACTIVE' | 'DONE' | 'RUN' | 'ERROR' | 'IDLE' | 'WAIT';
-type AgentLayer = 'preload' | 'orchestrator' | 'coaching' | 'inventory' | 'support';
+// 'coaching' = agents sales-module (agent_logs) · 'inventory' = agents inventory-module
+// (inventory.agent_runs) · 'support' = RAG partagé. Pas de layer 'preload'/'orchestrator' :
+// aucun agent réel de ce type n'existe dans le code (pas de watcher/orchestrateur instrumenté).
+type AgentLayer = 'coaching' | 'inventory' | 'support';
 
 interface AgentLog {
   time: string;
   level: 'info' | 'warn' | 'error' | 'success';
   message: string;
+  node?: string;
 }
 
 interface AgentDetail {
@@ -27,23 +31,23 @@ interface AgentDetail {
   layer: AgentLayer;
   status: AgentStatus;
   latency: number;
-  decisionLatency?: number;
-  isValidated?: boolean;
   lastRun: string;
   description: string;
+  // Architecture spec (statique — documentation de conception)
   inputs: string[];
   outputs: string[];
   stateFields: string[];
+  // Données live (agent_logs ou inventory.agent_runs)
   logs: AgentLog[];
   metrics: { label: string; value: string; color?: string; }[];
-}
-
-interface StateField {
-  key: string;
-  owner: string;
-  sprint: number;
-  value: string;
-  validated?: boolean;
+  hasTelemetry: boolean;
+  totalRuns?: number;
+  successRate?: number;
+  // 'node' = I/O par étape LangGraph (agent_logs JSONB) · 'run' = résumé d'exécution
+  // (inventory.agent_runs n'a pas de JSONB input/output, seulement des compteurs).
+  granularity?: 'node' | 'run';
+  lastInput?: Record<string, any>;
+  lastOutput?: Record<string, any>;
 }
 
 @Component({
@@ -63,312 +67,111 @@ export class Monitoring implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('failurePredictionChart') failurePredictionChartRef!: ElementRef;
 
   private charts: Chart[] = [];
-
-  // --- ICI : LES DONNÉES DYNAMIQUES ---
-  // --- ICI : LES DONNÉES DYNAMIQUES ---
-  private predictiveData = signal<number[]>([96, 94, 92, 95, 94]);
-  private costDataAPI = signal<number[]>([0.45, 0.32, 0.15, 0.08]);
-  private costDataCompute = signal<number[]>([0.12, 0.08, 0.25, 0.05]);
-  private costDataStorage = signal<number[]>([0.08, 0.15, 0.10, 0.03]); // NEW: Storage costs
-
-  // Failure prediction data per agent (24h forecast)
-  private agentPredictions: Record<string, {
-    historical: number[];
-    forecast: number[];
-    upper: number[];
-    lower: number[];
-  }> = {
-      'app08-watcher': {
-        historical: [0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0],
-        forecast: [0, 1, 0, 1, 1, 2, 1, 2, 1, 2, 2, 3],
-        upper: [1, 2, 1, 2, 2, 3, 2, 3, 2, 3, 3, 4],
-        lower: [0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 1, 2],
-      },
-      'app06': {
-        historical: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        forecast: [0, 0, 0, 1, 0, 1, 1, 1, 2, 1, 2, 2],
-        upper: [1, 1, 1, 2, 1, 2, 2, 2, 3, 2, 3, 3],
-        lower: [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1],
-      },
-      'app02': {
-        historical: [1, 0, 1, 1, 2, 1, 0, 1, 1, 0, 1, 0],
-        forecast: [1, 2, 1, 3, 2, 3, 3, 4, 3, 4, 5, 6],
-        upper: [2, 3, 2, 4, 3, 4, 4, 5, 4, 5, 6, 7],
-        lower: [0, 1, 0, 2, 1, 2, 2, 3, 2, 3, 4, 5],
-      },
-      'app05': {
-        historical: [0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1],
-        forecast: [1, 1, 2, 1, 2, 2, 3, 2, 3, 3, 4, 4],
-        upper: [2, 2, 3, 2, 3, 3, 4, 3, 4, 4, 5, 5],
-        lower: [0, 0, 1, 0, 1, 1, 2, 1, 2, 2, 3, 3],
-      },
-      'app07': {
-        historical: [0, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0],
-        forecast: [1, 1, 1, 2, 2, 2, 3, 2, 3, 3, 4, 5],
-        upper: [2, 2, 2, 3, 3, 3, 4, 3, 4, 4, 5, 6],
-        lower: [0, 0, 0, 1, 1, 1, 2, 1, 2, 2, 3, 4],
-      },
-      'app03-forecast': {
-        historical: [1, 1, 0, 1, 0, 1, 1, 2, 1, 0, 1, 1],
-        forecast: [2, 2, 3, 2, 3, 4, 3, 4, 5, 4, 5, 6],
-        upper: [3, 3, 4, 3, 4, 5, 4, 5, 6, 5, 6, 7],
-        lower: [1, 1, 2, 1, 2, 3, 2, 3, 4, 3, 4, 5],
-      },
-      'app04-gap': {
-        historical: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        forecast: [0, 0, 1, 0, 1, 1, 1, 1, 2, 1, 2, 2],
-        upper: [1, 1, 2, 1, 2, 2, 2, 2, 3, 2, 3, 3],
-        lower: [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1],
-      },
-      'app09': {
-        historical: [0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1],
-        forecast: [1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5],
-        upper: [2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6],
-        lower: [0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4],
-      },
-      'rag': {
-        historical: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        forecast: [0, 0, 0, 0, 1, 0, 1, 1, 1, 1, 2, 1],
-        upper: [1, 1, 1, 1, 2, 1, 2, 2, 2, 2, 3, 2],
-        lower: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0],
-      },
-      'memory': {
-        historical: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        forecast: [0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 1],
-        upper: [1, 1, 1, 1, 1, 1, 2, 1, 2, 2, 2, 2],
-        lower: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-      },
-    };
-
-  // Current displayed prediction (reactive)
-  private currentAgentId = signal<string>('app08-watcher'); // Default to first agent
-  currentPrediction = computed(() => this.agentPredictions[this.currentAgentId()] || this.agentPredictions['app08-watcher']);
+  private chartMap: Record<string, Chart> = {};
+  private pollTimer: any = null;
+  private viewReady = false;
 
   monitoringKPIs: any;
 
   selectedAgentId = signal<string | null>(null);
-  lastCycle = signal('2:32 PM');
-  nextCycle = signal('3:02 PM');
-  cycleStep = signal(9);
-  totalSteps = 12;
-  healthScore = signal<number>(94);
-  conflicts = signal<any[]>([]);
+  lastCycle = signal('—');
+  nextCycle = signal('—');
+  healthScore = signal<number>(0);
 
-  latencyData = {
-    labels: ['2:00', '2:05', '2:10', '2:15', '2:20', '2:25', '2:30', '2:32'],
-    orchestrator: [0.3, 0.3, 0.4, 0.3, 0.3, 0.3, 0.3, 0.3],
-    coach: [2.0, 2.3, 1.9, 2.1, 2.4, 2.0, 2.1, 2.1],
-    inventory: [2.2, 2.5, 2.1, 2.3, 2.6, 2.2, 2.4, 2.4],
-    slaThreshold: [3.0, 3.0, 3.0, 3.0, 3.0, 3.0, 3.0, 3.0], // SLA: 3 seconds max
-    successRate: [98, 97, 99, 98, 96, 99, 98, 99], // Success rate %
+  // ── Mapping nom backend → id agent frontend (8 agents réels uniquement) ──
+  private BACKEND_TO_ID: Record<string, string> = {
+    analyste: 'app02', analyst: 'app02', stratege: 'app05', coach: 'app07', rag: 'rag',
+    guardrail: 'app08',
+    analysis_agent: 'analysis_agent', context_agent: 'context_agent', decision_agent: 'decision_agent',
   };
 
-  // ── Agents ──
+  // ══════════════════════════════════════════════════════════════════════════
+  // Catalogue d'architecture (STATIQUE = documentation de conception).
+  // Limité aux 8 agents qui existent réellement dans le code et écrivent une
+  // télémétrie exploitable :
+  //   - sales-module  → agent_logs        : analyste, stratege, coach, rag, guardrail
+  //   - inventory-module → inventory.agent_runs : analysis_agent, context_agent, decision_agent
+  // (Pas de watcher/orchestrateur/forecast/gap/advisor/memory séparés — aucun
+  // de ces noms n'est jamais instrumenté dans le code, ils n'existent pas.)
+  // Le statut, la latence, les logs, les métriques et l'input/output sont
+  // remplacés en temps réel par /api/monitoring/agents.
+  // ══════════════════════════════════════════════════════════════════════════
   agents = signal<AgentDetail[]>([
     {
-      id: 'app08-watcher', name: 'InventoryWatcher', appId: 'APP08', decisionLatency: 0.1,
-      isValidated: true,
-      layer: 'preload', status: 'LIVE', latency: 0.8, lastRun: '2:32 PM',
-      description: 'Starts BEFORE every cycle. Polls WMS/ERP every 60s, compares stock vs thresholds, generates alerts and writes stock_disponible[] to LangGraph State.',
-      inputs: ['WMS / ERP continuous feed', 'Min/max thresholds'],
-      outputs: ['stock_disponible[]', 'alerte_stock → Orchestrator'],
-      stateFields: ['stock_disponible', 'alerte_stock'],
-      metrics: [
-        { label: 'Poll interval', value: '60s' },
-        { label: 'SKUs monitored', value: '6' },
-        { label: 'Active alerts', value: '2', color: '#E74C3C' },
-        { label: 'Last write', value: '2:32 PM' },
-      ],
-      logs: [
-        { time: '2:32 PM', level: 'success', message: 'stock_disponible[] written — iPhone16Pro: 3 units' },
-        { time: '2:31 PM', level: 'warn', message: 'alerte_stock triggered — IPH16PRO qty=3 below threshold=8' },
-        { time: '2:30 PM', level: 'info', message: 'WMS poll complete — 6 SKUs checked' },
-      ]
-    },
-    {
-      id: 'app06', name: 'Orchestrator LangGraph', appId: 'APP06', decisionLatency: 0.1,
-      isValidated: true,
-      layer: 'orchestrator', status: 'ACTIVE', latency: 0.3, lastRun: '2:32 PM',
-      description: 'Central brain. Receives POS events + enriched context. Reads stock_disponible[] from State. Routes to agents conditionally: urgency=HIGH → Analyst, gap>30% → Strategist, stock_alert → Inventory pipeline, conseil_prêt → Coach.',
-      inputs: ['POS event + context', 'alerte_stock from APP08', 'State snapshot'],
-      outputs: ['Route → Analyst', 'Route → Strategist', 'Route → Coach', 'Route → Inventory pipeline'],
-      stateFields: ['all fields (read + route)'],
-      metrics: [
-        { label: 'Cycle duration', value: '~18s' },
-        { label: 'Routing decisions', value: '4' },
-        { label: 'Degraded mode', value: 'Ready' },
-        { label: 'Active since', value: '9:00 AM' },
-      ],
-      logs: [
-        { time: '2:32 PM', level: 'success', message: 'Cycle #47 started — alerte_stock detected, routing to Inventory pipeline' },
-        { time: '2:32 PM', level: 'info', message: 'stock_disponible[] read from State — guard active for Coach' },
-        { time: '2:31 PM', level: 'info', message: 'Cycle #46 complete in 17.4s' },
-      ]
-    },
-    {
-      id: 'app02', name: 'Agent Analyste', appId: 'APP02', decisionLatency: 0.1,
-      isValidated: true,
-      layer: 'coaching', status: 'LIVE', latency: 1.4, lastRun: '2:32 PM',
+      id: 'app02', name: 'Agent Analyste', appId: 'APP02', layer: 'coaching',
+      status: 'IDLE', latency: 0, lastRun: '—', hasTelemetry: false,
       description: 'Receives live POS feed. Calculates gap vs daily target. Calls TimesFM for EOD forecast. Detects urgency level HIGH / MEDIUM / LOW. Writes to LangGraph State.',
       inputs: ['Live POS feed', 'TimesFM forecast', 'Daily target'],
       outputs: ['gap_objectif', 'niveau_urgence', 'écart_objectif → State'],
       stateFields: ['pos_data', 'écart_objectif', 'niveau_urgence'],
-      metrics: [
-        { label: 'Current gap', value: '44%', color: '#E74C3C' },
-        { label: 'Urgency', value: 'HIGH', color: '#E74C3C' },
-        { label: 'EOD forecast', value: '6,800 DT' },
-        { label: 'Latency', value: '1.4s' },
-      ],
-      logs: [
-        { time: '2:32 PM', level: 'warn', message: 'gap=44% detected — urgency set to HIGH' },
-        { time: '2:32 PM', level: 'success', message: 'TimesFM EOD forecast: 6,800 DT [5,400–8,200]' },
-        { time: '2:32 PM', level: 'info', message: 'POS snapshot processed — 4 advisors, 42 transactions' },
-      ]
+      metrics: [], logs: [],
     },
     {
-      id: 'app05', name: 'Agent Stratège', appId: 'APP05', decisionLatency: 0.1,
-      isValidated: true,
-      layer: 'coaching', status: 'LIVE', latency: 1.1, lastRun: '2:32 PM',
+      id: 'app05', name: 'Agent Stratège', appId: 'APP05', layer: 'coaching',
+      status: 'IDLE', latency: 0, lastRun: '—', hasTelemetry: false,
       description: 'Receives urgency score from State. Queries RAG pgvector for similar past situations. Analyzes weather + event context. Builds optimal strategy per advisor.',
       inputs: ['niveau_urgence from State', 'RAG pgvector query', 'Weather + events context'],
       outputs: ['stratégie → State', 'confiance score'],
       stateFields: ['stratégie'],
-      metrics: [
-        { label: 'Strategy', value: 'upsell_premium' },
-        { label: 'Confidence', value: '0.87', color: '#00B894' },
-        { label: 'RAG results', value: '3 cases' },
-        { label: 'Latency', value: '1.1s' },
-      ],
-      logs: [
-        { time: '2:32 PM', level: 'success', message: 'Strategy "upsell_premium" written — confidence 0.87' },
-        { time: '2:32 PM', level: 'info', message: 'RAG query: 3 similar cases found (rain + concert context)' },
-        { time: '2:31 PM', level: 'info', message: 'Weather signal processed: rain +40% accessories demand' },
-      ]
+      metrics: [], logs: [],
     },
     {
-      id: 'app07', name: 'Agent Coach', appId: 'APP07', decisionLatency: 0.1,
-      isValidated: true,
-      layer: 'coaching', status: 'RUN', latency: 2.1, lastRun: '2:32 PM',
+      id: 'app07', name: 'Agent Coach', appId: 'APP07', layer: 'coaching',
+      status: 'IDLE', latency: 0, lastRun: '—', hasTelemetry: false,
       description: 'Reads strategy from State. READS stock_disponible[] BEFORE any generation — if stock=0, product is EXCLUDED from advice. Optimizes prompt via DSPy. Generates NL advice via vLLM Mistral-7B in < 2s.',
       inputs: ['stratégie from State', 'stock_disponible[] (guard)', 'RAG context'],
       outputs: ['conseil_final → State', 'conseil NLG → Dashboard < 2s'],
       stateFields: ['conseil_final'],
-      metrics: [
-        { label: 'LLM', value: 'Mistral-7B' },
-        { label: 'Latency p95', value: '2.1s' },
-        { label: 'Quality score', value: '0.87', color: '#00B894' },
-        { label: 'Guard active', value: 'YES', color: '#00B894' },
-      ],
-      logs: [
-        { time: '2:32 PM', level: 'success', message: 'stock guard OK — iPhone16Pro badge "last units" added to script' },
-        { time: '2:32 PM', level: 'info', message: 'DSPy prompt optimized — vLLM generation started' },
-        { time: '2:31 PM', level: 'success', message: 'conseil_final written — quality score 0.87' },
-      ]
+      metrics: [], logs: [],
     },
     {
-      id: 'app03-forecast', name: 'ForecastEngine', appId: 'APP03', decisionLatency: 0.1,
-      isValidated: true,
-      layer: 'inventory', status: 'LIVE', latency: 1.8, lastRun: '2:32 PM',
-      description: 'NEW — Replaces TimesFM assistant. Receives SKU alert list from APP08. Loads TimesFM (already instantiated). Forecasts demand D+1 to D+7 per SKU. Calculates trend: rising/falling/stable. Confidence interval 80%.',
-      inputs: ['SKU alert list from APP08', 'TimesFM model (instantiated)'],
-      outputs: ['prévision_demande', 'trend_signal → State'],
-      stateFields: ['prévision_demande'],
-      metrics: [
-        { label: 'Horizon', value: 'D+1 to D+7' },
-        { label: 'MAPE', value: '14.3%' },
-        { label: 'CI', value: '80%' },
-        { label: 'SKUs forecast', value: '3' },
-      ],
-      logs: [
-        { time: '2:32 PM', level: 'success', message: 'Demand forecast: iPhone16Pro D+1=11, D+7=68 — trend: rising' },
-        { time: '2:32 PM', level: 'info', message: 'TimesFM loaded — 3 SKUs in alert queued for forecast' },
-        { time: '2:31 PM', level: 'info', message: 'MAPE validation: 14.3% — within target <20%' },
-      ]
-    },
-    {
-      id: 'app04-gap', name: 'GapDetector', appId: 'APP04', decisionLatency: 0.1,
-      isValidated: true,
-      layer: 'inventory', status: 'ACTIVE', latency: 0.2, lastRun: '2:32 PM',
-      description: 'NEW. Receives stock_disponible + prévision_demande. Calculates days remaining = qty / avg_daily_demand. Score rupture = 1 − (days_remaining / delay_supplier). Detects overstock if qty > 3× demand_30j. Prioritizes SKUs by risk score.',
-      inputs: ['stock_disponible from State', 'prévision_demande from APP03'],
-      outputs: ['scores_risque{sku→score}', 'demand_7j + trend → APP09'],
-      stateFields: ['scores_risque'],
-      metrics: [
-        { label: 'IPH16PRO risk', value: '0.91', color: '#E74C3C' },
-        { label: 'APLWTCH risk', value: '0.88', color: '#E74C3C' },
-        { label: 'AIRPDP3 risk', value: '0.73', color: '#F9A825' },
-        { label: 'Latency', value: '0.2s' },
-      ],
-      logs: [
-        { time: '2:32 PM', level: 'error', message: 'IPH16PRO risk=0.91 CRITICAL — days_remaining=0.27' },
-        { time: '2:32 PM', level: 'error', message: 'APLWTCH risk=0.88 CRITICAL — redistribution recommended' },
-        { time: '2:32 PM', level: 'warn', message: 'AIRPDP3 risk=0.73 HIGH — rain signal driving demand' },
-      ]
-    },
-    {
-      id: 'app09', name: 'InventoryAdvisor', appId: 'APP09', decisionLatency: 0.1,
-      isValidated: true,
-      layer: 'inventory', status: 'LIVE', latency: 2.4, lastRun: '2:32 PM',
-      description: 'CORE of Inventory Advisor. Receives scores_risque + prévision_demande + RAG purchasing policies. Calculates qty_to_order per critical SKU. Budget arbitrage — prioritizes by margin. Generates NLG justification. Writes reco_inventaire → State → read by Agent Coach.',
-      inputs: ['scores_risque from APP04', 'prévision_demande', 'RAG purchasing policies'],
-      outputs: ['reco_inventaire → State', 'alerts → Inventory Dashboard'],
-      stateFields: ['reco_inventaire'],
-      metrics: [
-        { label: 'Recos generated', value: '3' },
-        { label: 'LLM', value: 'Mistral-7B' },
-        { label: 'Confidence', value: '0.91', color: '#00B894' },
-        { label: 'Latency', value: '2.4s' },
-      ],
-      logs: [
-        { time: '2:32 PM', level: 'success', message: 'reco_inventaire — "Order 15 iPhone16Pro before Friday" conf=0.91' },
-        { time: '2:32 PM', level: 'success', message: 'reco_inventaire — "Redistribute 6 AppleWatch from BTQ-08" conf=0.84' },
-        { time: '2:32 PM', level: 'info', message: 'RAG purchasing policy validation passed — budget constraints OK' },
-      ]
-    },
-    {
-      id: 'rag', name: 'RAG Agent', appId: 'APP05-RAG', decisionLatency: 0.1,
-      isValidated: true,
-      layer: 'support', status: 'DONE', latency: 0.9, lastRun: '2:32 PM',
-      description: 'Shared memory agent. PostgreSQL + pgvector. 42k vectors. Serves both Coach Agent and InventoryAdvisor simultaneously. Returns top-3 most similar historical situations.',
-      inputs: ['Semantic query from APP07', 'Semantic query from APP09'],
-      outputs: ['Top-3 similar cases → APP07', 'Purchasing policies → APP09'],
+      id: 'rag', name: 'RAG Agent', appId: 'APP10', layer: 'support',
+      status: 'IDLE', latency: 0, lastRun: '—', hasTelemetry: false,
+      description: 'Shared memory agent. PostgreSQL + pgvector / Milvus. Serves both Coach Agent and inventory agents. Returns top-3 most similar historical situations.',
+      inputs: ['Semantic query from APP07', 'Semantic query from decision_agent'],
+      outputs: ['Top-3 similar cases → APP07', 'Purchasing policies → decision_agent'],
       stateFields: [],
-      metrics: [
-        { label: 'Vectors', value: '42k' },
-        { label: 'Recall', value: '>95%' },
-        { label: 'Latency', value: '0.9s' },
-        { label: 'Serving', value: 'APP07 + APP09' },
-      ],
-      logs: [
-        { time: '2:32 PM', level: 'success', message: 'APP07 query: 3 cases returned — rain+concert context match 0.89' },
-        { time: '2:32 PM', level: 'success', message: 'APP09 query: purchasing policy retrieved — supplier lead time 48h' },
-        { time: '2:31 PM', level: 'info', message: 'pgvector index healthy — 42,000 embeddings loaded' },
-      ]
+      metrics: [], logs: [],
     },
     {
-      id: 'memory', name: 'Memory Agent', appId: 'APP-MEM', decisionLatency: 0.1,
-      isValidated: true,
-      layer: 'support', status: 'IDLE', latency: 0.5, lastRun: '2:30 PM',
-      description: 'Continuous learning. Stores advisor feedback. Updates Milvus embeddings. Calculates drift (threshold 0.15). Signals MLflow if drift detected.',
-      inputs: ['Advisor feedback', 'LangGraph State snapshot'],
-      outputs: ['Milvus update', 'MLflow signal if drift > 0.15'],
+      id: 'app08', name: 'Agent Guardrail', appId: 'APP08', layer: 'coaching',
+      status: 'IDLE', latency: 0, lastRun: '—', hasTelemetry: false,
+      description: 'Validates every Coach reply before delivery: checks stock consistency, banned claims, price accuracy and confidence threshold. APPROVE / REWRITE / ESCALATE / BLOCK, with human validation triggered on HIGH/CRITICAL urgency escalations.',
+      inputs: ['message_for_advisor from APP07', 'inventory snapshot', 'rag_used + confidence'],
+      outputs: ['guardrail_status → Dashboard', 'safe_fallback (if BLOCK)'],
+      stateFields: ['guardrail_status'],
+      metrics: [], logs: [],
+    },
+    {
+      id: 'analysis_agent', name: 'Inventory Analysis Agent', appId: 'INV-A', layer: 'inventory',
+      status: 'IDLE', latency: 0, lastRun: '—', hasTelemetry: false,
+      description: 'Folder src/agents/analysis (fetch → compute → reason). DB-first with CSV fallback. Computes baseline stock metrics and two-layer risk classification per SKU. LLM used as evaluator, not narrator.',
+      inputs: ['sku', 'store_id', 'business_objective', 'preloaded_stock / preloaded_product (batch pre-fetch)'],
+      outputs: ['analysis_report { stock, forecast, metrics, risk_assessment, constraints }'],
       stateFields: [],
-      metrics: [
-        { label: 'Drift score', value: '0.08' },
-        { label: 'Last update', value: '2:30 PM' },
-        { label: 'Feedback stored', value: '7,821' },
-        { label: 'Threshold', value: '0.15' },
-      ],
-      logs: [
-        { time: '2:30 PM', level: 'info', message: 'Drift check: 0.08 — below threshold 0.15, no MLflow signal' },
-        { time: '2:28 PM', level: 'success', message: 'Milvus updated — 3 new feedback embeddings added' },
-        { time: '2:25 PM', level: 'info', message: 'Feedback stored: Karim approved coaching card ADV-02' },
-      ]
+      metrics: [], logs: [],
+    },
+    {
+      id: 'context_agent', name: 'Inventory Context Agent', appId: 'INV-C', layer: 'inventory',
+      status: 'IDLE', latency: 0, lastRun: '—', hasTelemetry: false,
+      description: 'Folder src/agents/context (fetch_signals → interpret). Learns from historical uplifts (promotions/weather/holidays) and produces a calibrated demand_uplift_pct for the next 7 days, consumed by the decision agent.',
+      inputs: ['sku', 'store_id', 'signals (weather, promotions, holidays, events, historical patterns)'],
+      outputs: ['context_report { demand_uplift_pct, interpretation, confidence, dominant_signal }'],
+      stateFields: [],
+      metrics: [], logs: [],
+    },
+    {
+      id: 'decision_agent', name: 'Inventory Decision Agent', appId: 'INV-D', layer: 'inventory',
+      status: 'IDLE', latency: 0, lastRun: '—', hasTelemetry: false,
+      description: 'Folder src/agents/decision (constraints_check → decide). Combines analysis_report + context_report into a concrete recommendation (ORDER / HOLD / MONITOR / EXPEDITE) with budget/margin arbitrage and graceful degradation if context is missing.',
+      inputs: ['baseline_report (from analysis_agent)', 'context_report (from context_agent)', 'adjusted_metrics'],
+      outputs: ['decision { action, order_qty, urgency, confidence, escalate_to_human }'],
+      stateFields: [],
+      metrics: [], logs: [],
     },
   ]);
 
   // ── Computed ──
-  // AJOUT : Computed signal to solve template errors
   selectedAgent = computed(() => {
     const id = this.selectedAgentId();
     return id ? this.agents().find(a => a.id === id) || null : null;
@@ -376,77 +179,85 @@ export class Monitoring implements OnInit, AfterViewInit, OnDestroy {
 
   selectAgent(id: string) {
     this.selectedAgentId.update(cur => cur === id ? null : id);
-
-    // Update failure prediction chart for selected agent
-    if (id && this.agentPredictions[id]) {
-      this.currentAgentId.set(id);
-      this.updateFailurePredictionChart();
-    }
   }
-  private updateFailurePredictionChart() {
-    const data = this.currentPrediction();
 
-    this.charts.forEach(chart => {
-      if (chart.data.datasets.some(d => d.label === 'Historical Failures')) {
-        chart.data.datasets[0].data = [...data.historical, null, null, null, null, null, null, null, null, null, null, null, null];
-        chart.data.datasets[1].data = [null, null, null, null, null, null, null, null, null, null, null, null, ...data.forecast];
-        chart.data.datasets[2].data = [null, null, null, null, null, null, null, null, null, null, null, null, ...data.upper];
-        chart.data.datasets[3].data = [null, null, null, null, null, null, null, null, null, null, null, null, ...data.lower];
-        chart.update('active');
-      }
-    });
+  /** lastInput / lastOutput → tableau [{key, value}] pour le template. */
+  ioEntries(obj: Record<string, any> | undefined): { key: string; value: string }[] {
+    if (!obj) return [];
+    return Object.entries(obj).map(([key, value]) => ({
+      key,
+      value: value === null || value === undefined ? '—' : String(value),
+    }));
   }
+
   liveCount = computed(() => this.agents().filter(a => a.status === 'LIVE').length);
   activeCount = computed(() => this.agents().filter(a => a.status === 'ACTIVE').length);
   errorCount = computed(() => this.agents().filter(a => a.status === 'ERROR').length);
 
-  totalLatency = computed(() => {
-    const sum = this.agents().reduce((a, b) => a + b.latency, 0);
-    return sum.toFixed(1);
-  });
+  totalLatency = computed(() =>
+    this.agents().reduce((a, b) => a + b.latency, 0).toFixed(1)
+  );
 
   agentsByLayer = computed(() => {
     const layers: Record<AgentLayer, AgentDetail[]> = {
-      preload: [], orchestrator: [], coaching: [],
-      inventory: [], support: [],
+      coaching: [], inventory: [], support: [],
     };
     this.agents().forEach(a => layers[a.layer].push(a));
     return layers;
   });
 
-  // ── LangGraph State ──
-  stateFields = [
-    { key: 'pos_data', owner: 'APP02', sprint: 1, value: 'live', validated: true },
-    { key: 'écart_objectif', owner: 'APP02', sprint: 1, value: '44%', validated: true },
-    { key: 'niveau_urgence', owner: 'APP02', sprint: 1, value: 'HIGH', validated: true },
-    { key: 'stratégie', owner: 'APP05', sprint: 1, value: 'upsell_premium', validated: true },
-    { key: 'conseil_final', owner: 'APP07', sprint: 1, value: 'generated', validated: true },
-    { key: 'stock_disponible', owner: 'APP08', sprint: 2, value: '{IPH16PRO:3…}', validated: true },
-    { key: 'alerte_stock', owner: 'APP08', sprint: 2, value: 'IPH16PRO,APLWTCH', validated: true },
-    { key: 'prévision_demande', owner: 'APP03', sprint: 2, value: '{IPH16PRO:11…}', validated: true },
-    { key: 'scores_risque', owner: 'APP04', sprint: 2, value: '{IPH16PRO:0.91}', validated: true },
-    { key: 'reco_inventaire', owner: 'APP09', sprint: 2, value: 'Order 15 units', validated: false },
-  ];
+  // ── LangGraph State (dérivé du dernier cycle réel via /kpis — cycle sales) ──
+  // Uniquement les champs réellement écrits par les 4 agents sales (agent_logs /
+  // last_result). Les agents inventaire (analysis_agent/context_agent/decision_agent)
+  // n'écrivent pas dans ce state — leur sortie réelle (analysis_report/context_report/
+  // decision) est visible dans leur propre panneau "Last output" une fois sélectionnés.
+  stateFields = computed(() => {
+    const k = this.monitoringKPIs() || {};
+    const has = (x: any) => x !== undefined && x !== null && x !== '' && x !== 0;
+    return [
+      { key: 'pos_data', owner: 'APP02', sprint: 1, value: has(k.cycle_id) ? 'live' : '—' },
+      { key: 'écart_objectif', owner: 'APP02', sprint: 1, value: has(k.gap_pct) ? `${k.gap_pct}%` : '—' },
+      { key: 'niveau_urgence', owner: 'APP02', sprint: 1, value: k.urgency_level || '—' },
+      { key: 'stratégie', owner: 'APP05', sprint: 1, value: has(k.nb_actions) ? `${k.nb_actions} actions` : '—' },
+      { key: 'conseil_final', owner: 'APP07', sprint: 1, value: has(k.completed_at) ? 'generated' : '—' },
+      { key: 'rag_used', owner: 'APP10', sprint: 1, value: has(k.rag_used) ? `${k.nb_rag_scripts || 0} scripts` : '—' },
+    ];
+  });
 
   layers: { key: AgentLayer; label: string; color: string }[] = [
-    { key: 'preload', label: 'Pre-load', color: '#00B894' },
-    { key: 'orchestrator', label: 'Orchestrator', color: '#6C5CE7' },
-    { key: 'coaching', label: 'Coaching', color: '#6C5CE7' },
+    { key: 'coaching', label: 'Coaching (sales)', color: '#6C5CE7' },
     { key: 'inventory', label: 'Inventory', color: '#00B894' },
     { key: 'support', label: 'Support', color: '#888780' },
   ];
 
-  // ── Guardrail history (S8.4) ─────────────────────────────────────────────
+  // ── Guardrail history — historique DB (agent_logs) fusionné avec le flux
+  // WebSocket temps réel. Sans l'historique DB, le panneau repartait à zéro
+  // à chaque rechargement de page tant qu'aucun nouvel incident ne survenait
+  // pendant la session en cours. ──
   private ws = inject(WebSocketService);
+  private dbGuardrailHistory = signal<{
+    status: string; advisor: string;
+    issues: { rule: string; message: string }[];
+    urgency: string; timestamp: string;
+  }[]>([]);
 
-  guardrailHistory = computed(() => this.ws.guardrailHistory());
+  guardrailHistory = computed(() => {
+    const live = this.ws.guardrailHistory();
+    const seen = new Set(live.map(e => `${e.advisor}|${e.timestamp}`));
+    const historical = this.dbGuardrailHistory().filter(
+      e => !seen.has(`${e.advisor}|${e.timestamp}`)
+    );
+    return [...live, ...historical]
+      .sort((a, b) => (b.timestamp > a.timestamp ? 1 : -1))
+      .slice(0, 20);
+  });
 
   guardrailStats = computed(() => {
     const h = this.guardrailHistory();
     return {
-      total:    h.length,
-      blocks:   h.filter(e => e.status === 'BLOCK').length,
-      escalates:h.filter(e => e.status === 'ESCALATE').length,
+      total: h.length,
+      blocks: h.filter(e => e.status === 'BLOCK').length,
+      escalates: h.filter(e => e.status === 'ESCALATE').length,
       rewrites: h.filter(e => e.status === 'REWRITE').length,
     };
   });
@@ -456,41 +267,200 @@ export class Monitoring implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngOnInit() {
-    this.startSimulation();
-    this.monitoringService.fetchAgentDependencies().subscribe((data: any) => {
-      this.conflicts.set(data);
-    });
+    // Premier chargement + refresh périodique (données réelles uniquement)
+    this.refreshAll();
+    this.pollTimer = setInterval(() => this.refreshAll(), 15000);
   }
 
   ngAfterViewInit() {
-    setTimeout(() => this.initCharts(), 120);
+    setTimeout(() => {
+      this.initCharts();
+      this.viewReady = true;
+      this.refreshAll();   // pousse les données déjà chargées dans les charts
+    }, 120);
   }
 
   ngOnDestroy() {
+    if (this.pollTimer) clearInterval(this.pollTimer);
     this.charts.forEach(c => c.destroy());
   }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Rafraîchissement des données réelles
+  // ══════════════════════════════════════════════════════════════════════════
+
+  /** Rafraîchissement manuel (bouton Refresh). */
+  refresh() { this.refreshAll(); }
+
+  private refreshAll() {
+    this.monitoringService.fetchKPIs();
+    this.refreshAgents();
+    this.refreshPerformance();
+    this.refreshCosts();
+    this.refreshPrediction();
+    this.refreshTimeline();
+    this.refreshGuardrailHistory();
+  }
+
+  private refreshGuardrailHistory() {
+    this.monitoringService.fetchGuardrailEvents(20).subscribe({
+      next: (res: any) => this.dbGuardrailHistory.set(res?.events ?? []),
+      error: () => { /* garde le dernier état connu */ },
+    });
+  }
+
+  private refreshAgents() {
+    this.monitoringService.fetchAgents().subscribe({
+      next: (res: any) => {
+        const live: any[] = res?.agents ?? [];
+        let latestRun = '';
+        this.agents.update(list => list.map(a => {
+          const match = live.find(l =>
+            this.BACKEND_TO_ID[String(l.agent_name || '').toLowerCase()] === a.id ||
+            l.agent_id === a.appId);
+          if (!match) return { ...a, hasTelemetry: false };
+          if (match.last_run && match.last_run > latestRun) latestRun = match.last_run;
+          return {
+            ...a,
+            status: (match.status as AgentStatus) ?? a.status,
+            latency: match.avg_latency_s ?? a.latency,
+            lastRun: match.last_run ?? a.lastRun,
+            logs: match.logs ?? [],
+            metrics: match.metrics ?? [],
+            totalRuns: match.total_runs,
+            successRate: match.success_rate,
+            ioInputs: match.inputs ?? [],
+            ioOutputs: match.outputs ?? [],
+            lastInput: match.last_input ?? {},
+            lastOutput: match.last_output ?? {},
+            hasTelemetry: true,
+          };
+        }));
+        if (latestRun) this.lastCycle.set(latestRun);
+      },
+      error: () => { /* garde le dernier état connu */ },
+    });
+  }
+
+  private refreshPerformance() {
+    this.monitoringService.fetchAgentPerformance().subscribe({
+      next: (res: any) => {
+        const agents: any[] = (res?.agents ?? []).slice(0, 8);
+        const chart = this.chartMap['latency'];
+        if (!chart || !agents.length) return;
+        chart.data.labels = agents.map(a => a.agent_name);
+        chart.data.datasets[0].data = agents.map(a => a.avg_latency_s ?? 0);
+        chart.data.datasets[1].data = agents.map(a => Math.round((a.success_rate ?? 0) * 100));
+        chart.update('none');
+      },
+      error: () => {},
+    });
+  }
+
+  private refreshCosts() {
+    this.monitoringService.fetchAgentCosts().subscribe({
+      next: (res: any) => {
+        const chart = this.chartMap['cost'];
+        if (!chart) return;
+        const byAgent: Record<string, number> = res?.by_agent ?? {};
+        const labels = Object.keys(byAgent);
+        if (labels.length) {
+          chart.data.labels = labels;
+          chart.data.datasets[0].data = labels.map(k => byAgent[k]);
+        } else {
+          chart.data.labels = ['API LLM', 'Compute', 'Storage'];
+          chart.data.datasets[0].data = [
+            res?.api_cost_tnd ?? 0, res?.compute_cost_tnd ?? 0, res?.storage_cost_tnd ?? 0,
+          ];
+        }
+        chart.update('none');
+      },
+      error: () => {},
+    });
+  }
+
+  private refreshPrediction() {
+    this.monitoringService.fetchFailurePrediction().subscribe({
+      next: (res: any) => {
+        const hist: number[] = res?.historical ?? [];
+        const fc: number[] = res?.forecast ?? [];
+        const up: number[] = res?.upper ?? [];
+        const lo: number[] = res?.lower ?? [];
+
+        // Score de santé = 100 − risque courant
+        const risk = res?.risk_score ?? (hist.length ? hist[hist.length - 1] : 0);
+        this.healthScore.set(Math.round(100 - risk * 100));
+
+        // Chart santé prédictive (12 derniers points)
+        const health = this.chartMap['health'];
+        if (health) {
+          const series = hist.slice(-12).map(r => Math.round(100 - r * 100));
+          health.data.labels = series.map((_, i) => i === series.length - 1 ? 'Now' : `-${series.length - 1 - i}`);
+          health.data.datasets[0].data = series;
+          health.update('none');
+        }
+
+        // Chart failure prediction (risque % : 12 historiques + 12 forecast)
+        const fail = this.chartMap['failure'];
+        if (fail) {
+          const h12 = hist.slice(-12).map(r => Math.round(r * 100));
+          const pad = Array(Math.max(0, 12 - h12.length)).fill(null).concat(h12).slice(-12);
+          const nulls12 = Array(12).fill(null);
+          fail.data.datasets[0].data = [...pad, ...nulls12];
+          fail.data.datasets[1].data = [...nulls12, ...fc.slice(0, 12).map(r => Math.round(r * 100))];
+          fail.data.datasets[2].data = [...nulls12, ...up.slice(0, 12).map(r => Math.round(r * 100))];
+          fail.data.datasets[3].data = [...nulls12, ...lo.slice(0, 12).map(r => Math.round(r * 100))];
+          fail.update('none');
+        }
+      },
+      error: () => {},
+    });
+  }
+
+  private refreshTimeline() {
+    this.monitoringService.fetchExecutionTimeline().subscribe({
+      next: (res: any) => {
+        const events: any[] = res?.events ?? [];
+        const chart = this.chartMap['gantt'];
+        if (!chart || !events.length) return;
+        chart.data.labels = events.map(e => e.agent);
+        chart.data.datasets[0].data = events.map(e => [
+          +(e.start_ms / 1000).toFixed(2), +(e.end_ms / 1000).toFixed(2),
+        ]);
+        chart.update('none');
+      },
+      error: () => {},
+    });
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Charts (structure ; données injectées par les refresh*)
+  // ══════════════════════════════════════════════════════════════════════════
 
   private initCharts() {
     this.charts.forEach(c => c.destroy());
     this.charts = [];
+    this.chartMap = {};
 
-    // --- Sankey Diagram (Dependency Flow) ---
+    // ── Sankey (flux d'architecture — design, statique) ──
     if (this.dependencyFlowCanvas) {
       const ctx = this.dependencyFlowCanvas.nativeElement.getContext('2d');
       if (ctx) {
-        this.charts.push(new Chart(ctx, {
+        const c = new Chart(ctx, {
           type: 'sankey',
           data: {
             datasets: [{
               label: 'Agent Flow',
               data: [
-                { from: 'Watcher', to: 'Orchestrator', flow: 10 },
-                { from: 'Orchestrator', to: 'Analyst', flow: 5 },
-                { from: 'Orchestrator', to: 'Inventory', flow: 5 },
-                { from: 'Analyst', to: 'Strategist', flow: 4 },
-                { from: 'Strategist', to: 'Coach', flow: 4 },
-                { from: 'Inventory', to: 'Coach', flow: 2 },
-                { from: 'Coach', to: 'RAG', flow: 3 }
+                { from: 'Supervisor', to: 'Analyste', flow: 4 },
+                { from: 'Supervisor', to: 'Analysis Agent', flow: 4 },
+                { from: 'Analyste', to: 'Stratège', flow: 4 },
+                { from: 'Analysis Agent', to: 'Context Agent', flow: 4 },
+                { from: 'Analysis Agent', to: 'Decision Agent', flow: 4 },
+                { from: 'Context Agent', to: 'Decision Agent', flow: 4 },
+                { from: 'Stratège', to: 'RAG', flow: 3 },
+                { from: 'Decision Agent', to: 'RAG', flow: 3 },
+                { from: 'RAG', to: 'Coach', flow: 4 }
               ],
               colorFrom: () => '#6C5CE7',
               colorTo: () => '#00B894',
@@ -499,408 +469,208 @@ export class Monitoring implements OnInit, AfterViewInit, OnDestroy {
             }]
           } as any,
           options: {
-            responsive: true,
-            maintainAspectRatio: false,
+            responsive: true, maintainAspectRatio: false,
             plugins: { legend: { display: false } }
           }
-        }));
+        });
+        this.charts.push(c); this.chartMap['sankey'] = c;
       }
     }
 
-    // Chart 2 — Enhanced Latency with SLA + Success Rate
+    // ── Latence + taux de succès par agent (réel via /performance) ──
     if (this.latencyChartRef) {
       const ctx = this.latencyChartRef.nativeElement.getContext('2d');
-      this.charts.push(new Chart(ctx, {
-        type: 'line',
+      const c = new Chart(ctx, {
+        type: 'bar',
         data: {
-          labels: this.latencyData.labels,
+          labels: [],
           datasets: [
             {
-              label: 'Orchestrator',
-              data: this.latencyData.orchestrator,
-              borderColor: '#6C5CE7',
-              backgroundColor: 'transparent',
-              borderWidth: 2,
-              pointRadius: 3,
-              tension: 0.3,
-              yAxisID: 'y',
+              type: 'bar', label: 'Avg latency (s)', data: [],
+              backgroundColor: '#6C5CE7', borderRadius: 4, yAxisID: 'y',
             },
             {
-              label: 'Coach Agent',
-              data: this.latencyData.coach,
-              borderColor: '#00B894',
-              backgroundColor: 'transparent',
-              borderWidth: 2,
-              pointRadius: 3,
-              tension: 0.3,
-              yAxisID: 'y',
+              type: 'line', label: 'Success rate (%)', data: [],
+              borderColor: '#2ECC71', backgroundColor: 'rgba(46,204,113,0.1)',
+              borderWidth: 2.5, pointRadius: 4, pointBackgroundColor: '#2ECC71',
+              tension: 0.3, yAxisID: 'y1', fill: false,
+            }
+          ]
+        } as any,
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: { position: 'top', labels: { font: { size: 10 }, usePointStyle: true, padding: 10 } },
+            tooltip: {
+              callbacks: {
+                label: (c: any) => c.dataset.label === 'Success rate (%)'
+                  ? ` ${c.dataset.label}: ${c.parsed.y}%`
+                  : ` ${c.dataset.label}: ${c.parsed.y}s`,
+              }
+            }
+          },
+          scales: {
+            y: {
+              type: 'linear', position: 'left', beginAtZero: true,
+              ticks: { font: { size: 10 }, callback: (v: any) => v + 's' },
+              grid: { color: 'rgba(0,0,0,0.05)' },
+              title: { display: true, text: 'Latency (s)', font: { size: 11, weight: 'bold' }, color: '#6b7280' }
+            },
+            y1: {
+              type: 'linear', position: 'right', min: 0, max: 100,
+              ticks: { font: { size: 10 }, callback: (v: any) => v + '%' },
+              grid: { display: false },
+              title: { display: true, text: 'Success (%)', font: { size: 11, weight: 'bold' }, color: '#2ECC71' }
+            },
+            x: { ticks: { font: { size: 9 }, maxRotation: 45, minRotation: 0 }, grid: { display: false } }
+          }
+        }
+      });
+      this.charts.push(c); this.chartMap['latency'] = c;
+    }
+
+    // ── Santé prédictive (réel via /predict) ──
+    if (this.predictiveHealthChartRef) {
+      const ctx = this.predictiveHealthChartRef.nativeElement.getContext('2d');
+      const c = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [{
+            label: 'Stabilité', data: [],
+            borderColor: '#00B894', backgroundColor: 'rgba(0,184,148,0.1)',
+            fill: true, tension: 0.4
+          }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          scales: { y: { min: 0, max: 100 } },
+          plugins: { legend: { display: false } }
+        }
+      });
+      this.charts.push(c); this.chartMap['health'] = c;
+    }
+
+    // ── Coûts par agent (réel via /costs) ──
+    if (this.costAnalysisChartRef) {
+      const ctx = this.costAnalysisChartRef.nativeElement.getContext('2d');
+      const c = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: [],
+          datasets: [{
+            label: 'Cost (TND)', data: [],
+            backgroundColor: '#6C5CE7', borderRadius: 4,
+          }]
+        },
+        options: {
+          indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: (c: any) => ` ${c.parsed.x?.toFixed?.(4) ?? c.parsed.x} TND` } }
+          },
+          scales: {
+            x: { beginAtZero: true, ticks: { font: { size: 10 }, callback: (v: any) => v + '' },
+                 title: { display: true, text: 'Cost (TND)', font: { size: 11, weight: 'bold' }, color: '#6b7280' } },
+            y: { ticks: { font: { size: 11 } } }
+          }
+        }
+      });
+      this.charts.push(c); this.chartMap['cost'] = c;
+    }
+
+    // ── Timeline d'exécution / Gantt (réel via /timeline) ──
+    if (this.ganttChartRef) {
+      const ctx = this.ganttChartRef.nativeElement.getContext('2d');
+      const c = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: [],
+          datasets: [{
+            label: "Intervalle d'exécution (s)", data: [],
+            backgroundColor: '#6C5CE7', borderRadius: 5, borderSkipped: false
+          }]
+        },
+        options: {
+          indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: { x: { beginAtZero: true, title: { display: true, text: 'seconds', font: { size: 10 } } } }
+        }
+      });
+      this.charts.push(c); this.chartMap['gantt'] = c;
+    }
+
+    // ── Prédiction de risque de panne (réel via /predict) ──
+    if (this.failurePredictionChartRef) {
+      const ctx = this.failurePredictionChartRef.nativeElement.getContext('2d');
+      const labels = [
+        '-12h', '-11h', '-10h', '-9h', '-8h', '-7h', '-6h', '-5h', '-4h', '-3h', '-2h', '-1h',
+        'Now', '+1h', '+2h', '+3h', '+4h', '+5h', '+6h', '+7h', '+8h', '+9h', '+10h', '+11h'
+      ];
+      const c = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: 'Historical risk (%)', data: [],
+              borderColor: '#6C5CE7', backgroundColor: 'rgba(108,92,231,0.1)',
+              borderWidth: 2, pointRadius: 3, pointBackgroundColor: '#6C5CE7', fill: false, tension: 0.3,
             },
             {
-              label: 'Inventory Agent',
-              data: this.latencyData.inventory,
-              borderColor: '#F9A825',
-              backgroundColor: 'transparent',
-              borderWidth: 2,
-              pointRadius: 3,
-              tension: 0.3,
-              yAxisID: 'y',
+              label: 'Predicted risk (%)', data: [],
+              borderColor: '#E74C3C', backgroundColor: 'rgba(231,76,60,0.1)',
+              borderWidth: 2, borderDash: [5, 5], pointRadius: 4, pointBackgroundColor: '#E74C3C', fill: false, tension: 0.3,
             },
             {
-              label: 'SLA Threshold (3s)',
-              data: this.latencyData.slaThreshold,
-              borderColor: '#E74C3C',
-              backgroundColor: 'rgba(231, 76, 60, 0.05)',
-              borderWidth: 2,
-              borderDash: [8, 4],
-              pointRadius: 0,
-              fill: 'origin',
-              tension: 0,
-              yAxisID: 'y',
+              label: 'Upper Bound', data: [],
+              borderColor: 'rgba(231,76,60,0.3)', backgroundColor: 'rgba(231,76,60,0.05)',
+              borderWidth: 1, borderDash: [2, 2], pointRadius: 0, fill: '+1', tension: 0.3,
             },
             {
-              label: 'Success Rate',
-              data: this.latencyData.successRate,
-              borderColor: '#2ECC71',
-              backgroundColor: 'rgba(46, 204, 113, 0.1)',
-              borderWidth: 2.5,
-              pointRadius: 4,
-              pointBackgroundColor: '#2ECC71',
-              pointBorderColor: '#fff',
-              pointBorderWidth: 2,
-              tension: 0.3,
-              yAxisID: 'y1',
-              fill: false,
+              label: 'Lower Bound', data: [],
+              borderColor: 'rgba(231,76,60,0.3)', backgroundColor: 'rgba(231,76,60,0.05)',
+              borderWidth: 1, borderDash: [2, 2], pointRadius: 0, fill: false, tension: 0.3,
             }
           ]
         },
         options: {
-          responsive: true,
-          maintainAspectRatio: false,
+          responsive: true, maintainAspectRatio: false,
           interaction: { mode: 'index', intersect: false },
           plugins: {
             legend: {
               position: 'top',
               labels: {
-                font: { size: 10, family: 'Inter' },
-                usePointStyle: true,
-                pointStyleWidth: 10,
-                padding: 10,
-                filter: (item) => {
-                  // Group latency agents together, show SLA and Success Rate
-                  return true;
-                }
+                font: { size: 10 }, usePointStyle: true, padding: 12,
+                filter: (item: any) => item.text !== 'Upper Bound' && item.text !== 'Lower Bound'
               }
             },
             tooltip: {
               callbacks: {
-                label: (context) => {
-                  const label = context.dataset.label || '';
-                  const value = context.parsed.y;
-                  if (label === 'Success Rate') {
-                    return ` ${label}: ${value}%`;
-                  } else if (label.includes('SLA')) {
-                    return ` ${label}`;
-                  } else {
-                    return ` ${label}: ${value}s`;
-                  }
-                }
+                label: (c: any) => (c.datasetIndex === 0 || c.datasetIndex === 1)
+                  ? ` ${c.dataset.label}: ${c.parsed.y}%` : ''
               }
             }
           },
           scales: {
             y: {
-              type: 'linear',
-              position: 'left',
-              min: 0,
-              max: 4,
-              ticks: {
-                font: { size: 10 },
-                callback: (value) => value + 's',
-              },
+              beginAtZero: true, max: 100,
+              ticks: { font: { size: 10 }, callback: (v: any) => v + '%' },
               grid: { color: 'rgba(0,0,0,0.05)' },
-              title: {
-                display: true,
-                text: 'Latency (seconds)',
-                font: { size: 11, weight: 'bold' },
-                color: '#6b7280'
-              }
+              title: { display: true, text: 'Failure risk (%)', font: { size: 11, weight: 'bold' }, color: '#6b7280' }
             },
-            y1: {
-              type: 'linear',
-              position: 'right',
-              min: 90,
-              max: 100,
-              ticks: {
-                font: { size: 10 },
-                callback: (value) => value + '%',
-              },
-              grid: { display: false },
-              title: {
-                display: true,
-                text: 'Success Rate (%)',
-                font: { size: 11, weight: 'bold' },
-                color: '#2ECC71'
-              }
-            },
-            x: {
-              ticks: { font: { size: 10 } },
-              grid: { display: false },
-            }
-          }
-        }
-      }));
-    }
-
-    // Chart 4 — Santé Prédictive
-    if (this.predictiveHealthChartRef) {
-      const ctx = this.predictiveHealthChartRef.nativeElement.getContext('2d');
-      const chart = new Chart(ctx, {
-        type: 'line',
-        data: {
-          labels: ['-2h', '-1h', '-30m', '-15m', 'Maintenant'],
-          datasets: [{
-            label: 'Stabilité',
-            data: this.predictiveData(),
-            borderColor: '#00B894',
-            backgroundColor: 'rgba(0, 184, 148, 0.1)',
-            fill: true,
-            tension: 0.4
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          scales: { y: { min: 0, max: 100 } },
-          animation: { duration: 1000 }
-        }
-      });
-      this.charts.push(chart);
-    }
-
-    // --- Coûts (Stacked) - 3 layers: API + Compute + Storage ---
-    if (this.costAnalysisChartRef) {
-      const ctx = this.costAnalysisChartRef.nativeElement.getContext('2d');
-      const chart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-          labels: ['Coach', 'Inventory', 'Forecaster', 'RAG'],
-          datasets: [
-            {
-              label: 'API LLM',
-              data: this.costDataAPI(),
-              backgroundColor: '#6C5CE7',
-              borderRadius: 4,
-            },
-            {
-              label: 'Compute',
-              data: this.costDataCompute(),
-              backgroundColor: '#A29BFE',
-              borderRadius: 4,
-            },
-            {
-              label: 'Storage',
-              data: this.costDataStorage(),
-              backgroundColor: '#DFE6E9',
-              borderRadius: 4,
-            }
-          ]
-        },
-        options: {
-          indexAxis: 'y',
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: {
-              position: 'top',
-              labels: {
-                font: { size: 10, family: 'Inter' },
-                usePointStyle: true,
-                pointStyleWidth: 10,
-                padding: 12,
-              }
-            },
-            tooltip: {
-              callbacks: {
-                label: (context) => {
-                  const label = context.dataset.label || '';
-                  const value = context.parsed.x ? context.parsed.x.toFixed(2) : '0.00';
-                  return ` ${label}: $${value}`;
-                },
-                footer: (tooltipItems) => {
-                  const total = tooltipItems.reduce((sum, item) => sum + (item.parsed.x || 0), 0);
-                  return `Total: $${total.toFixed(2)}`;
-                }
-              }
-            } 
-          },
-          scales: {
-            x: {
-              stacked: true,
-              ticks: {
-                font: { size: 10 },
-                callback: (value) => '$' + value
-              },
-              title: {
-                display: true,
-                text: 'Cost (USD)',
-                font: { size: 11, weight: 'bold' },
-                color: '#6b7280'
-              }
-            },
-            y: {
-              stacked: true,
-              ticks: {
-                font: { size: 11 }
-              }
-            }
+            x: { ticks: { font: { size: 9 }, maxRotation: 45, minRotation: 45 }, grid: { display: false } }
           }
         }
       });
-      this.charts.push(chart);
-    }
-
-    if (this.ganttChartRef) {
-      const ctx = this.ganttChartRef.nativeElement.getContext('2d');
-      this.charts.push(new Chart(ctx, {
-        type: 'bar',
-        data: {
-          labels: ['Watcher', 'Orchestrator', 'Analyst', 'Coach'],
-          datasets: [{
-            label: 'Intervalle d\'exécution (s)',
-            data: [[0, 2], [2, 3], [3, 7], [7, 12]],
-            backgroundColor: '#6C5CE7',
-            borderRadius: 5,
-            borderSkipped: false
-          }]
-        },
-        options: {
-          indexAxis: 'y',
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: { legend: { display: false } }
-        }
-      }));
-    }
-    // Chart 6 — Failure Prediction (Prophet ML)
-    if (this.failurePredictionChartRef) {
-      const ctx = this.failurePredictionChartRef.nativeElement.getContext('2d');
-      const data = this.currentPrediction();
-
-      const labels = [
-        '-12h', '-11h', '-10h', '-9h', '-8h', '-7h', '-6h', '-5h', '-4h', '-3h', '-2h', '-1h', // Historical
-        'Now', '+1h', '+2h', '+3h', '+4h', '+5h', '+6h', '+7h', '+8h', '+9h', '+10h', '+11h'    // Forecast
-      ];
-
-      this.charts.push(new Chart(ctx, {
-        type: 'line',
-        data: {
-          labels: labels,
-          datasets: [
-            {
-              label: 'Historical Failures',
-              data: [...data.historical, null, null, null, null, null, null, null, null, null, null, null, null],
-              borderColor: '#6C5CE7',
-              backgroundColor: 'rgba(108, 92, 231, 0.1)',
-              borderWidth: 2,
-              pointRadius: 3,
-              pointBackgroundColor: '#6C5CE7',
-              fill: false,
-              tension: 0.3,
-            },
-            {
-              label: 'Predicted Failures',
-              data: [null, null, null, null, null, null, null, null, null, null, null, null, ...data.forecast],
-              borderColor: '#E74C3C',
-              backgroundColor: 'rgba(231, 76, 60, 0.1)',
-              borderWidth: 2,
-              borderDash: [5, 5],
-              pointRadius: 4,
-              pointBackgroundColor: '#E74C3C',
-              fill: false,
-              tension: 0.3,
-            },
-            {
-              label: 'Upper Bound (95% CI)',
-              data: [null, null, null, null, null, null, null, null, null, null, null, null, ...data.upper],
-              borderColor: 'rgba(231, 76, 60, 0.3)',
-              backgroundColor: 'rgba(231, 76, 60, 0.05)',
-              borderWidth: 1,
-              borderDash: [2, 2],
-              pointRadius: 0,
-              fill: '+1',
-              tension: 0.3,
-            },
-            {
-              label: 'Lower Bound (95% CI)',
-              data: [null, null, null, null, null, null, null, null, null, null, null, null, ...data.lower],
-              borderColor: 'rgba(231, 76, 60, 0.3)',
-              backgroundColor: 'rgba(231, 76, 60, 0.05)',
-              borderWidth: 1,
-              borderDash: [2, 2],
-              pointRadius: 0,
-              fill: false,
-              tension: 0.3,
-            }
-          ]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          interaction: {
-            mode: 'index',
-            intersect: false,
-          },
-          plugins: {
-            legend: {
-              position: 'top',
-              labels: {
-                font: { size: 10, family: 'Inter' },
-                usePointStyle: true,
-                pointStyleWidth: 10,
-                padding: 12,
-                filter: (item) => item.text !== 'Upper Bound (95% CI)' && item.text !== 'Lower Bound (95% CI)'
-              }
-            },
-            tooltip: {
-              callbacks: {
-                label: (context) => {
-                  if (context.datasetIndex === 0 || context.datasetIndex === 1) {
-                    return ` ${context.dataset.label}: ${context.parsed.y} failures`;
-                  }
-                  return '';
-                }
-              }
-            }
-          },
-          scales: {
-            y: {
-              beginAtZero: true,
-              ticks: {
-                font: { size: 10 },
-                stepSize: 1,
-                callback: (value) => Math.floor(value as number),
-              },
-              grid: { color: 'rgba(0,0,0,0.05)' },
-              title: {
-                display: true,
-                text: 'Predicted Failures',
-                font: { size: 11, weight: 'bold' },
-                color: '#6b7280'
-              }
-            },
-            x: {
-              ticks: {
-                font: { size: 9 },
-                maxRotation: 45,
-                minRotation: 45
-              },
-              grid: { display: false },
-            }
-          }
-        }
-      }));
+      this.charts.push(c); this.chartMap['failure'] = c;
     }
   }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Helpers de style (inchangés)
+  // ══════════════════════════════════════════════════════════════════════════
 
   statusColor(s: AgentStatus): string {
     const m: Record<AgentStatus, string> = {
@@ -934,16 +704,14 @@ export class Monitoring implements OnInit, AfterViewInit, OnDestroy {
 
   layerColor(layer: AgentLayer): string {
     const m: Record<AgentLayer, string> = {
-      preload: '#00B894', orchestrator: '#6C5CE7', coaching: '#6C5CE7',
-      inventory: '#00B894', support: '#888780',
+      coaching: '#6C5CE7', inventory: '#00B894', support: '#888780',
     };
     return m[layer];
   }
 
   layerBg(layer: AgentLayer): string {
     const m: Record<AgentLayer, string> = {
-      preload: '#E0FAF4', orchestrator: '#EEEDFE', coaching: '#EEEDFE',
-      inventory: '#E0FAF4', support: '#F1EFE8',
+      coaching: '#EEEDFE', inventory: '#E0FAF4', support: '#F1EFE8',
     };
     return m[layer];
   }
@@ -955,95 +723,5 @@ export class Monitoring implements OnInit, AfterViewInit, OnDestroy {
     if (score > 90) return '#00B894';
     if (score > 70) return '#F1C40F';
     return '#E74C3C';
-  }
-
-  getSeverityColor(level: string): string {
-    return level === 'high' ? '#d63031' : level === 'medium' ? '#e17055' : '#fab1a0';
-  }
-
-  private startSimulation() {
-    setInterval(() => {
-      this.agents.update(list => list.map(agent => {
-        if (agent.status === 'RUN' || agent.status === 'ACTIVE') {
-          const variation = (Math.random() - 0.5) * 0.2;
-          return { ...agent, latency: Math.max(0.1, +(agent.latency + variation).toFixed(1)) };
-        }
-        return agent;
-      }));
-
-      const currentPredictive = [...this.predictiveData()];
-      currentPredictive.shift();
-      const lastValue = currentPredictive[currentPredictive.length - 1];
-      const newScore = Math.max(80, Math.min(100, lastValue + (Math.random() - 0.5) * 6));
-      currentPredictive.push(+newScore.toFixed(0));
-
-      this.predictiveData.set(currentPredictive);
-      this.healthScore.set(+newScore.toFixed(0));
-
-      // ── Update failure prediction for current agent (NEW) ──
-      const currentAgentId = this.currentAgentId();
-      if (this.agentPredictions[currentAgentId]) {
-        const currentPrediction = this.agentPredictions[currentAgentId];
-        const newHistorical = [...currentPrediction.historical];
-        newHistorical.shift();
-        newHistorical.push(Math.random() > 0.7 ? 1 : 0);
-
-        const newForecast = currentPrediction.forecast.map((v: number) =>
-          Math.max(0, Math.floor(v + (Math.random() - 0.5) * 2))
-        );
-
-        this.agentPredictions[currentAgentId] = {
-          historical: newHistorical,
-          forecast: newForecast,
-          upper: newForecast.map((v: number) => v + 2),
-          lower: newForecast.map((v: number) => Math.max(0, v - 1)),
-        };
-      }
-      // ── Update all charts ──
-      this.charts.forEach(chart => {
-        const firstDataset = chart.data.datasets[0];
-
-        // Update Predictive Health chart
-        if (firstDataset && (firstDataset.label === 'Stabilité' || firstDataset.label === 'Score Prédit')) {
-          firstDataset.data = [...currentPredictive];
-          chart.update('none');
-        }
-
-        if (firstDataset && firstDataset.label === 'API LLM') {
-          // Update API costs
-          const currentCostsAPI = [...this.costDataAPI()];
-          const updatedCostsAPI = currentCostsAPI.map(c => Math.max(0.1, +(c + (Math.random() - 0.5) * 0.02).toFixed(2)));
-          this.costDataAPI.set(updatedCostsAPI);
-
-          // Update Compute costs
-          const currentCostsCompute = [...this.costDataCompute()];
-          const updatedCostsCompute = currentCostsCompute.map(c => Math.max(0.05, +(c + (Math.random() - 0.5) * 0.01).toFixed(2)));
-          this.costDataCompute.set(updatedCostsCompute);
-
-          // Update Storage costs
-          const currentCostsStorage = [...this.costDataStorage()];
-          const updatedCostsStorage = currentCostsStorage.map(c => Math.max(0.02, +(c + (Math.random() - 0.5) * 0.005).toFixed(2)));
-          this.costDataStorage.set(updatedCostsStorage);
-
-          // Update chart datasets
-          chart.data.datasets[0].data = updatedCostsAPI;
-          chart.data.datasets[1].data = updatedCostsCompute;
-          chart.data.datasets[2].data = updatedCostsStorage;
-          chart.update('none');
-        }
-
-        // Update Failure Prediction chart (NEW)
-        if (chart.data.datasets.some(d => d.label === 'Historical Failures')) {
-          const data = this.currentPrediction();
-          chart.data.datasets[0].data = [...data.historical, null, null, null, null, null, null, null, null, null, null, null, null];
-          chart.data.datasets[1].data = [null, null, null, null, null, null, null, null, null, null, null, null, ...data.forecast];
-          chart.data.datasets[2].data = [null, null, null, null, null, null, null, null, null, null, null, null, ...data.upper];
-          chart.data.datasets[3].data = [null, null, null, null, null, null, null, null, null, null, null, null, ...data.lower];
-          chart.update('none');
-        }
-      });
-
-      this.cycleStep.update(s => s >= this.totalSteps ? 1 : s + 1);
-    }, 3000);
   }
 }

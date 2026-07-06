@@ -42,6 +42,22 @@
         </span>
       </h1>
       <p class="page-sub">Vue en direct du magasin</p>
+      @if (contextHolidayLabel() || contextPromoLabel()) {
+      <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">
+        @if (contextHolidayLabel()) {
+        <span class="badge--warning" title="Agent Stratège — jours fériés (Nager.Date)">
+          {{ contextHolidayLabel() }}
+        </span>
+        }
+        @if (contextPromoLabel()) {
+        <span class="badge--warning badge--clickable"
+              title="Agent Stratège — offres scrapées sur ooredoo.tn · cliquer pour voir les scripts"
+              (click)="openOffersModal()">
+          {{ contextPromoLabel() }}
+        </span>
+        }
+      </div>
+      }
     </div>
     <div class="page-header__right">
       <app-hitl-panel />
@@ -342,70 +358,6 @@
         }
       </div>
 
-      <!-- ── Inventaire Top Risques ── -->
-      @if (inventoryVsSales.length > 0) {
-        <div class="card inv-quick-card">
-          <div class="card-header">
-            <div>
-              <h2 class="card-title">Inventaire · Top Risques</h2>
-              <p class="card-sub">SKUs triés par risque de rupture</p>
-            </div>
-            <span class="inv-health-badge"
-                  [style.background]="stockKpi().critical > 0 ? '#FDEDEC' : '#E0FAF4'"
-                  [style.color]="stockKpi().critical > 0 ? '#E74C3C' : '#007A63'">
-              {{ stockHealthPct() }}% santé
-            </span>
-          </div>
-          <div class="inv-quick-list">
-            @for (item of inventoryVsSales.slice(0, 5); track item.sku) {
-              <div class="inv-quick-row">
-                <div class="inv-quick-dot" [style.background]="item.color"></div>
-                <span class="inv-quick-name">{{ item.shortName }}</span>
-                <div class="inv-quick-bar-track">
-                  <div class="inv-quick-bar"
-                       [style.width.%]="item.stockMax > 0 ? (item.stock / item.stockMax * 100) : 0"
-                       [style.background]="item.risk === 'critical' ? '#E74C3C' : item.risk === 'high' ? '#F9A825' : item.color">
-                  </div>
-                </div>
-                <span class="inv-quick-stock"
-                      [style.color]="item.risk === 'critical' ? '#E74C3C' : item.risk === 'high' ? '#F9A825' : '#27AE60'">
-                  {{ item.stock }} u
-                </span>
-              </div>
-            }
-          </div>
-          @if (stockBackLines().length > 0) {
-            <div class="inv-quick-footer">{{ stockBackLines()[0] }}</div>
-          }
-        </div>
-      }
-
-      <!-- ── Lead Time par catégorie ── -->
-      @if (leadTimeData.length > 0) {
-        <div class="card lead-quick-card">
-          <div class="card-header">
-            <h2 class="card-title">Délais de Réapprovisionnement</h2>
-          </div>
-          <div class="lead-list">
-            @for (row of leadTimeData.slice(0, 4); track row.label) {
-              <div class="lead-row">
-                <span class="lead-label">{{ row.label }}</span>
-                <div class="lead-bar-track">
-                  <div class="lead-bar"
-                       [style.width.%]="row.days >= 30 ? 100 : row.days / 30 * 100"
-                       [style.background]="row.status === 'crit' ? '#E74C3C' : row.status === 'late' ? '#F9A825' : '#00B894'">
-                  </div>
-                </div>
-                <span class="lead-days"
-                      [style.color]="row.status === 'crit' ? '#E74C3C' : row.status === 'late' ? '#F9A825' : '#27AE60'">
-                  {{ row.days }}j
-                </span>
-              </div>
-            }
-          </div>
-        </div>
-      }
-
       <!-- ── Bottom row: Heatmap + Alertes ── -->
       <div class="dash-bottom-row">
 
@@ -558,155 +510,11 @@
         </div>
 
       </div>
+
     </div>
 
     <!-- ══════ DROITE ══════ -->
     <div class="dash-right">
-
-      <!-- ── Prochaine Meilleure Action (NBA) ── -->
-      <div class="card nba-card">
-        <div class="card-header">
-          <p class="nba-eyebrow">PROCHAINE MEILLEURE ACTION</p>
-          <span class="nba-priority-badge">
-            Priorité {{ bestNba()?.priorite ?? 1 }}
-          </span>
-        </div>
-
-        <div class="nba-body">
-          <div class="nba-hero">
-            <div class="nba-rocket">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
-                   stroke="#6C5CE7" stroke-width="2">
-                <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 00-2.91-.09z"/>
-                <path d="M12 15l-3-3a22 22 0 012-3.95A12.88 12.88 0 0122 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 01-4 2z"/>
-                <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/>
-                <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/>
-              </svg>
-            </div>
-            <div>
-              <h3 class="nba-title">
-                {{ bestNba()?.action || 'Analyse en cours...' }}
-              </h3>
-              @if (bestNba()?.produit_cible) {
-                <p class="nba-product">{{ bestNba()!.produit_cible }}</p>
-              }
-            </div>
-          </div>
-
-          @if (bestNba()?.argument_vente) {
-            <p class="nba-desc">{{ bestNba()!.argument_vente }}</p>
-          } @else if (analystSummary()) {
-            <p class="nba-desc">{{ analystSummary() }}</p>
-          }
-
-          @if (bestNba()?.impact_estime) {
-            <div class="nba-impact-row">
-              <span class="nba-pill nba-pill--green">{{ bestNba()!.impact_estime }}</span>
-            </div>
-          }
-
-          <div class="nba-checks">
-            <span class="nba-check">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
-                   stroke="#E2001A" stroke-width="2.5">
-                <polyline points="20,6 9,17 4,12"/>
-              </svg>
-              {{ attainment() >= 100 ? 'Objectif atteint' : 'En progression' }}
-            </span>
-            <span class="nba-check">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
-                   stroke="#E2001A" stroke-width="2.5">
-                <polyline points="20,6 9,17 4,12"/>
-              </svg>
-              Stock disponible
-            </span>
-            <span class="nba-check">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
-                   stroke="#E2001A" stroke-width="2.5">
-                <polyline points="20,6 9,17 4,12"/>
-              </svg>
-              Marge attractive
-            </span>
-          </div>
-
-          @if (strateActions().length > 1) {
-            <div class="nba-more-actions">
-              @for (action of strateActions().slice(1, 3); track action.priorite) {
-                <div class="nba-more-item">
-                  <span class="nba-more-num">P{{ action.priorite }}</span>
-                  <span class="nba-more-text">{{ action.action }}</span>
-                </div>
-              }
-            </div>
-          }
-
-          <button class="nba-link">
-            Voir l'argumentaire
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-                 stroke="currentColor" stroke-width="2">
-              <line x1="5" y1="12" x2="19" y2="12"/>
-              <polyline points="12,5 19,12 12,19"/>
-            </svg>
-          </button>
-        </div>
-      </div>
-
-      <!-- ── Plan Stratégique (Agent Stratège) ── -->
-      @if (strateActions().length > 0 || focusProduits().length > 0) {
-        <div class="card strate-card">
-          <div class="card-header">
-            <div>
-              <h2 class="card-title">Plan Stratégique</h2>
-              <p class="card-sub">{{ strateActions().length }} action(s) · Agent Stratège</p>
-            </div>
-            @if (ws.ragUsed()) {
-              <span class="strate-rag-badge">✦ RAG {{ ws.nbRagScripts() }}</span>
-            }
-          </div>
-
-          @if (strategie()) {
-            <p class="strate-headline">{{ strategie() }}</p>
-          }
-
-          @if (focusProduits().length) {
-            <div class="strate-focus-row">
-              <span class="strate-focus-label">Produits prioritaires</span>
-              <div class="strate-chips">
-                @for (p of focusProduits().slice(0, 5); track p) {
-                  <span class="strate-chip">{{ p }}</span>
-                }
-              </div>
-            </div>
-          }
-
-          <div class="strate-actions">
-            @for (a of strateActions().slice(0, 4); track a.priorite) {
-              <div class="strate-action">
-                <span class="strate-action__num">P{{ a.priorite }}</span>
-                <div class="strate-action__body">
-                  <span class="strate-action__text">{{ a.action }}</span>
-                  @if (a.produit_cible) {
-                    <span class="strate-action__prod">{{ a.produit_cible }}</span>
-                  }
-                </div>
-                @if (a.impact_estime) {
-                  <span class="strate-action__impact">{{ a.impact_estime }}</span>
-                }
-              </div>
-            }
-          </div>
-
-          @if (messageManager()) {
-            <div class="strate-manager-msg">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-                   stroke="#6C5CE7" stroke-width="2">
-                <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
-              </svg>
-              {{ messageManager() }}
-            </div>
-          }
-        </div>
-      }
 
       <!-- ── Classement Équipe ── -->
       <div class="card team-card">
@@ -780,8 +588,249 @@
         </div>
       </div>
 
+      <!-- ── Inventaire Top Risques ── -->
+      @if (inventoryVsSales.length > 0) {
+        <div class="card inv-quick-card">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title">Inventaire · Top Risques</h2>
+              <p class="card-sub">SKUs triés par risque de rupture</p>
+            </div>
+            <span class="inv-health-badge"
+                  [style.background]="stockKpi().critical > 0 ? '#FDEDEC' : '#E0FAF4'"
+                  [style.color]="stockKpi().critical > 0 ? '#E74C3C' : '#007A63'">
+              {{ stockHealthPct() }}% santé
+            </span>
+          </div>
+          <div class="inv-quick-list">
+            @for (item of inventoryVsSales.slice(0, 5); track item.sku) {
+              <div class="inv-quick-row">
+                <div class="inv-quick-dot" [style.background]="item.color"></div>
+                <span class="inv-quick-name">{{ item.shortName }}</span>
+                <div class="inv-quick-bar-track">
+                  <div class="inv-quick-bar"
+                       [style.width.%]="item.stockMax > 0 ? (item.stock / item.stockMax * 100) : 0"
+                       [style.background]="item.risk === 'critical' ? '#E74C3C' : item.risk === 'high' ? '#F9A825' : item.color">
+                  </div>
+                </div>
+                <span class="inv-quick-stock"
+                      [style.color]="item.risk === 'critical' ? '#E74C3C' : item.risk === 'high' ? '#F9A825' : '#27AE60'">
+                  {{ item.stock }} u
+                </span>
+              </div>
+            }
+          </div>
+          @if (stockBackLines().length > 0) {
+            <div class="inv-quick-footer">{{ stockBackLines()[0] }}</div>
+          }
+        </div>
+      }
+
+      <!-- ── Lead Time par catégorie ── -->
+      @if (leadTimeData.length > 0) {
+        <div class="card lead-quick-card">
+          <div class="card-header">
+            <h2 class="card-title">Délais de Réapprovisionnement</h2>
+          </div>
+          <div class="lead-list">
+            @for (row of leadTimeData.slice(0, 4); track row.label) {
+              <div class="lead-row">
+                <span class="lead-label">{{ row.label }}</span>
+                <div class="lead-bar-track">
+                  <div class="lead-bar"
+                       [style.width.%]="row.days >= 30 ? 100 : row.days / 30 * 100"
+                       [style.background]="row.status === 'crit' ? '#E74C3C' : row.status === 'late' ? '#F9A825' : '#00B894'">
+                  </div>
+                </div>
+                <span class="lead-days"
+                      [style.color]="row.status === 'crit' ? '#E74C3C' : row.status === 'late' ? '#F9A825' : '#27AE60'">
+                  {{ row.days }}j
+                </span>
+              </div>
+            }
+          </div>
+        </div>
+      }
+
     </div>
   </div>
+
+  <!-- ══ NBA + STRATÉGIE — rangée pleine largeur ══ -->
+  <div class="dash-strategy-row">
+
+    <!-- ── Prochaine Meilleure Action (NBA) ── -->
+    <div class="card nba-card">
+      <div class="card-header">
+        <p class="nba-eyebrow">PROCHAINE MEILLEURE ACTION</p>
+        <span class="nba-priority-badge">
+          Priorité {{ bestNba()?.priorite ?? 1 }}
+        </span>
+      </div>
+
+        <div class="nba-body">
+          @if (bestNba(); as nba) {
+            <div class="nba-hero">
+              <div class="nba-rocket">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+                     stroke="#6C5CE7" stroke-width="2">
+                  <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 00-2.91-.09z"/>
+                  <path d="M12 15l-3-3a22 22 0 012-3.95A12.88 12.88 0 0122 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 01-4 2z"/>
+                  <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/>
+                  <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/>
+                </svg>
+              </div>
+              <div>
+                <h3 class="nba-title">{{ nba.action }}</h3>
+                @if (nba.produit_cible) {
+                  <p class="nba-product">{{ nba.produit_cible }}</p>
+                }
+              </div>
+            </div>
+
+            @if (nba.argument_vente) {
+              <p class="nba-desc">{{ nba.argument_vente }}</p>
+            } @else if (analystSummary()) {
+              <p class="nba-desc">{{ analystSummary() }}</p>
+            }
+
+            @if (nba.impact_estime) {
+              <div class="nba-impact-row">
+                <span class="nba-pill nba-pill--green">{{ nba.impact_estime }}</span>
+              </div>
+            }
+
+            <div class="nba-checks">
+              <span class="nba-check">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+                     stroke="#E2001A" stroke-width="2.5">
+                  <polyline points="20,6 9,17 4,12"/>
+                </svg>
+                {{ attainment() >= 100 ? 'Objectif atteint' : 'En progression' }}
+              </span>
+              <span class="nba-check">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+                     stroke="#E2001A" stroke-width="2.5">
+                  <polyline points="20,6 9,17 4,12"/>
+                </svg>
+                Stock disponible
+              </span>
+              <span class="nba-check">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+                     stroke="#E2001A" stroke-width="2.5">
+                  <polyline points="20,6 9,17 4,12"/>
+                </svg>
+                Marge attractive
+              </span>
+            </div>
+
+            @if (strateActions().length > 1) {
+              <div class="nba-more-actions">
+                @for (action of strateActions().slice(1, 3); track action.priorite) {
+                  <div class="nba-more-item">
+                    <span class="nba-more-num">P{{ action.priorite }}</span>
+                    <span class="nba-more-text">{{ action.action }}</span>
+                  </div>
+                }
+              </div>
+            }
+
+            <button class="nba-link" (click)="openNbaModal()">
+              Voir l'argumentaire
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" stroke-width="2">
+                <line x1="5" y1="12" x2="19" y2="12"/>
+                <polyline points="12,5 19,12 12,19"/>
+              </svg>
+            </button>
+          } @else {
+            <!-- Premier cycle multi-agent encore en cours (jusqu'à ~2 min) -->
+            <div class="nba-hero">
+              <div class="nba-rocket nba-rocket--pulse">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+                     stroke="#6C5CE7" stroke-width="2">
+                  <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 00-2.91-.09z"/>
+                  <path d="M12 15l-3-3a22 22 0 012-3.95A12.88 12.88 0 0122 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 01-4 2z"/>
+                  <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/>
+                  <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/>
+                </svg>
+              </div>
+              <div style="flex:1">
+                <div class="skel" style="height:18px;width:70%;margin-bottom:8px"></div>
+                <div class="skel" style="height:12px;width:40%"></div>
+              </div>
+            </div>
+            <div class="skel" style="height:12px;width:95%;margin:12px 0 6px"></div>
+            <div class="skel" style="height:12px;width:75%"></div>
+            <p class="nba-skel-status">
+              <span class="skel-pulse"></span>
+              Agents analyste + stratège en cours de raisonnement…
+            </p>
+          }
+        </div>
+      </div>
+
+      <!-- ── Plan Stratégique (Agent Stratège) ── -->
+      @if (strateActions().length > 0 || focusProduits().length > 0) {
+        <div class="card strate-card">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title">Plan Stratégique</h2>
+              <p class="card-sub">{{ strateActions().length }} action(s) · Agent Stratège</p>
+            </div>
+            @if (ws.ragUsed()) {
+              <span class="strate-rag-badge">✦ RAG {{ ws.nbRagScripts() }}</span>
+            }
+          </div>
+
+          @if (strategie()) {
+            <p class="strate-headline">{{ strategie() }}</p>
+          }
+
+          @if (focusProduits().length) {
+            <div class="strate-focus-row">
+              <span class="strate-focus-label">Produits prioritaires</span>
+              <div class="strate-chips">
+                @for (p of focusProduits().slice(0, 5); track p) {
+                  <span class="strate-chip">{{ p }}</span>
+                }
+              </div>
+            </div>
+          }
+
+          <div class="strate-actions">
+            @for (a of strateActions().slice(0, 4); track a.priorite) {
+              <div class="strate-action">
+                <div class="strate-action__top">
+                  <span class="strate-action__num">P{{ a.priorite }}</span>
+                  <span class="strate-action__text">{{ a.action }}</span>
+                </div>
+                @if (a.produit_cible || a.impact_estime) {
+                  <div class="strate-action__meta">
+                    @if (a.produit_cible) {
+                      <span class="strate-action__prod">{{ a.produit_cible }}</span>
+                    }
+                    @if (a.impact_estime) {
+                      <span class="strate-action__impact">{{ a.impact_estime }}</span>
+                    }
+                  </div>
+                }
+              </div>
+            }
+          </div>
+
+          @if (messageManager()) {
+            <div class="strate-manager-msg">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                   stroke="#6C5CE7" stroke-width="2">
+                <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+              </svg>
+              {{ messageManager() }}
+            </div>
+          }
+        </div>
+      }
+
+    </div>
 
   <!-- ══ PRIORITÉS DE COACHING (Agent Coach) ══ -->
   @if (ws.coachingCards().length > 0) {
@@ -818,6 +867,238 @@
               <span class="coaching-card__action">→ {{ card.action }}</span>
               <span class="coaching-card__prod">{{ card.produit }}</span>
             </div>
+          </div>
+        }
+      </div>
+    </div>
+  }
+
+  <!-- ══ RAISONNEMENT MULTI-AGENT (SupervisorAgent) ══ -->
+  @if (ws.supervisorInsights().agents_invoked.length === 0) {
+    <div class="dash-supervisor-section">
+      <div class="dash-coaching-header">
+        <div>
+          <h2 class="card-title">Raisonnement Multi-Agent</h2>
+          <p class="card-sub">Analyste · Stratège · Inventaire · Guardrail — cycle en cours</p>
+        </div>
+      </div>
+      <div class="supervisor-agents-row">
+        @for (agent of ['analyst', 'strategist', 'inventory', 'guardrail']; track agent) {
+          <span class="agent-chip agent-chip--pending">
+            <span class="skel-pulse"></span>{{ agent }}
+          </span>
+        }
+      </div>
+    </div>
+  } @else {
+    <div class="dash-supervisor-section">
+      <div class="dash-coaching-header">
+        <div>
+          <h2 class="card-title">Raisonnement Multi-Agent</h2>
+          <p class="card-sub">{{ ws.supervisorInsights().agents_invoked.length }} agents exécutés ce cycle</p>
+        </div>
+        <span class="guardrail-pill"
+              [class.guardrail-pill--block]="ws.supervisorInsights().guardrail_status === 'BLOCK'"
+              [class.guardrail-pill--escalate]="ws.supervisorInsights().guardrail_status === 'ESCALATE'"
+              [class.guardrail-pill--rewrite]="ws.supervisorInsights().guardrail_status === 'REWRITE'">
+          @if (ws.supervisorInsights().guardrail_status === 'BLOCK') { 🚫 }
+          @else if (ws.supervisorInsights().guardrail_status === 'ESCALATE') { ⚠️ }
+          @else if (ws.supervisorInsights().guardrail_status === 'REWRITE') { ✏️ }
+          @else { ✅ }
+          Guardrail {{ ws.supervisorInsights().guardrail_status }}
+        </span>
+      </div>
+
+      @if (ws.supervisorInsights().hitl_required) {
+        <div class="supervisor-hitl-banner">
+          ⏳ Validation manager requise avant diffusion de cette recommandation
+        </div>
+      }
+
+      <div class="supervisor-agents-row">
+        @for (agent of ws.supervisorInsights().agents_invoked; track agent) {
+          <span class="agent-chip">{{ agent }}</span>
+        }
+      </div>
+
+      <div class="supervisor-body">
+        @if (ws.supervisorInsights().coach_recommendation.message_for_advisor) {
+          <div class="supervisor-block">
+            <span class="supervisor-block-label">Recommandation coach</span>
+            <p class="supervisor-coach-msg">{{ ws.supervisorInsights().coach_recommendation.message_for_advisor }}</p>
+          </div>
+        }
+
+        @if (ws.supervisorInsights().scored_products.length > 0) {
+          <div class="supervisor-block">
+            <span class="supervisor-block-label">Produits recommandés (scoring cross-domaine)</span>
+            <div class="scored-products">
+              @for (p of ws.supervisorInsights().scored_products.slice(0, 3); track p.sku) {
+                <div class="scored-product-chip" [title]="p.recommendation_reason">
+                  <span class="spc-score"
+                        [style.color]="p.final_score >= 0.75 ? '#10B981' : p.final_score >= 0.5 ? '#F59E0B' : '#94A3B8'">
+                    {{ (p.final_score * 100).toFixed(0) }}%
+                  </span>
+                  <span class="spc-name">{{ p.name || p.sku }}</span>
+                </div>
+              }
+            </div>
+          </div>
+        }
+
+        @if (ws.supervisorInsights().critical_stock_alerts.length > 0) {
+          <div class="supervisor-block">
+            <span class="supervisor-block-label">⚠️ {{ ws.supervisorInsights().critical_stock_alerts.length }} alerte(s) stock critique</span>
+            <div class="supervisor-stock-alerts">
+              @for (a of ws.supervisorInsights().critical_stock_alerts.slice(0, 3); track a.sku) {
+                <span class="stock-alert-chip">{{ a.name || a.sku }}</span>
+              }
+            </div>
+          </div>
+        }
+      </div>
+    </div>
+  }
+
+  <!-- Phase 2-lite: live sales ticker, fed by realtime_stock_update WS messages -->
+  <div class="dash-live-sales-section">
+    <div class="dash-coaching-header">
+      <div>
+        <h2 class="card-title">Ventes en direct</h2>
+        <p class="card-sub">Flux temps réel — stock et transactions</p>
+      </div>
+      <span class="dash-live-dot" [class.dash-live-dot--off]="!ws.connected()"></span>
+    </div>
+    @if (ws.liveSalesTicker().length === 0) {
+      <p class="dash-live-sales-empty">En attente de la première vente…</p>
+    } @else {
+      <div class="dash-live-sales-list">
+        @for (tx of ws.liveSalesTicker().slice(0, 8); track tx.timestamp) {
+          <div class="dash-live-sales-item"
+               [class.dash-live-sales-item--warn]="tx.severity === 'critical' || tx.severity === 'rupture'">
+            <span class="dash-live-sales-msg">{{ tx.message }}</span>
+            <span class="dash-live-sales-time">{{ tx.timestamp | date:'HH:mm:ss' }}</span>
+          </div>
+        }
+      </div>
+    }
+  </div>
+
+  <!-- ══ MODAL — Offres Ooredoo actives ══ -->
+  @if (showOffersModal()) {
+    <div class="modal-overlay" (click)="closeOffersModal()">
+      <div class="modal-content offers-modal" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <div>
+            <h2 class="modal-title">Offres Ooredoo actives</h2>
+            <p class="modal-subtitle">{{ activeOffers().length }} offre(s) scrapée(s) sur ooredoo.tn</p>
+          </div>
+          <button class="modal-close" (click)="closeOffersModal()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"/>
+              <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          @if (activeOffers().length > 0) {
+            <div class="offers-list">
+              @for (offer of activeOffers(); track $index) {
+                <div class="offer-card">
+                  <div class="offer-card__head">
+                    <span class="offer-card__title">{{ offer.title }}</span>
+                    @if (offer.price) {
+                      <span class="offer-card__price">{{ offer.price }}</span>
+                    }
+                  </div>
+                  @if (offer.category) {
+                    <span class="offer-card__cat">{{ offer.category }}</span>
+                  }
+                  @if (offer.details) {
+                    <p class="offer-card__details">{{ offer.details }}</p>
+                  }
+                  <div class="offer-card__script">
+                    <span class="offer-card__script-label">Script conseillé</span>
+                    <p class="offer-card__script-text">{{ offer.script }}</p>
+                  </div>
+                </div>
+              }
+            </div>
+          } @else {
+            <p class="no-data">Aucune offre détaillée disponible pour le moment.</p>
+          }
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ══ MODAL — Argumentaire détaillé (NBA) ══ -->
+  @if (showNbaModal()) {
+    <div class="modal-overlay" (click)="closeNbaModal()">
+      <div class="modal-content nba-modal" (click)="$event.stopPropagation()">
+        @if (bestNba(); as nba) {
+          <div class="modal-header">
+            <div>
+              <span class="nba-priority-badge">Priorité {{ nba.priorite }}</span>
+              <h2 class="modal-title">{{ nba.action }}</h2>
+              @if (nba.produit_cible) {
+                <p class="modal-subtitle">{{ nba.produit_cible }}</p>
+              }
+            </div>
+            <button class="modal-close" (click)="closeNbaModal()">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
+
+          <div class="modal-body">
+            <div class="argu-section">
+              <span class="argu-label">Script de vente complet</span>
+              <p class="argu-text">{{ nba.argument_vente || analystSummary() }}</p>
+            </div>
+
+            @if (nba.impact_estime) {
+              <div class="argu-section">
+                <span class="argu-label">Impact estimé</span>
+                <span class="nba-pill nba-pill--green">{{ nba.impact_estime }}</span>
+              </div>
+            }
+
+            @if (causeRacine()) {
+              <div class="argu-section">
+                <span class="argu-label">Contexte · pourquoi maintenant</span>
+                <p class="argu-text">{{ causeRacine() }}</p>
+              </div>
+            }
+
+            @if (strateActions().length > 1) {
+              <div class="argu-section">
+                <span class="argu-label">Autres actions du plan stratégique</span>
+                <div class="argu-alt-list">
+                  @for (a of strateActions().slice(1); track a.priorite) {
+                    <div class="argu-alt-item">
+                      <span class="strate-action__num">P{{ a.priorite }}</span>
+                      <div class="argu-alt-body">
+                        <div class="argu-alt-top">
+                          <span class="argu-alt-text">{{ a.action }}</span>
+                          @if (a.impact_estime) {
+                            <span class="strate-action__impact">{{ a.impact_estime }}</span>
+                          }
+                        </div>
+                        @if (a.produit_cible) {
+                          <span class="argu-alt-prod">{{ a.produit_cible }}</span>
+                        }
+                        @if (a.argument_vente) {
+                          <p class="argu-alt-script">{{ a.argument_vente }}</p>
+                        }
+                      </div>
+                    </div>
+                  }
+                </div>
+              </div>
+            }
           </div>
         }
       </div>

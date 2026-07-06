@@ -1,5 +1,5 @@
 import {
-  Component, computed, signal,
+  Component, computed, signal, effect,
   OnInit, OnDestroy
 } from '@angular/core';
 import { CommonModule }     from '@angular/common';
@@ -90,6 +90,14 @@ export class Dashboard implements OnInit, OnDestroy {
   ) {
     this.store         = this.data.getStoreMetrics();
     this._mockAdvisors = this.data.getAdvisors();
+
+    // Phase 2-lite: nudge the cheap stock-summary refresh immediately on a
+    // live sale/stock alert instead of waiting up to 60s for the next poll —
+    // same endpoint, same cost, just event-triggered on top of the interval.
+    effect(() => {
+      const ticker = this.ws.liveSalesTicker();
+      if (ticker.length > 0) this._loadStockSummary();
+    });
   }
 
   // ── Advisors ──────────────────────────────────────────
@@ -227,6 +235,20 @@ export class Dashboard implements OnInit, OnDestroy {
   weatherIcon  = computed(() => this.ws.weatherIcon()  ?? '');
   isHoliday    = computed(() => this.ws.isHolidayToday());
   nextHoliday  = computed(() => this.ws.nextHoliday()  ?? '');
+
+  // ── Contexte agent Stratège : jour férié à venir + offres Ooredoo scrapées ──
+  contextHolidayLabel = computed(() => this.ws.liveMetrics()?.store_context?.event ?? '');
+  contextPromoLabel   = computed(() => this.ws.liveMetrics()?.store_context?.promo ?? '');
+  activeOffers        = computed(() => this.ws.liveMetrics()?.store_context?.active_offers ?? []);
+
+  // ── Modals ─────────────────────────────────────────────
+  showOffersModal = signal(false);
+  showNbaModal    = signal(false);
+
+  openOffersModal()  { this.showOffersModal.set(true); }
+  closeOffersModal() { this.showOffersModal.set(false); }
+  openNbaModal()     { this.showNbaModal.set(true); }
+  closeNbaModal()    { this.showNbaModal.set(false); }
 
   // ── Stock KPI — agent overwrites via ngOnInit (lightweight summary call) ──
   stockKpi = signal({
@@ -488,15 +510,10 @@ export class Dashboard implements OnInit, OnDestroy {
     this.refreshTimer = setInterval(() => this.loadData(), 120000);
 
     // Stock KPI card — lightweight summary endpoint (no pipeline trigger).
-    // Cheap enough to poll regularly, so it stays fresh on its own.
-    const loadSummary = () => {
-      this.invApi.getSummary('I63').subscribe({
-        next:  summary => this._applyAgentSummary(summary),
-        error: err     => console.warn('Stock summary unavailable:', err),
-      });
-    };
-    loadSummary();
-    this.inventoryTimer = setInterval(loadSummary, 60_000); // 1 min, cheap
+    // Cheap enough to poll regularly, so it stays fresh on its own; also
+    // nudged immediately by the liveSalesTicker effect above (constructor).
+    this._loadStockSummary();
+    this.inventoryTimer = setInterval(() => this._loadStockSummary(), 60_000); // 1 min, cheap
 
     // Inventory vs Sales / Lead time widgets need per-SKU detail, which only
     // the full getStore() payload provides. getStore() triggers analyze_store()
@@ -578,6 +595,13 @@ export class Dashboard implements OnInit, OnDestroy {
   }
 
   // ── Inventory agent overlay ───────────────────────────
+  private _loadStockSummary(): void {
+    this.invApi.getSummary('I63').subscribe({
+      next:  summary => this._applyAgentSummary(summary),
+      error: err     => console.warn('Stock summary unavailable:', err),
+    });
+  }
+
   // Lightweight path: called from ngOnInit via getSummary() — no pipeline trigger.
   private _applyAgentSummary(summary: InventorySummary): void {
     this.stockKpi.set({

@@ -1,0 +1,98 @@
+<div class="pb-page">
+
+  <div class="pb-header">
+    <h1>Approvisionnement — Suivi des commandes</h1>
+    <p class="pb-sub">Store {{ selectedStore() }}</p>
+  </div>
+
+  @if (toastMsg()) {
+    <div class="pb-toast">{{ toastMsg() }}</div>
+  }
+
+  @if (errorMsg()) {
+    <div class="pb-error">{{ errorMsg() }}</div>
+  }
+
+  <div class="pb-board">
+
+    @for (col of columns; track col.key) {
+      <div class="pb-column">
+        <div class="pb-column__head">
+          <span class="pb-column__label">{{ col.label }}</span>
+          <span class="pb-column__count">{{ ordersFor(col.key).length }}</span>
+        </div>
+
+        <div
+          class="pb-column__list"
+          cdkDropList
+          [id]="dropListId(col.key)"
+          [cdkDropListData]="ordersFor(col.key)"
+          [cdkDropListConnectedTo]="allDropListIds"
+          [cdkDropListEnterPredicate]="canEnter(col.key)"
+          (cdkDropListDropped)="onDrop($event, col.key)"
+        >
+          @for (po of ordersFor(col.key); track trackByPoId($index, po)) {
+            <div class="pb-card" cdkDrag [cdkDragData]="po">
+              <div class="pb-card__top">
+                <span class="pb-card__sku">{{ po.product_name || ('SKU ' + po.sku) }}</span>
+                <span class="pb-card__priority" [style.background]="priorityColor(po.priorite)">
+                  {{ po.priorite }}
+                </span>
+              </div>
+              <div class="pb-card__qty">
+                {{ po.quantite_recue }}/{{ po.quantite_commandee }} unités
+              </div>
+              <div class="pb-card__cost">{{ po.montant_total_ht | number:'1.0-0' }} {{ po.devise }}</div>
+              <div class="pb-card__age">{{ ageLabel(po) }}</div>
+            </div>
+          }
+        </div>
+      </div>
+    }
+
+    <div class="pb-column pb-column--problems">
+      <div class="pb-column__head">
+        <span class="pb-column__label">Problèmes</span>
+      </div>
+
+      <div class="pb-problems-sub">
+        <span class="pb-problems-sub__label">Annulé</span>
+        <div
+          class="pb-column__list pb-column__list--compact"
+          cdkDropList
+          id="col-ANNULE"
+          [cdkDropListData]="annuleOrders()"
+          [cdkDropListConnectedTo]="allDropListIds"
+          [cdkDropListEnterPredicate]="canEnter('ANNULE')"
+          (cdkDropListDropped)="onDrop($event, 'ANNULE')"
+        >
+          @for (po of annuleOrders(); track trackByPoId($index, po)) {
+            <div class="pb-card pb-card--muted" cdkDrag [cdkDragData]="po">
+              <span class="pb-card__sku">{{ po.product_name || ('SKU ' + po.sku) }}</span>
+            </div>
+          }
+        </div>
+      </div>
+
+      <div class="pb-problems-sub">
+        <span class="pb-problems-sub__label">Litige</span>
+        <div
+          class="pb-column__list pb-column__list--compact"
+          cdkDropList
+          id="col-LITIGE"
+          [cdkDropListData]="litigeOrders()"
+          [cdkDropListConnectedTo]="allDropListIds"
+          [cdkDropListEnterPredicate]="canEnter('LITIGE')"
+          (cdkDropListDropped)="onDrop($event, 'LITIGE')"
+        >
+          @for (po of litigeOrders(); track trackByPoId($index, po)) {
+            <div class="pb-card pb-card--warn" cdkDrag [cdkDragData]="po">
+              <span class="pb-card__sku">{{ po.product_name || ('SKU ' + po.sku) }}</span>
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>

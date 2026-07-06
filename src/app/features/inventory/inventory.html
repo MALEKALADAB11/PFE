@@ -5,10 +5,17 @@
     <div class="page-header__left">
       <h1 class="page-title">
         Stock &amp; Inventory
-        <span class="page-live-pill">
-          <span class="page-live-dot"></span>
-          LIVE
-        </span>
+        @if (wsConnected() && isLiveData()) {
+          <span class="page-live-pill">
+            <span class="page-live-dot"></span>
+            LIVE
+          </span>
+        } @else {
+          <span class="page-live-pill page-live-pill--off">
+            <span class="page-live-dot page-live-dot--off"></span>
+            {{ wsConnected() ? 'DONNÉES INITIALES' : 'DÉCONNECTÉ' }}
+          </span>
+        }
       </h1>
       <p class="page-sub">Vue d'ensemble en temps réel de votre stock et des risques</p>
     </div>
@@ -197,7 +204,11 @@
 
         <div class="inv-quadrant-update-bar">
           <span class="inv-quadrant-update-dot"></span>
-          Dernière mise à jour : Aujourd'hui à {{ lastUpdateTime() }}
+          @if (lastUpdateTime(); as t) {
+            Dernière mise à jour : Aujourd'hui à {{ t }}
+          } @else {
+            En attente de la première actualisation…
+          }
         </div>
       </div>
     </div>
@@ -252,7 +263,7 @@
           }
         </div>
 
-        <a class="alerts-see-all">Voir toutes les alertes →</a>
+        <a class="alerts-see-all" routerLink="/purchase-board">Voir toutes les alertes →</a>
       </div>
 
       <!-- Top produits à risque -->
@@ -420,7 +431,11 @@
   <!-- ══ BOTTOM STATUS BAR ══ -->
   <div class="inv-status-bar">
     <span class="inv-status-bar__dot"></span>
-    Les données sont mises à jour en temps réel. Dernier rafraîchissement : Aujourd'hui à {{ lastUpdateTime() }}
+    @if (lastUpdateTime(); as t) {
+      Les données sont mises à jour en temps réel. Dernier rafraîchissement : Aujourd'hui à {{ t }}
+    } @else {
+      En attente de la première actualisation des données…
+    }
   </div>
 
   <!-- ══ ANALYSIS MODAL ══ -->
@@ -554,6 +569,12 @@
               </svg>
               Recommandation approuvée
               <button class="btn-modal-undo" (click)="undoProductDecision(analysisModal()!.id, $event)">Annuler</button>
+            </div>
+          }
+          @if (poBridgeErrorFor(analysisModal()!.id); as poErr) {
+            <div class="modal-decision-result modal-decision-result--rejected">
+              {{ poErr }}
+              <button class="btn-modal-undo" (click)="retryCreatePurchaseOrder(analysisModal()!.id, $event)">Créer la commande</button>
             </div>
           }
           @if (getProductDecision(analysisModal()!.id) === 'rejected') {

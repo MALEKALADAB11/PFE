@@ -2,6 +2,7 @@ import {
   Component,
   signal,
   computed,
+  effect,
   ViewChild,
   ElementRef,
   AfterViewChecked,
@@ -16,6 +17,7 @@ import { HttpClient } from '@angular/common/http';
 import { WebSocketService } from '../../core/services/websocket.service';
 import { ApiService }        from '../../core/services/api';
 import { MockDataService }   from '../../core/services/mock-data';
+import { ConversationStorageService } from '../../core/services/conversation-storage.service';
 import { Advisor }           from '../../core/models/advisor';
 import { environment }      from '../../../environments/environment';
 
@@ -75,9 +77,10 @@ interface InventoryChatResponse {
 export class ChatComponent implements OnInit, AfterViewChecked, OnDestroy {
   @ViewChild('msgEnd') msgEnd!: ElementRef;
 
-  private ws   = inject(WebSocketService);
-  private api  = inject(ApiService);
-  private http = inject(HttpClient);
+  private ws      = inject(WebSocketService);
+  private api     = inject(ApiService);
+  private http    = inject(HttpClient);
+  private storage = inject(ConversationStorageService);
 
   advisors: Advisor[]  = [];
   shouldScroll         = false;
@@ -227,11 +230,26 @@ export class ChatComponent implements OnInit, AfterViewChecked, OnDestroy {
 
   constructor(private data: MockDataService) {
     this.advisors = this.data.getAdvisors();
+
+    // Persiste automatiquement les conversations du jour (localStorage,
+    // purgées le lendemain — voir ConversationStorageService.todayKey()).
+    effect(() => {
+      const convs = this.conversations();
+      if (convs.length) this.storage.save(convs);
+    });
   }
 
   ngOnInit(): void {
-    // Créer la conversation initiale avec contexte live
-    this._initConversations();
+    // Purge les sessions de plus de 7 jours, puis restaure celles du jour
+    // en cours si elles existent — sinon on démarre une session fraîche.
+    this.storage.cleanup();
+    const saved = this.storage.load();
+    if (saved.length) {
+      this.conversations.set(saved);
+      this.activeConvId.set(saved[0].id);
+    } else {
+      this._initConversations();
+    }
 
     // Essayer de récupérer un prefill depuis sessionStorage
     try {

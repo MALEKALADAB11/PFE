@@ -43,6 +43,13 @@ export const routes: Routes = [
       import('./features/monitoring/monitoring')
         .then(m => m.Monitoring),
   },
+  {
+    path: 'purchase-board',
+    canActivate: [managerGuard],
+    loadComponent: () =>
+      import('./features/purchase-board/purchase-board')
+        .then(m => m.PurchaseBoardComponent),
+  },
 
   // ── Manager + Vendeur ───────────────────────────────────
   {

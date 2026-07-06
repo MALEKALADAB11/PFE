@@ -121,6 +121,45 @@ export class WebSocketService {
     timestamp: string;
   }[]>([]);
 
+  // ── Real-time sales ticker + stock alerts (Phase 2-lite) ──────────────────
+  // Fed by `realtime_stock_update` / `stock_alert`, pushed on every simulated
+  // sale (main.py _on_sale/_persist_and_broadcast) — previously received but
+  // silently dropped by this service.
+  liveSalesTicker = signal<{
+    sku:          string;
+    product_name: string | null;
+    amount:       number | null;
+    units_sold:   number;
+    stock_before: number;
+    stock_after:  number;
+    severity:     string;
+    message:      string;
+    timestamp:    string;
+  }[]>([]);
+
+  liveStockAlert = signal<{
+    sku:      string;
+    stock:    number;
+    severity: string;
+    message:  string;
+  } | null>(null);
+
+  // ── SupervisorAgent — raisonnement unifié sales + inventory (cycle courant) ──
+  supervisorInsights = signal<{
+    guardrail_status:      string;
+    guardrail_issues:      { rule: string; message: string }[];
+    scored_products:       { sku: string; name: string; final_score: number; recommendation_reason: string }[];
+    coach_recommendation:  { priority?: string; product_to_push?: string; message_for_advisor?: string; confidence?: number };
+    inventory_decisions:   any[];
+    critical_stock_alerts: any[];
+    hitl_required:         boolean;
+    agents_invoked:        string[];
+  }>({
+    guardrail_status: 'APPROVE', guardrail_issues: [], scored_products: [],
+    coach_recommendation: {}, inventory_decisions: [], critical_stock_alerts: [],
+    hitl_required: false, agents_invoked: [],
+  });
+
   // ── Computed ───────────────────────────────────────────────────────────────
   urgencyColor = computed(() => {
     const u = this.urgencyLevel();
@@ -273,6 +312,29 @@ export class WebSocketService {
               nb_warning:  data.nb_warning  ?? 0,
               timestamp:   data.timestamp,
             });
+          } else if (data.type === 'realtime_stock_update') {
+            // Phase 2-lite — one simulated sale, pushed instantly
+            this.liveSalesTicker.update(list => [
+              {
+                sku:          data.sku,
+                product_name: data.product_name ?? null,
+                amount:       data.amount ?? null,
+                units_sold:   data.units_sold,
+                stock_before: data.stock_before,
+                stock_after:  data.stock_after,
+                severity:     data.severity,
+                message:      data.message,
+                timestamp:    data.timestamp,
+              },
+              ...list.slice(0, 19), // keep last 20
+            ]);
+          } else if (data.type === 'stock_alert') {
+            this.liveStockAlert.set({
+              sku:      data.sku,
+              stock:    data.stock,
+              severity: data.severity,
+              message:  data.message,
+            });
           }
         } catch (e) {
           console.warn('[WS] Parse error', e);
@@ -320,13 +382,18 @@ export class WebSocketService {
   private _handleMetricsUpdate(data: any) {
 
     // ── liveMetrics complet ────────────────────────────────────────────────
+    // Fusion avec l'état précédent : certains messages metrics_update sont des
+    // ticks légers (CA/visiteurs) qui ne portent pas store_context/strategie/
+    // hourly_performance/etc. Un remplacement total les effacerait à chaque
+    // tick léger (badges jours fériés/offres, graphique horaire qui "disparaît").
+    const prev = this.liveMetrics();
     this.liveMetrics.set({
       ca_today:               data.ca_today,
       ca_target:              data.ca_target,
       attainment:             data.attainment,
       visitors_h:             data.visitors_h,
       agents_live:            data.agents_live,
-      store_context:          data.store_context          ?? {},
+      store_context:          (data.store_context && Object.keys(data.store_context).length) ? data.store_context : (prev?.store_context ?? {}),
       niveau_urgence:         data.niveau_urgence,
       ecart_objectif:         data.ecart_objectif,
       forecast_eod:           data.forecast_eod,
@@ -334,24 +401,24 @@ export class WebSocketService {
       forecast_ci_high:       data.forecast_ci_high,
       forecast_mape:          data.forecast_mape,
       last_cycle_id:          data.last_cycle_id,
-      risk_hours:             data.risk_hours             ?? [],
-      context_signals:        data.context_signals        ?? [],
-      advisor_priorities:     data.advisor_priorities     ?? [],
-      product_mix:            data.product_mix            ?? [],
-      hourly_performance:     data.hourly_performance     ?? [],
+      risk_hours:             data.risk_hours?.length             ? data.risk_hours             : (prev?.risk_hours             ?? []),
+      context_signals:        data.context_signals?.length        ? data.context_signals        : (prev?.context_signals        ?? []),
+      advisor_priorities:     data.advisor_priorities?.length     ? data.advisor_priorities     : (prev?.advisor_priorities     ?? []),
+      product_mix:            data.product_mix?.length            ? data.product_mix            : (prev?.product_mix            ?? []),
+      hourly_performance:     data.hourly_performance?.length     ? data.hourly_performance     : (prev?.hourly_performance     ?? []),
       ca_yesterday_same_hour: data.ca_yesterday_same_hour,
-      analyst_summary:        data.analyst_summary        ?? '',
-      advisors:               data.advisors               ?? [],
-      strategie:              data.strategie              ?? '',
-      strategie_actions:      data.strategie_actions      ?? [],
-      cause_racine:           data.cause_racine           ?? '',
-      focus_produits:         data.focus_produits         ?? [],
-      message_manager:        data.message_manager        ?? '',
-      coaching_cards:         data.coaching_cards         ?? [],
-      context_heatmap:        data.context_heatmap        ?? {},
+      analyst_summary:        data.analyst_summary                || (prev?.analyst_summary     ?? ''),
+      advisors:               data.advisors?.length               ? data.advisors               : (prev?.advisors               ?? []),
+      strategie:              data.strategie                      || (prev?.strategie           ?? ''),
+      strategie_actions:      data.strategie_actions?.length      ? data.strategie_actions      : (prev?.strategie_actions      ?? []),
+      cause_racine:           data.cause_racine                   || (prev?.cause_racine        ?? ''),
+      focus_produits:         data.focus_produits?.length         ? data.focus_produits         : (prev?.focus_produits         ?? []),
+      message_manager:        data.message_manager                || (prev?.message_manager     ?? ''),
+      coaching_cards:         data.coaching_cards?.length         ? data.coaching_cards         : (prev?.coaching_cards         ?? []),
+      context_heatmap:        (data.context_heatmap && Object.keys(data.context_heatmap).length) ? data.context_heatmap : (prev?.context_heatmap ?? {}),
       // Nouveaux champs Agent Coach + RAG
-      rag_used:               data.rag_used               ?? false,
-      nb_rag_scripts:         data.nb_rag_scripts         ?? 0,
+      rag_used:               data.rag_used               ?? (prev?.rag_used         ?? false),
+      nb_rag_scripts:         data.nb_rag_scripts         ?? (prev?.nb_rag_scripts   ?? 0),
       timestamp:              data.timestamp,
     });
 
@@ -363,6 +430,20 @@ export class WebSocketService {
     // ── Coaching Cards (Agent Coach) ───────────────────────────────────────
     if (data.coaching_cards?.length) {
       this.coachingCards.set(data.coaching_cards);
+    }
+
+    // ── SupervisorAgent — raisonnement unifié (cycle courant) ───────────────
+    if (data.agents_invoked?.length) {
+      this.supervisorInsights.set({
+        guardrail_status:      data.guardrail_status      ?? 'APPROVE',
+        guardrail_issues:      data.guardrail_issues      ?? [],
+        scored_products:       data.scored_products       ?? [],
+        coach_recommendation:  data.coach_recommendation  ?? {},
+        inventory_decisions:   data.inventory_decisions   ?? [],
+        critical_stock_alerts: data.critical_stock_alerts ?? [],
+        hitl_required:         data.hitl_required         ?? false,
+        agents_invoked:        data.agents_invoked        ?? [],
+      });
     }
 
     // ── RAG ───────────────────────────────────────────────────────────────

@@ -20,7 +20,7 @@
         Next: <strong>{{ nextCycle() }}</strong>
       </div>
 
-      <button class="btn-outline" type="button">
+      <button class="btn-outline" type="button" (click)="refresh()">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polyline points="1,4 1,10 7,10" />
           <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
@@ -173,6 +173,13 @@
               {{ agent.name }}
             </span>
 
+            @if (!agent.hasTelemetry) {
+            <span title="Aucune exécution enregistrée pour cet agent sur la fenêtre courante"
+              style="font-size:7px;font-weight:700;color:#b45309;background:#FEF3C7;padding:1px 4px;border-radius:6px;">
+              NO TELEMETRY
+            </span>
+            }
+
             <span style="font-size:8px;font-weight:700;color:#9ca3af;font-family:'JetBrains Mono',monospace;">
               {{ agent.appId }}
             </span>
@@ -281,9 +288,54 @@
           </div>
           }
 
+          <!-- ── Real Input / Output snapshot (agent_logs JSONB, ou résumé de run pour les agents inventaire) ── -->
+          @if (selectedAgent()!.hasTelemetry) {
+          <div class="detail-io" style="margin-top:8px;">
+            <div class="io-col">
+              <p class="io-title">{{ selectedAgent()!.granularity === 'run' ? 'Last run — input' : 'Last input (state)' }}</p>
+              @if (ioEntries(selectedAgent()!.lastInput).length) {
+                @for (e of ioEntries(selectedAgent()!.lastInput); track e.key) {
+                <div class="io-tag io-tag--in" style="display:flex;justify-content:space-between;gap:8px;">
+                  <strong style="font-family:'JetBrains Mono',monospace;">{{ e.key }}</strong>
+                  <span style="opacity:0.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px;">{{ e.value }}</span>
+                </div>
+                }
+              } @else {
+                <div class="io-tag io-tag--in" style="opacity:0.6;">—</div>
+              }
+            </div>
+            <div class="io-col">
+              <p class="io-title">{{ selectedAgent()!.granularity === 'run' ? 'Last run — output' : 'Last output (state)' }}</p>
+              @if (ioEntries(selectedAgent()!.lastOutput).length) {
+                @for (e of ioEntries(selectedAgent()!.lastOutput); track e.key) {
+                <div class="io-tag io-tag--out" style="display:flex;justify-content:space-between;gap:8px;">
+                  <strong style="font-family:'JetBrains Mono',monospace;">{{ e.key }}</strong>
+                  <span style="opacity:0.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px;">{{ e.value }}</span>
+                </div>
+                }
+              } @else {
+                <div class="io-tag io-tag--out" style="opacity:0.6;">—</div>
+              }
+            </div>
+          </div>
+          }
+
           <div class="detail-logs">
-            <p class="detail-logs__title">Recent logs</p>
-            @for (log of selectedAgent()!.logs; track log.time) {
+            <p class="detail-logs__title">
+              {{ selectedAgent()!.granularity === 'run' ? 'Recent runs' : 'Recent logs' }}
+              @if (selectedAgent()!.hasTelemetry) {
+                <span style="font-size:9px;color:#9ca3af;">
+                  · {{ selectedAgent()!.granularity === 'run' ? 'inventory.agent_runs live' : 'agent_logs live' }}
+                </span>
+              }
+            </p>
+            @if (!selectedAgent()!.hasTelemetry) {
+              <div class="log-row" style="border-left-color:#F9A825;background:#FFF8E1;">
+                <span class="log-level" style="color:#b45309;">INFO</span>
+                <span class="log-text">Aucune télémétrie enregistrée pour cet agent — statut IDLE.</span>
+              </div>
+            }
+            @for (log of selectedAgent()!.logs; track $index) {
             <div class="log-row" [style.border-left-color]="logColor(log.level)" [style.background]="logBg(log.level)">
               <span class="log-level" [style.color]="logColor(log.level)">{{ log.level.toUpperCase() }}</span>
               <span class="log-time mono">{{ log.time }}</span>
@@ -347,7 +399,7 @@
         </div>
 
         <div class="state-fields">
-          @for (f of stateFields; track f.key) {
+          @for (f of stateFields(); track f.key) {
           <div class="state-field" [class.state-field--new]="f.sprint === 2">
             <span class="state-field__key">{{ f.key }}</span>
             <span class="state-field__owner">{{ f.owner }}</span>

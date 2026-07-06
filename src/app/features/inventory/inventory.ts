@@ -3,12 +3,14 @@ import {
   inject, OnDestroy, DestroyRef, PLATFORM_ID,
 } from '@angular/core';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
+import { RouterLink } from '@angular/router';
 import { HttpClientModule, HttpParams } from '@angular/common/http';
 import { HttpClient } from '@angular/common/http';
 import { timeout } from 'rxjs/operators';
 import { InventoryItem, InventoryAlert } from '../../core/models/inventory';
 import { MockDataService } from '../../core/services/mock-data';
 import { InventoryApiService, InventoryApiItem, StorePayload } from '../../core/services/inventory-api.service';
+import { PurchaseOrderApiService } from '../../core/services/purchase-order-api.service';
 import { WebSocketService } from '../../core/services/websocket.service';
 import { environment }      from '../../../environments/environment';
 
@@ -44,7 +46,7 @@ const HTTP_MAX_ATTEMPTS   = 12;
 @Component({
   selector:    'app-inventory',
   standalone:  true,
-  imports:     [CommonModule, HttpClientModule],
+  imports:     [CommonModule, HttpClientModule, RouterLink],
   templateUrl: './inventory.html',
   styleUrl:    './inventory.scss',
 })
@@ -53,6 +55,7 @@ export class InventoryComponent implements OnInit, OnDestroy {
   private ws         = inject(WebSocketService);
   private mock       = inject(MockDataService);
   private invApi     = inject(InventoryApiService);
+  private poApi      = inject(PurchaseOrderApiService);
   private http       = inject(HttpClient);
   private destroyRef = inject(DestroyRef);
   private platformId = inject(PLATFORM_ID);
@@ -96,6 +99,12 @@ export class InventoryComponent implements OnInit, OnDestroy {
   flippedId  = signal<string | null>(null);
   decisions  = signal<Record<string, Decision>>({});
   productDecisions = signal<Record<string, Decision>>({});
+
+  // Purchase-order bridge: after a recommendation is approved, a PO is created
+  // via POST /api/supply/purchase-orders. If that second call fails, we keep
+  // the approval (no re-approval needed) and let the user retry just the PO
+  // creation step — keyed by recommendationId.
+  poBridgeError = signal<Record<string, string>>({});
 
   /**
    * Per-alert status right after a user action.
@@ -843,6 +852,7 @@ export class InventoryComponent implements OnInit, OnDestroy {
           console.warn('[Recommendations] Skipped PATCH (no id):', recId);
         } else {
           console.log('[Recommendations] ✅ DB status → approved:', recId);
+          this.createPurchaseOrderFor(recId);
         }
       },
       error: err => {
@@ -851,6 +861,43 @@ export class InventoryComponent implements OnInit, OnDestroy {
         console.warn('[Recommendations] PATCH failed (approve):', err?.status, recId);
       },
     });
+  }
+
+  /**
+   * Second step of the approve→PO bridge. Kept as an explicit, separate call
+   * (not baked into the recommendation PATCH on the backend) so the two
+   * routers stay decoupled — this is the orchestration point that keeps it
+   * robust: on failure the recommendation stays 'approved' and the user gets
+   * a retry affordance instead of a silently missing purchase order.
+   */
+  private createPurchaseOrderFor(recId: string): void {
+    this.poApi.createPurchaseOrder(recId).subscribe({
+      next: po => {
+        console.log('[PurchaseOrder] ✅ created', po.po_id, 'for recommendation', recId);
+        this.poBridgeError.update(d => { const { [recId]: _drop, ...rest } = d; return rest; });
+      },
+      error: err => {
+        console.warn('[PurchaseOrder] creation failed for recommendation', recId, err?.status);
+        this.poBridgeError.update(d => ({
+          ...d,
+          [recId]: "La commande n'a pas pu être créée sur le board.",
+        }));
+      },
+    });
+  }
+
+  /** Looks up the recommendationId for a modal/product id and returns its pending bridge error, if any. */
+  poBridgeErrorFor(id: string): string | null {
+    const item = this.items().find(i => (i as any).id === id || i.sku === id);
+    const recId: string | null = (item as any)?.recommendationId ?? null;
+    return recId ? (this.poBridgeError()[recId] ?? null) : null;
+  }
+
+  retryCreatePurchaseOrder(id: string, e: Event): void {
+    e.stopPropagation();
+    const item = this.items().find(i => (i as any).id === id || i.sku === id);
+    const recId: string | null = (item as any)?.recommendationId ?? null;
+    if (recId) this.createPurchaseOrderFor(recId);
   }
 
   rejectProduct(id: string, e: Event): void {
@@ -1286,29 +1333,46 @@ export class InventoryComponent implements OnInit, OnDestroy {
 
   invRecs = computed(() => {
     const items = this.items();
-    const recs: { icon: string; title: string; desc: string }[] = [];
-    const critical = items.filter(i => i.riskLevel === 'critical');
-    const high     = items.filter(i => i.riskLevel === 'high');
-    const overstk  = items.filter(i => (i as any).overstockFlag || i.stock >= 999);
-    if (critical.length || high.length) {
-      const item = critical[0] ?? high[0];
-      recs.push({ icon: 'transfer', title: 'Transférer du stock', desc: `Transférer ${(item as any).formulaOrderQty || 5} unités de ${item.name} depuis FR LAC1 vers FR LAC2` });
+    const timingRank: Record<string, number> = { immediate: 0, this_week: 1, this_month: 2, none: 3 };
+    const iconFor = (action: string | null): string =>
+      action === 'EXPEDITE' ? 'transfer' : action === 'ORDER' ? 'reorder' : 'promo';
+
+    const decided = items
+      .filter(i => this.hasDecision(i))
+      .sort((a, b) => {
+        const ea = (a as any).escalateToHuman ? 0 : 1;
+        const eb = (b as any).escalateToHuman ? 0 : 1;
+        if (ea !== eb) return ea - eb;
+        const ta = timingRank[(a as any).orderTiming ?? 'none'] ?? 3;
+        const tb = timingRank[(b as any).orderTiming ?? 'none'] ?? 3;
+        return ta - tb;
+      })
+      .slice(0, 5)
+      .map(item => {
+        const api = item as any;
+        const qty  = api.finalOrderQty != null ? `${api.finalOrderQty} unités` : '';
+        const desc = api.recommendationDetail
+          ?? (qty ? `${this.actionLabel(item)} — ${qty} de ${item.name} (${this.timingLabel(item)})`
+                  : `${this.actionLabel(item)} recommandé pour ${item.name} (${this.timingLabel(item)})`);
+        return {
+          icon:  iconFor(api.recommendation),
+          title: `${this.actionLabel(item)} — ${item.name}`,
+          desc:  api.escalateToHuman ? `⚠️ Validation requise — ${desc}` : desc,
+        };
+      });
+
+    if (!decided.length) {
+      return [{ icon: 'reorder', title: 'Stock sain', desc: 'Aucune action urgente. Surveillance habituelle recommandée.' }];
     }
-    if (high.length) {
-      const item = high[0];
-      recs.push({ icon: 'reorder', title: 'Réapprovisionnement recommandé', desc: `Commander ${(item as any).formulaOrderQty || 8} unités de ${item.name} (couverture < 2 jours)` });
-    }
-    if (overstk.length) {
-      const item = overstk[0];
-      recs.push({ icon: 'promo', title: 'Promouvoir pour écouler le surstock', desc: `Lancer une promo sur ${item.name} (${item.stock} unités en surstock)` });
-    }
-    if (!recs.length) recs.push({ icon: 'reorder', title: 'Stock sain', desc: 'Aucune action urgente. Surveillance habituelle recommandée.' });
-    return recs;
+    return decided;
   });
 
+  // Returns null (not a fake "now") until a real WS/HTTP update has actually
+  // landed — previously fell back to `new Date()`, which falsely implied the
+  // initial mock seed was fresh.
   lastUpdateTime = computed(() => {
     const lu = this.lastUpdate();
-    return (lu ?? new Date()).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    return lu ? lu.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : null;
   });
 
   coverageDays(item: InventoryItem): string {

@@ -5,6 +5,21 @@
     <p class="pb-sub">Store {{ selectedStore() }}</p>
   </div>
 
+  <!-- Chaîne d'intégration : agents → MCP Kanban → base → HITL -->
+  <div class="pb-mcp-strip">
+    <span class="pb-mcp-strip__title">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/>
+      </svg>
+      Kanban piloté par le serveur MCP
+    </span>
+    <span class="pb-mcp-chip">DecisionAgent → suggest_purchase_order</span>
+    <span class="pb-mcp-chip">MCP inventory-advisor · 4 outils Kanban</span>
+    <span class="pb-mcp-chip">PostgreSQL · supply.purchase_orders</span>
+    <span class="pb-mcp-chip pb-mcp-chip--hitl">Porte HITL : Approuver / Rejeter humain</span>
+    <span class="pb-mcp-chip pb-mcp-chip--pred">Prédiction rupture × réception sur chaque carte</span>
+  </div>
+
   @if (toastMsg()) {
     <div class="pb-toast">{{ toastMsg() }}</div>
   }
@@ -32,18 +47,83 @@
           (cdkDropListDropped)="onDrop($event, col.key)"
         >
           @for (po of ordersFor(col.key); track trackByPoId($index, po)) {
-            <div class="pb-card" cdkDrag [cdkDragData]="po">
+            <div
+              class="pb-card"
+              [class.pb-card--suggested]="col.key === 'SUGGERE'"
+              cdkDrag
+              [cdkDragDisabled]="col.key === 'SUGGERE'"
+              [cdkDragData]="po"
+            >
               <div class="pb-card__top">
                 <span class="pb-card__sku">{{ po.product_name || ('SKU ' + po.sku) }}</span>
                 <span class="pb-card__priority" [style.background]="priorityColor(po.priorite)">
                   {{ po.priorite }}
                 </span>
               </div>
+
+              @if (po.source === 'AGENT') {
+                <div class="pb-card__badges">
+                  <span class="pb-card__badge pb-card__badge--ia">IA</span>
+                  @if (po.urgency) {
+                    <span class="pb-card__badge" [class]="'pb-card__badge--urgency-' + po.urgency">
+                      {{ po.urgency }}
+                    </span>
+                  }
+                  @if (po.confidence != null) {
+                    <span class="pb-card__badge pb-card__badge--confidence">
+                      {{ po.confidence | percent:'1.0-0' }} confiance
+                    </span>
+                  }
+                </div>
+              }
+
               <div class="pb-card__qty">
                 {{ po.quantite_recue }}/{{ po.quantite_commandee }} unités
               </div>
               <div class="pb-card__cost">{{ po.montant_total_ht | number:'1.0-0' }} {{ po.devise }}</div>
-              <div class="pb-card__age">{{ ageLabel(po) }}</div>
+
+              <!-- Croisement stock × demande × réception (calcul backend temps réel) -->
+              <div class="pb-card__stock-row">
+                <span title="Stock disponible du SKU">Stock {{ po.stock_current ?? '—' }}</span>
+                <span class="pb-card__sep">·</span>
+                <span title="Vélocité de vente sur 30 jours">{{ (po.avg_daily_sales ?? 0) | number:'1.0-1' }}/j</span>
+                <span class="pb-card__sep">·</span>
+                <span [style.color]="coverageColor(po)" title="Couverture avant rupture">
+                  couvre {{ coverageLabel(po) }}
+                </span>
+              </div>
+
+              <div class="pb-card__timing">
+                @if (etaLabel(po)) {
+                  <span class="pb-card__eta" [class.pb-card__eta--late]="(po.eta_days ?? 0) < 0">
+                    📦 {{ etaLabel(po) }}
+                  </span>
+                }
+                @if (waitLabel(po)) {
+                  <span class="pb-card__wait" [class.pb-card__wait--long]="waitIsLong(po)">
+                    ⏳ {{ waitLabel(po) }}
+                  </span>
+                }
+                <span class="pb-card__age">{{ ageLabel(po) }}</span>
+              </div>
+
+              @if (riskBanner(po); as rb) {
+                <div class="pb-card__risk" [class.pb-card__risk--danger]="rb.kind === 'danger'"
+                     [class.pb-card__risk--ok]="rb.kind === 'ok'">
+                  {{ rb.kind === 'danger' ? '⚠' : '✓' }} {{ rb.text }}
+                </div>
+              }
+
+              @if (col.key === 'SUGGERE') {
+                <div class="pb-card__actions">
+                  <button type="button" class="pb-btn pb-btn--approve" (click)="approve(po)">
+                    Approuver
+                  </button>
+                  <button type="button" class="pb-btn pb-btn--reject" (click)="reject(po)">
+                    Rejeter
+                  </button>
+                </div>
+              }
             </div>
           }
         </div>

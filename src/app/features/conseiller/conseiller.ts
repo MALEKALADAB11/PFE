@@ -59,47 +59,47 @@ export class ConseillerComponent implements AfterViewChecked, OnInit, OnDestroy 
   private _lastAdvisorId = '';
 
   // ── Advisors dynamiques depuis WS ─────────────────────
+  // Objectif : jamais de chiffre inventé. Target réel de la DB (objectifs),
+  // sinon quote-part de l'objectif magasin ; prévision EOD = quote-part du
+  // forecast TimesFM du magasin (proportionnelle au CA), pas un ×1.25 fictif.
   advisors = computed((): any[] => {
-    const wsAdvisors = this.ws.liveMetrics()?.advisors;
-    if (wsAdvisors?.length) {
-      return [...wsAdvisors]
-        .sort((a: any, b: any) => (b.revenue ?? 0) - (a.revenue ?? 0))
-        .map((a: any, i: number) => ({
-          id:          a.id ?? a.name?.replace(/ /g, '_').toLowerCase() ?? `adv_${i}`,
-          name:        a.name ?? '',
-          initials:    this._initials(a.name ?? ''),
-          avatarColor: this._avatarColor(i),
-          role:        this._roleFromName(a.name ?? ''),
-          caRealized:  Math.round(a.revenue    ?? 0),
-          caObjectif:  Math.round(a.target     ?? 252),
-          performance: Math.round(a.attainment ?? 0),
-          previsionEod: Math.round((a.revenue  ?? 0) * 1.25),
-          coachScore:  this._coachScore(a.attainment ?? 0),
-          nbVentes:    a.nb_ventes ?? 0,
-          status:      (a.attainment ?? 0) >= 80 ? 'top'
-                     : (a.attainment ?? 0) >= 50 ? 'ok' : 'urgent',
-        }));
-    }
-    const apiList = this.liveAdvisors();
-    if (apiList.length) {
-      return [...apiList]
+    const mapAdvisor = (list: any[]) => {
+      const totalRev   = list.reduce((s, a) => s + (a.revenue ?? a.caRealized ?? 0), 0);
+      const storeTgt   = Number(this.ws.liveMetrics()?.ca_target ?? 0);
+      const storeEod   = this.ws.forecastEod();
+      const fallbackTgt = storeTgt > 0 && list.length ? storeTgt / list.length : 0;
+
+      return [...list]
         .sort((a: any, b: any) => (b.revenue ?? b.caRealized ?? 0) - (a.revenue ?? a.caRealized ?? 0))
-        .map((a: any, i: number) => ({
-          id:          a.id ?? `adv_${i}`,
-          name:        a.name ?? '',
-          initials:    this._initials(a.name ?? ''),
-          avatarColor: this._avatarColor(i),
-          role:        this._roleFromName(a.name ?? ''),
-          caRealized:  Math.round(a.revenue ?? a.caRealized ?? 0),
-          caObjectif:  Math.round(a.target  ?? a.caObjectif ?? 252),
-          performance: Math.round(a.attainment ?? a.performance ?? 0),
-          previsionEod: Math.round((a.revenue ?? 0) * 1.25),
-          coachScore:  this._coachScore(a.attainment ?? 0),
-          nbVentes:    a.nb_ventes ?? 0,
-          status:      (a.attainment ?? 0) >= 80 ? 'top'
-                     : (a.attainment ?? 0) >= 50 ? 'ok' : 'urgent',
-        }));
-    }
+        .map((a: any, i: number) => {
+          const revenue = a.revenue ?? a.caRealized ?? 0;
+          const target  = Number(a.target ?? a.caObjectif ?? 0) || fallbackTgt;
+          const attainment = a.attainment != null
+            ? Math.round(a.attainment)
+            : target > 0 ? Math.round(revenue / target * 100) : 0;
+          const share = totalRev > 0 ? revenue / totalRev : (list.length ? 1 / list.length : 0);
+          return {
+            id:          a.id ?? a.name?.replace(/ /g, '_').toLowerCase() ?? `adv_${i}`,
+            name:        a.name ?? '',
+            initials:    this._initials(a.name ?? ''),
+            avatarColor: this._avatarColor(i),
+            role:        this._roleFromName(a.name ?? ''),
+            caRealized:  Math.round(revenue),
+            caObjectif:  Math.round(target),
+            hasTarget:   target > 0,
+            performance: attainment,
+            previsionEod: storeEod > 0 ? Math.round(storeEod * share) : 0,
+            coachScore:  this._coachScore(attainment),
+            nbVentes:    a.nb_ventes ?? 0,
+            status:      attainment >= 80 ? 'top' : attainment >= 50 ? 'ok' : 'urgent',
+          };
+        });
+    };
+
+    const wsAdvisors = this.ws.liveMetrics()?.advisors;
+    if (wsAdvisors?.length) return mapAdvisor(wsAdvisors);
+    const apiList = this.liveAdvisors();
+    if (apiList.length) return mapAdvisor(apiList);
     return this.data.getAdvisors().map((a) => ({ ...a, nbVentes: 0 }));
   });
 
@@ -114,54 +114,109 @@ export class ConseillerComponent implements AfterViewChecked, OnInit, OnDestroy 
   advisorsList = computed(() => this.advisors());
   hoursLeft = computed(() => Math.max(0, 20 - new Date().getHours()));
 
-  // ── Alertes dynamiques ────────────────────────────────
+  // ── Alertes temps réel — 100% sorties agents (AlertBus / Analyste / ticker RT)
   alerts = computed<Alert[]>(() => {
     const gap     = this.ws.gapPct();
+    const gapAmt  = this.ws.gapAmount();
     const urgency = this.ws.urgencyLevel();
     const weather = (this.ws.weatherIcon() + ' ' + this.ws.weatherLabel()).trim();
-    const adv     = this.selected();
     const signals = this.ws.liveMetrics()?.context_signals ?? [];
+    const ticker  = this.ws.liveSalesTicker();
+    const supAlerts = this.ws.supervisorInsights()?.critical_stock_alerts ?? [];
     const list: Alert[] = [];
 
-    if (gap > 40 && adv) {
+    // 1. Ruptures / stocks critiques — flux temps réel du simulateur POS + inventory
+    for (const t of ticker.filter(x => x.severity === 'rupture' || x.severity === 'critical').slice(0, 3)) {
+      const name = t.product_name || `SKU ${t.sku}`;
+      list.push({
+        id: `rt-${t.sku}-${t.timestamp}`, type: 'stock',
+        label: t.severity === 'rupture' ? `Rupture — ${name}` : `Stock critique — ${name}`,
+        detail: `${t.stock_after} unité(s) restante(s) · vente -${t.units_sold} à ${this.tickerTime(t.timestamp)}`,
+        color: '#E74C3C', bg: '#FDEDEC',
+        chatMessage: `Stock ${t.severity === 'rupture' ? 'en rupture' : 'critique'} sur ${name} (${t.stock_after} unités). Comment gérer les clients intéressés et quelle alternative proposer ?`,
+      });
+    }
+
+    // 2. Alertes stock du SupervisorAgent (cross-domain inventory)
+    for (const a of supAlerts.slice(0, 2)) {
+      const name = a.product_name || a.name || `SKU ${a.sku ?? ''}`;
+      list.push({
+        id: `sup-${a.sku ?? name}`, type: 'stock',
+        label: `Risque rupture — ${name}`,
+        detail: a.message || `Niveau ${a.risk_level ?? 'CRITICAL'} détecté par l'agent inventory`,
+        color: '#E74C3C', bg: '#FDEDEC',
+        chatMessage: `L'agent inventory signale un risque de rupture sur ${name}. Quelle stratégie de vente adopter ?`,
+      });
+    }
+
+    // 3. Gap objectif — calcul temps réel de l'Agent Analyste (ReAct)
+    if (gap > 0 && (urgency === 'HIGH' || gap > 25)) {
       list.push({
         id: 'gap-alert', type: 'gap',
         label:  `Gap ${gap.toFixed(0)}% — Urgence ${urgency}`,
-        detail: `${adv.caRealized} / ${adv.caObjectif} DT · ${adv.nbVentes} ventes`,
-        color: '#E74C3C', bg: '#FDEDEC',
-        chatMessage: `J'ai un gap de ${gap.toFixed(0)}% (${adv.caRealized} / ${adv.caObjectif} DT). Quels produits prioriser maintenant ?`,
+        detail: `${gapAmt > 0 ? gapAmt.toFixed(0) + ' DT à rattraper · ' : ''}analyse Agent Analyste · ${this.hoursLeft()}h restantes`,
+        color: urgency === 'HIGH' ? '#E74C3C' : '#F9A825',
+        bg:    urgency === 'HIGH' ? '#FDEDEC' : '#FFF8E1',
+        chatMessage: `L'analyste détecte un gap de ${gap.toFixed(0)}% (${gapAmt.toFixed(0)} DT). Quels produits prioriser maintenant ?`,
       });
     }
 
-    list.push({
-      id: 'stock-iphone', type: 'stock',
-      label: 'Stock critique — iPhone 15',
-      detail: '3 unités restantes · 91% risque rupture',
-      color: '#E74C3C', bg: '#FDEDEC',
-      chatMessage: 'Stock iPhone 15 critique (3 unités). Comment gérer les clients intéressés et quoi proposer en alternative ?',
-    });
-
+    // 4. Signaux contexte (météo/événements) — Agent Stratège
     const weatherSig = signals.find((s: any) => s.type === 'weather' && s.level !== 'low');
-    if (weatherSig || weather) {
+    if (weatherSig && weather) {
       list.push({
         id: 'weather', type: 'weather',
-        label: `${weather} — Opportunité accessoires`,
-        detail: 'Demande accessoires +40% · Signal actif',
+        label: `${weather} — Signal contexte actif`,
+        detail: weatherSig.detail || 'Signal météo détecté par l\'Agent Stratège',
         color: '#2D9CDB', bg: '#E8F4FD',
-        chatMessage: `Météo: ${weather}. Comment exploiter ce contexte pour booster les ventes d'accessoires ?`,
+        chatMessage: `Météo: ${weather}. Comment exploiter ce contexte pour booster les ventes ?`,
       });
     }
-
-    list.push({
-      id: 'traffic-peak', type: 'traffic',
-      label: 'Pic trafic attendu 16h–17h',
-      detail: 'Créneau le plus fort I63 — 21% du CA journalier',
-      color: '#F9A825', bg: '#FFF8E1',
-      chatMessage: 'Stratégie pour le pic de trafic 16h-17h ? Comment maximiser les ventes pendant ce créneau ?',
-    });
 
     return list;
   });
+
+  // ── Recommandations — sorties réelles de l'Agent Stratège + Superviseur ──
+  agentRecos = computed(() => {
+    const actions = this.ws.strateActions() ?? [];
+    const coachReco = this.ws.supervisorInsights()?.coach_recommendation;
+    const list = actions.slice(0, 3).map((a, i) => ({
+      id: `strat-${i}`,
+      priorite: a.priorite ?? i + 1,
+      action: a.action,
+      produit: a.produit_cible,
+      argument: a.argument_vente,
+      impact: a.impact_estime,
+      source: 'Agent Stratège',
+      chatMessage: `Comment appliquer concrètement : "${a.action}" sur ${a.produit_cible} ? Donne-moi le script complet.`,
+    }));
+    if (coachReco?.product_to_push && list.length < 3) {
+      list.push({
+        id: 'sup-reco',
+        priorite: list.length + 1,
+        action: coachReco.message_for_advisor || `Pousser ${coachReco.product_to_push}`,
+        produit: coachReco.product_to_push,
+        argument: `Priorité ${coachReco.priority ?? 'normale'} · confiance ${Math.round((coachReco.confidence ?? 0) * 100)}%`,
+        impact: '',
+        source: 'SupervisorAgent',
+        chatMessage: `Le superviseur recommande de pousser ${coachReco.product_to_push}. Donne-moi le script de vente.`,
+      });
+    }
+    return list;
+  });
+
+  // Produits scorés par le SupervisorAgent (score multi-critères Sales×Inventory)
+  scoredProducts = computed(() => this.ws.supervisorInsights()?.scored_products ?? []);
+
+  tickerTime(ts: string): string {
+    try {
+      return new Date(ts).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    } catch { return ''; }
+  }
+
+  recoToChat(reco: any) {
+    this.chatTab.set('coach'); this.chatOpen.set(true); this.sendMessage(reco.chatMessage);
+  }
 
   // ── Messages chat ─────────────────────────────────────
   messages = signal<ChatMessage[]>([]);
@@ -307,7 +362,7 @@ export class ConseillerComponent implements AfterViewChecked, OnInit, OnDestroy 
 
     const perf    = adv.performance ?? 0;
     const ca      = adv.caRealized  ?? 0;
-    const target  = adv.caObjectif  ?? 252;
+    const target  = adv.caObjectif  ?? 0;
     const prenom  = adv.name.split(' ').find((p: string) => p.length > 1) ?? adv.name.split(' ')[0];
     const hours   = Math.max(0, 20 - new Date().getHours());
     const weather = (this.ws.weatherIcon() + ' ' + this.ws.weatherLabel()).trim() || '⛅ Tunis';
@@ -405,7 +460,7 @@ export class ConseillerComponent implements AfterViewChecked, OnInit, OnDestroy 
       message: userMsg, advisor_name: adv?.name ?? 'Conseiller', store_id: 'store-lac2',
       context: {
         current_revenue:   adv?.caRealized ?? 0,
-        daily_target:      adv?.caObjectif ?? 252,
+        daily_target:      adv?.caObjectif ?? 0,
         gap_pct:           this.ws.gapPct(),
         urgency:           this.ws.urgencyLevel(),
         analyst_summary:   this.ws.analystSummary(),
@@ -538,7 +593,7 @@ export class ConseillerComponent implements AfterViewChecked, OnInit, OnDestroy 
     }
     if (m.includes('objectif') || m.includes('gap') || m.includes('rattraper')) {
       const ca  = adv?.caRealized ?? 0;
-      const tgt = adv?.caObjectif ?? 252;
+      const tgt = adv?.caObjectif ?? 0;
       return `Gap: ${(tgt - ca).toFixed(0)} DT à rattraper.\n\n1. Un iPhone 16 Pro = 1299 DT → comble le gap immédiatement.\n2. Bundle forfait + terminal = panier moyen 800 DT.\n3. Assurance Premium sur chaque vente = marge 80%.`;
     }
     return `Gap ${gap.toFixed(0)}% — ${urgency}.\n\n${actions.slice(0, 2).map((a: any) => `• ${a.action} → ${a.produit_cible}`).join('\n') || '• Bundle terminal + forfait\n• Assurance Premium sur chaque vente'}`;
@@ -627,7 +682,7 @@ export class ConseillerComponent implements AfterViewChecked, OnInit, OnDestroy 
     if (!list.length) return { ca: 0, attainment: 0, ventes: 0, panierMoyen: 0 };
     const ca      = list.reduce((s, a) => s + (a.caRealized ?? 0), 0);
     const ventes  = list.reduce((s, a) => s + (a.nbVentes  ?? 0), 0);
-    const target  = list.reduce((s, a) => s + (a.caObjectif ?? 252), 0);
+    const target  = list.reduce((s, a) => s + (a.caObjectif ?? 0), 0);
     return {
       ca:          Math.round(ca),
       attainment:  Math.round((ca / Math.max(target, 1)) * 1000) / 10,
@@ -636,38 +691,54 @@ export class ConseillerComponent implements AfterViewChecked, OnInit, OnDestroy 
     };
   });
 
+  // Répartition réelle par catégorie — product_mix calculé par le backend
+  // (sales.transactions du jour), plus de 55/20/15/10 codé en dur.
   categoryDonut = computed(() => {
-    const total = Math.max(this.teamTotal().ca, 1);
-    const cats = [
-      { label: 'Smartphones', pct: 55, color: '#6C5CE7' },
-      { label: 'Forfaits',    pct: 20, color: '#27AE60' },
-      { label: 'Accessoires', pct: 15, color: '#F9A825' },
-      { label: 'Bundles',     pct: 10, color: '#2D9CDB' },
-    ];
+    const COLORS = ['#6C5CE7', '#27AE60', '#F9A825', '#2D9CDB', '#E74C3C', '#A29BFE'];
+    const mix: any[] = this.ws.liveMetrics()?.product_mix ?? [];
+    const real = mix
+      .filter(m => (m.revenue ?? 0) > 0)
+      .sort((a, b) => (b.revenue ?? 0) - (a.revenue ?? 0))
+      .slice(0, 4);
+
+    let cats: { label: string; pct: number; amount: number; color: string }[];
+    if (real.length) {
+      const total = real.reduce((s, m) => s + (m.revenue ?? 0), 0) || 1;
+      cats = real.map((m, i) => ({
+        label:  m.product ?? 'Autre',
+        pct:    Math.round((m.revenue ?? 0) / total * 100),
+        amount: Math.round(m.revenue ?? 0),
+        color:  COLORS[i % COLORS.length],
+      }));
+    } else {
+      // Aucune donnée mix reçue : donut neutre, pas de fausses catégories
+      cats = [{ label: 'En attente de données', pct: 100, amount: this.teamTotal().ca, color: '#E2E8F0' }];
+    }
+
     const R = 62, C = 2 * Math.PI * R;
     let cum = 0;
     return cats.map(c => {
       const arc        = (c.pct / 100) * C;
       const dashOffset = (C - cum).toFixed(1);
       cum += arc;
-      return { ...c, amount: Math.round(total * c.pct / 100), dashArray: `${arc.toFixed(1)} ${C.toFixed(1)}`, dashOffset };
+      return { ...c, dashArray: `${arc.toFixed(1)} ${C.toFixed(1)}`, dashOffset };
     });
   });
 
   recActions = computed(() => {
+    // Actions réelles du Stratège dès la première disponible — le statique
+    // n'apparaît qu'avant le tout premier cycle agent.
     const acts = this.ws.strateActions() ?? [];
-    if (acts.length >= 3) {
+    if (acts.length > 0) {
       return acts.slice(0, 3).map((a: any, i: number) => ({
-        icon: ['rocket', 'chart', 'gift'][i],
+        icon: ['rocket', 'chart', 'gift'][i % 3],
         title: a.action ?? a.produit_cible,
         desc:  a.argument_vente ?? a.produit_cible,
-        impact: i === 1 ? 'moyen' : 'élevé',
+        impact: a.impact_estime || (i === 1 ? 'moyen' : 'élevé'),
       }));
     }
     return [
-      { icon: 'rocket', title: 'Proposer Apple Watch S10',       desc: 'Cross-sell recommandé pour les clients premium', impact: 'élevé' },
-      { icon: 'chart',  title: 'Upsell accessoires premium',      desc: 'Chargeurs, coques, écouteurs',                   impact: 'moyen' },
-      { icon: 'gift',   title: 'Pousser bundles 5G + Terminal',   desc: 'Engagement 24 mois + remise immédiate',          impact: 'élevé' },
+      { icon: 'rocket', title: 'En attente du cycle Stratège',   desc: 'Les actions IA arrivent après le premier cycle agent', impact: '' },
     ];
   });
 
@@ -695,16 +766,20 @@ export class ConseillerComponent implements AfterViewChecked, OnInit, OnDestroy 
   }
 
   vsObjDay(adv: any): number {
-    return Math.round((adv?.caRealized ?? 0) - (adv?.caObjectif ?? 252));
+    return Math.round((adv?.caRealized ?? 0) - (adv?.caObjectif ?? 0));
   }
 
   minPct(v: number): number { return Math.min(v, 100); }
 
-  monthlyTarget(adv: any): number  { return Math.round((adv?.caObjectif ?? 252) * 30); }
-  monthlyRealized(adv: any): number { return Math.round((adv?.caRealized ?? 0) * 15); }
-  monthlyProgress(adv: any): number {
-    const t = this.monthlyTarget(adv);
-    return t > 0 ? Math.min(Math.round(this.monthlyRealized(adv) / t * 100), 100) : 0;
+  // Prévision fin de journée réelle (quote-part du forecast TimesFM magasin)
+  // — remplace les anciens chiffres mensuels inventés (CA×15, objectif×30).
+  eodForecast(adv: any): number { return Math.round(adv?.previsionEod ?? 0); }
+  eodVsTarget(adv: any): number {
+    return Math.round((adv?.previsionEod ?? 0) - (adv?.caObjectif ?? 0));
+  }
+  eodProgress(adv: any): number {
+    const t = adv?.caObjectif ?? 0;
+    return t > 0 ? Math.min(Math.round((adv?.previsionEod ?? 0) / t * 100), 200) : 0;
   }
 
   isTopPerf(adv: any): boolean { return (adv?.performance ?? 0) >= 100; }
@@ -744,18 +819,38 @@ export class ConseillerComponent implements AfterViewChecked, OnInit, OnDestroy 
     }));
   });
 
+  // Timeline réelle : flux WebSocket des ventes simulées + alertes stock,
+  // horodatage réel des événements (plus de "now - i minutes" fictif).
   timelineAlerts = computed(() => {
-    const now = new Date();
-    return this.alerts().slice(0, 3).map((a, i) => {
-      const t = new Date(now.getTime() - i * 60000);
-      const time = t.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-      const category =
-        a.type === 'stock'   ? { label: 'Inventaire',  color: '#2D9CDB', bg: '#EBF5FB' }
-        : a.type === 'traffic' ? { label: 'Opportunité', color: '#27AE60', bg: '#E8F8F5' }
-        : a.type === 'weather' ? { label: 'Opportunité', color: '#27AE60', bg: '#E8F8F5' }
-        : { label: 'Performance', color: '#F9A825', bg: '#FFF8E1' };
-      return { time, label: a.label, color: a.color, category };
-    });
+    const ticker = this.ws.liveSalesTicker();
+    if (ticker.length) {
+      return ticker.slice(0, 6).map(t => {
+        const isAlert = t.severity === 'rupture' || t.severity === 'critical';
+        const color = t.severity === 'rupture' ? '#E74C3C'
+                    : t.severity === 'critical' ? '#E74C3C'
+                    : t.severity === 'warning'  ? '#F9A825' : '#27AE60';
+        const category = isAlert
+          ? { label: 'Inventaire', color: '#E74C3C', bg: '#FDEDEC' }
+          : { label: 'Vente',      color: '#27AE60', bg: '#E8F8F5' };
+        const name = t.product_name || `SKU ${t.sku}`;
+        return {
+          time: this.tickerTime(t.timestamp),
+          label: isAlert
+            ? `${t.severity === 'rupture' ? 'Rupture' : 'Stock critique'} — ${name} (${t.stock_after} u.)`
+            : `Vente ${name}${t.amount ? ' — ' + Math.round(t.amount) + ' DT' : ''}`,
+          color, category,
+        };
+      });
+    }
+    // Fallback : alertes agents si le ticker n'a pas encore émis
+    return this.alerts().slice(0, 3).map(a => ({
+      time: '',
+      label: a.label,
+      color: a.color,
+      category: a.type === 'stock'
+        ? { label: 'Inventaire', color: '#2D9CDB', bg: '#EBF5FB' }
+        : { label: 'Analyse', color: '#F9A825', bg: '#FFF8E1' },
+    }));
   });
 
   iaActions = computed(() => {

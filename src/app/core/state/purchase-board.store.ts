@@ -11,6 +11,15 @@ export interface PoStatusChangedMessage {
   timestamp: number;
 }
 
+export interface PoSuggestedMessage {
+  type: 'po_suggested';
+  store_id: string;
+  po: PurchaseOrder;
+  timestamp: number;
+}
+
+export type PurchaseBoardMessage = PoStatusChangedMessage | PoSuggestedMessage;
+
 @Injectable({ providedIn: 'root' })
 export class PurchaseBoardStore {
   private readonly _byId = signal<Record<string, PurchaseOrder>>({});
@@ -38,11 +47,17 @@ export class PurchaseBoardStore {
     this._byId.update(m => ({ ...m, [po.po_id]: po }));
   }
 
-  applyMessage(msg: PoStatusChangedMessage) {
-    if (msg?.type !== 'po_status_changed') return;
-    this._byId.update(m =>
-      m[msg.po_id] ? { ...m, [msg.po_id]: { ...m[msg.po_id], statut: msg.new_statut } } : m,
-    );
+  applyMessage(msg: PurchaseBoardMessage) {
+    switch (msg?.type) {
+      case 'po_status_changed':
+        this._byId.update(m =>
+          m[msg.po_id] ? { ...m, [msg.po_id]: { ...m[msg.po_id], statut: msg.new_statut } } : m,
+        );
+        break;
+      case 'po_suggested':
+        this.upsert(msg.po);
+        break;
+    }
   }
 
   reset() {

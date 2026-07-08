@@ -943,6 +943,101 @@ export class InventoryComponent implements OnInit, OnDestroy {
     this.analysisModal.set(null);
   }
 
+  // ── Plan de commande — sortie DecisionAgent pour TOUS les produits ────────
+  // Quantités à commander calculées par les agents (ventes réelles → forecast
+  // → EOQ/ROP → décision LLM), avec rapport détaillé par produit (modal).
+
+  planSearch  = signal<string>('');
+  planFilter  = signal<'all' | 'order' | 'watch'>('all');
+  planShowAll = signal<boolean>(false);
+
+  private _actionRank(rec: string | null | undefined): number {
+    const r = (rec || '').toUpperCase();
+    if (r.includes('EXPEDITE')) return 0;
+    if (r.includes('ORDER'))    return 1;
+    if (r.includes('MONITOR'))  return 2;
+    if (r.includes('HOLD'))     return 3;
+    return 4;
+  }
+
+  recommendedQty(p: any): number {
+    if (p.finalOrderQty != null) return Math.max(0, Math.round(p.finalOrderQty));
+    // HOLD/MONITOR explicite du DecisionAgent ⇒ rien à commander (cohérent
+    // avec le badge). La formule EOQ ne sert de repli qu'en absence de décision.
+    if (p.recommendation && this._actionRank(p.recommendation) >= 2) return 0;
+    return Math.max(0, Math.round(p.formulaOrderQty ?? 0));
+  }
+
+  orderPlanAll = computed(() => {
+    const q = this.planSearch().trim().toLowerCase();
+    const f = this.planFilter();
+    return [...this.items()]
+      .filter((p: any) => {
+        if (q && !(`${p.name ?? ''} ${p.sku ?? ''}`.toLowerCase().includes(q))) return false;
+        const rank = this._actionRank(p.recommendation);
+        if (f === 'order') return rank <= 1 && this.recommendedQty(p) > 0;
+        if (f === 'watch') return rank >= 2;
+        return true;
+      })
+      .sort((a: any, b: any) =>
+        // Même priorité que le panneau d'alertes : les critiques d'abord,
+        // puis l'action agent, puis la quantité recommandée.
+        (b.riskScore ?? 0) - (a.riskScore ?? 0)
+        || this._actionRank(a.recommendation) - this._actionRank(b.recommendation)
+        || this.recommendedQty(b) - this.recommendedQty(a));
+  });
+
+  orderPlanVisible = computed(() =>
+    this.planShowAll() ? this.orderPlanAll() : this.orderPlanAll().slice(0, 8));
+
+  toOrderCount = computed(() =>
+    this.items().filter((p: any) =>
+      this._actionRank((p as any).recommendation) <= 1 && this.recommendedQty(p) > 0).length);
+
+  totalPlannedUnits = computed(() =>
+    this.items().reduce((s, p: any) =>
+      this._actionRank(p.recommendation) <= 1 ? s + this.recommendedQty(p) : s, 0));
+
+  totalPlannedCost = computed(() =>
+    Math.round(this.items().reduce((s, p: any) =>
+      this._actionRank(p.recommendation) <= 1
+        ? s + this.recommendedQty(p) * (Number(p.unitCost) || 0) : s, 0)));
+
+  planActionBadge(rec: string | null | undefined): { label: string; color: string; bg: string } {
+    const r = (rec || '').toUpperCase();
+    if (r.includes('EXPEDITE')) return { label: 'Expédier',   color: '#E74C3C', bg: '#FDEDEC' };
+    if (r.includes('ORDER'))    return { label: 'Commander',  color: '#D35400', bg: '#FEF5E7' };
+    if (r.includes('MONITOR'))  return { label: 'Surveiller', color: '#2D9CDB', bg: '#EBF5FB' };
+    if (r.includes('HOLD'))     return { label: 'Conserver',  color: '#27AE60', bg: '#E8F8F5' };
+    return { label: 'En attente', color: '#94A3B8', bg: '#F1F5F9' };
+  }
+
+  onPlanSearch(e: Event): void {
+    this.planSearch.set((e.target as HTMLInputElement).value);
+  }
+
+  /** Export CSV du plan de commande complet (tous produits, décision agents). */
+  exportOrderPlanCsv(): void {
+    const rows = this.orderPlanAll();
+    const esc = (v: any) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const head = 'sku;produit;categorie;stock;ventes_jour;jours_de_stock;qte_recommandee;action;confiance;cout_estime_dt;justification_agents';
+    const lines = rows.map((p: any) => [
+      p.sku, esc(p.name), esc(p.category), p.stock, p.demandForecast24h,
+      p.daysOfStock ?? '', this.recommendedQty(p),
+      this.planActionBadge(p.recommendation).label,
+      p.decisionConfidence ?? '',
+      Math.round(this.recommendedQty(p) * (Number(p.unitCost) || 0)),
+      esc(p.recommendationDetail || p.analystNote || ''),
+    ].join(';'));
+    const blob = new Blob(['﻿' + [head, ...lines].join('\n')], { type: 'text/csv;charset=utf-8' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url;
+    a.download = `plan_commande_${this.selectedStore()}_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   dismissAlert(id: string): void {
     // X button = gone immediately, no undo
     this._cancelAlertRemoval(id);

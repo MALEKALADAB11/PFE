@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { PurchaseBoardStore, PoStatusChangedMessage } from '../state/purchase-board.store';
+import { PurchaseBoardStore, PurchaseBoardMessage } from '../state/purchase-board.store';
 import { environment } from '../../../environments/environment';
 
 @Injectable({ providedIn: 'root' })
@@ -24,7 +24,7 @@ export class PurchaseBoardSocketService {
 
     this.ws.onmessage = (ev) => {
       try {
-        const msg = JSON.parse(ev.data) as PoStatusChangedMessage;
+        const msg = JSON.parse(ev.data) as PurchaseBoardMessage;
         this.store.applyMessage(msg);
       } catch {
         // ignore malformed frames

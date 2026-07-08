@@ -124,6 +124,121 @@
 
   </div>
 
+  <!-- ══ PLAN DE COMMANDE — DECISION AGENT (tous les produits) ══ -->
+  <div class="card inv-plan-card">
+    <div class="card-header">
+      <div>
+        <h2 class="card-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6C5CE7" stroke-width="2" style="flex-shrink:0">
+            <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/>
+          </svg>
+          Plan de commande — Agents Inventory
+        </h2>
+        <p class="card-sub">
+          Quantités à commander calculées par les agents (ventes réelles → prévision → EOQ → décision)
+          pour les {{ totalItems() }} produits suivis
+        </p>
+      </div>
+      <div class="inv-plan-totals">
+        <div class="inv-plan-total">
+          <span class="inv-plan-total__val">{{ toOrderCount() }}</span>
+          <span class="inv-plan-total__lbl">produits à commander</span>
+        </div>
+        <div class="inv-plan-total">
+          <span class="inv-plan-total__val">{{ totalPlannedUnits() | number:'1.0-0' }}</span>
+          <span class="inv-plan-total__lbl">unités recommandées</span>
+        </div>
+        <div class="inv-plan-total">
+          <span class="inv-plan-total__val">{{ totalPlannedCost() | number:'1.0-0' }} DT</span>
+          <span class="inv-plan-total__lbl">coût estimé</span>
+        </div>
+        <button class="inv-plan-export" (click)="exportOrderPlanCsv()" title="Exporter le plan complet en CSV">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          Rapport CSV
+        </button>
+      </div>
+    </div>
+
+    <div class="inv-plan-controls">
+      <div class="inv-plan-chips">
+        <button class="inv-plan-chip" [class.inv-plan-chip--active]="planFilter() === 'all'"
+                (click)="planFilter.set('all')">Tous ({{ orderPlanAll().length }})</button>
+        <button class="inv-plan-chip inv-plan-chip--order" [class.inv-plan-chip--active]="planFilter() === 'order'"
+                (click)="planFilter.set('order')">À commander ({{ toOrderCount() }})</button>
+        <button class="inv-plan-chip" [class.inv-plan-chip--active]="planFilter() === 'watch'"
+                (click)="planFilter.set('watch')">Surveiller / Conserver</button>
+      </div>
+      <input class="inv-plan-search" type="text" placeholder="Rechercher un produit ou SKU…"
+             [value]="planSearch()" (input)="onPlanSearch($event)" />
+    </div>
+
+    <div class="inv-plan-table">
+      <div class="inv-plan-thead">
+        <span>Produit</span>
+        <span class="inv-plan-num">Stock</span>
+        <span class="inv-plan-num">Ventes/j</span>
+        <span class="inv-plan-num">Couverture</span>
+        <span class="inv-plan-num inv-plan-qty-col">Qté à commander</span>
+        <span class="inv-plan-num">Coût est.</span>
+        <span>Action agent</span>
+        <span></span>
+      </div>
+
+      @for (p of orderPlanVisible(); track p.id) {
+        <div class="inv-plan-row"
+             [class.inv-plan-row--critical]="p.riskLevel === 'critical'"
+             [class.inv-plan-row--high]="p.riskLevel === 'high'"
+             [class.inv-plan-row--order]="p.riskLevel !== 'critical' && p.riskLevel !== 'high' && recommendedQty(p) > 0 && planActionBadge($any(p).recommendation).label !== 'Surveiller' && planActionBadge($any(p).recommendation).label !== 'Conserver'"
+             [class.inv-plan-row--flash]="flashedSkus().has(p.sku)"
+             (click)="viewFullAnalysis(p, $event)">
+          <div class="inv-plan-prod">
+            <span class="inv-plan-prod-name">
+              @if (p.riskLevel === 'critical') {
+                <span class="inv-plan-risk-dot" title="Critique — même niveau que l'alerte active"></span>
+              }
+              {{ p.name }}
+            </span>
+            <span class="inv-plan-prod-sku">{{ p.sku }} · {{ p.category }}</span>
+          </div>
+          <span class="inv-plan-num">{{ p.stock | number:'1.0-0' }}</span>
+          <span class="inv-plan-num">{{ p.demandForecast24h | number:'1.0-0' }}</span>
+          <span class="inv-plan-num" [style.color]="($any(p).daysOfStock ?? 99) < 7 ? '#E74C3C' : ($any(p).daysOfStock ?? 99) < 14 ? '#F9A825' : '#27AE60'">
+            {{ $any(p).daysOfStock != null ? ($any(p).daysOfStock | number:'1.0-0') + ' j' : '—' }}
+          </span>
+          <span class="inv-plan-num inv-plan-qty" [class.inv-plan-qty--zero]="recommendedQty(p) === 0">
+            {{ recommendedQty(p) > 0 ? (recommendedQty(p) | number:'1.0-0') : '0' }}
+          </span>
+          <span class="inv-plan-num inv-plan-cost">
+            {{ recommendedQty(p) > 0 && $any(p).unitCost ? ((recommendedQty(p) * $any(p).unitCost) | number:'1.0-0') + ' DT' : '—' }}
+          </span>
+          <span class="inv-plan-badge"
+                [style.color]="planActionBadge($any(p).recommendation).color"
+                [style.background]="planActionBadge($any(p).recommendation).bg"
+                [title]="$any(p).recommendationDetail || 'Justification complète dans le rapport'">
+            {{ planActionBadge($any(p).recommendation).label }}
+            @if ($any(p).escalateToHuman) { <span title="Escalade validation humaine">·&nbsp;HITL</span> }
+          </span>
+          <button class="inv-plan-report" (click)="viewFullAnalysis(p, $event)">
+            Rapport
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9,18 15,12 9,6"/></svg>
+          </button>
+        </div>
+      }
+
+      @if (!orderPlanAll().length) {
+        <div class="inv-plan-empty">Aucun produit ne correspond — le pipeline agents tourne peut-être encore.</div>
+      }
+    </div>
+
+    @if (orderPlanAll().length > 8) {
+      <button class="inv-plan-more" (click)="planShowAll.set(!planShowAll())">
+        @if (planShowAll()) { Réduire } @else { Afficher les {{ orderPlanAll().length }} produits }
+      </button>
+    }
+  </div>
+
   <!-- ══ MAIN 2-COLUMN LAYOUT ══ -->
   <div class="inv-main-layout">
 
@@ -374,58 +489,6 @@
       </div>
     </div>
 
-    <!-- Recommandations IA -->
-    <div class="card inv-recs-card">
-      <div class="card-header">
-        <h2 class="card-title">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6C5CE7" stroke-width="2" style="flex-shrink:0">
-            <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/>
-          </svg>
-          Recommandations IA
-        </h2>
-        <a class="card-link">Voir toutes</a>
-      </div>
-      <div class="recs-list">
-        @for (rec of invRecs(); track rec.title) {
-          <div class="rec-item">
-            <div class="rec-icon"
-                 [class.rec-icon--transfer]="rec.icon === 'transfer'"
-                 [class.rec-icon--reorder]="rec.icon === 'reorder'"
-                 [class.rec-icon--promo]="rec.icon === 'promo'">
-              @if (rec.icon === 'transfer') {
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <polyline points="17,1 21,5 17,9"/>
-                  <path d="M3 11V9a4 4 0 014-4h14"/>
-                  <polyline points="7,23 3,19 7,15"/>
-                  <path d="M21 13v2a4 4 0 01-4 4H3"/>
-                </svg>
-              }
-              @if (rec.icon === 'reorder') {
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
-                </svg>
-              }
-              @if (rec.icon === 'promo') {
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/>
-                  <line x1="7" y1="7" x2="7.01" y2="7"/>
-                </svg>
-              }
-            </div>
-            <div class="rec-body">
-              <p class="rec-title">{{ rec.title }}</p>
-              <p class="rec-desc">{{ rec.desc }}</p>
-            </div>
-            <span class="rec-impact"
-                  [style.color]="recImpact(rec).color"
-                  [style.background]="recImpact(rec).bg">
-              {{ recImpact(rec).label }}
-            </span>
-          </div>
-        }
-      </div>
-    </div>
-
   </div>
 
   <!-- ══ BOTTOM STATUS BAR ══ -->
@@ -497,7 +560,7 @@
               </div>
               <div class="analysis-metric">
                 <span class="analysis-metric-label">Plage de stock</span>
-                <span class="analysis-metric-value">{{ analysisModal()!.stockMin }} - {{ analysisModal()!.stockMax }}</span>
+                <span class="analysis-metric-value">{{ analysisModal()!.stockMin | number:'1.0-0' }} – {{ analysisModal()!.stockMax | number:'1.0-0' }}</span>
               </div>
               <div class="analysis-metric">
                 <span class="analysis-metric-label">Prévision 24h</span>
@@ -542,6 +605,78 @@
             </div>
             @if (riskRationaleVal(analysisModal()!)) {
               <p class="analysis-text" style="margin-top:12px">{{ riskRationaleVal(analysisModal()!) }}</p>
+            }
+          </div>
+
+          <!-- Raisonnement des agents — chaîne Analyste → Contexte → Décision -->
+          <div class="analysis-section">
+            <h3 class="analysis-section-title">Raisonnement des agents</h3>
+            <div class="analysis-metrics">
+              <div class="analysis-metric">
+                <span class="analysis-metric-label">EOQ (qté économique)</span>
+                <span class="analysis-metric-value">{{ ($any(analysisModal()!).eoq || 0) | number:'1.0-0' }} unités</span>
+              </div>
+              <div class="analysis-metric">
+                <span class="analysis-metric-label">Délai fournisseur</span>
+                <span class="analysis-metric-value">{{ ($any(analysisModal()!).leadTimeDays || 0) | number:'1.0-0' }} jours</span>
+              </div>
+              <div class="analysis-metric">
+                <span class="analysis-metric-label">MOQ</span>
+                <span class="analysis-metric-value">
+                  {{ ($any(analysisModal()!).moq || 0) | number:'1.0-0' }}
+                  @if ($any(analysisModal()!).moqIsBinding) { <span style="color:#F9A825">(contraignant)</span> }
+                </span>
+              </div>
+              <div class="analysis-metric">
+                <span class="analysis-metric-label">Niveau de service</span>
+                <span class="analysis-metric-value">{{ (($any(analysisModal()!).effectiveServiceLevel || 0) * 100) | number:'1.0-0' }}%</span>
+              </div>
+              <div class="analysis-metric">
+                <span class="analysis-metric-label">Coût stock sécurité</span>
+                <span class="analysis-metric-value">{{ ($any(analysisModal()!).safetyStockCostDt || 0) | number:'1.0-0' }} DT</span>
+              </div>
+              <div class="analysis-metric">
+                <span class="analysis-metric-label">Coût réappro total</span>
+                <span class="analysis-metric-value">{{ ($any(analysisModal()!).totalReplenishmentCost || 0) | number:'1.0-0' }} DT</span>
+              </div>
+              <div class="analysis-metric">
+                <span class="analysis-metric-label">Timing commande</span>
+                <span class="analysis-metric-value">{{ $any(analysisModal()!).orderTiming || '—' }}</span>
+              </div>
+              <div class="analysis-metric">
+                <span class="analysis-metric-label">Source du raisonnement</span>
+                <span class="analysis-metric-value">
+                  {{ (analysisModal()!.confidence || 0) >= 0.8 ? 'LLM + règles métier' : 'Règles métier (fallback)' }}
+                </span>
+              </div>
+            </div>
+
+            @if ($any(analysisModal()!).analystNote) {
+              <p class="analysis-text" style="margin-top:12px">
+                <strong>Note de l'Analyste :</strong> {{ $any(analysisModal()!).analystNote }}
+              </p>
+            }
+            @if ($any(analysisModal()!).tradeOffs) {
+              <p class="analysis-text" style="margin-top:8px">
+                <strong>Arbitrage considéré :</strong> {{ $any(analysisModal()!).tradeOffs }}
+              </p>
+            }
+            @if ($any(analysisModal()!).moqBindingNote) {
+              <p class="analysis-text" style="margin-top:8px">
+                <strong>Contrainte MOQ :</strong> {{ $any(analysisModal()!).moqBindingNote }}
+              </p>
+            }
+            @if ($any(analysisModal()!).escalateToHuman) {
+              <div class="analysis-recommendation" style="margin-top:12px;border-left:3px solid #E74C3C">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#E74C3C" stroke-width="2">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+                  <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                </svg>
+                <span>
+                  <strong>Escalade HITL demandée par l'agent</strong>
+                  @if ($any(analysisModal()!).escalationReason) { — {{ $any(analysisModal()!).escalationReason }} }
+                </span>
+              </div>
             }
           </div>
         </div>

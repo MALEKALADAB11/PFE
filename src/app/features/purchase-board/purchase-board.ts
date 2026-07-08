@@ -16,6 +16,7 @@ interface Column {
 }
 
 const COLUMNS: Column[] = [
+  { key: 'SUGGERE',   label: 'Suggéré (IA)' },
   { key: 'BROUILLON', label: 'Brouillon' },
   { key: 'SOUMIS',    label: 'Soumis' },
   { key: 'CONFIRME',  label: 'Confirmé' },
@@ -25,6 +26,8 @@ const COLUMNS: Column[] = [
 
 // Client-side mirror of supply_repo.ALLOWED_TRANSITIONS — backend remains the
 // authority (PATCH is re-validated server-side); this only gates the drag UI.
+// SUGGERE is deliberately absent here: those cards never move by drag, only
+// via approve()/reject() (they touch inventory.recommendations too).
 const ALLOWED_TRANSITIONS: Record<string, PurchaseOrderStatut[]> = {
   BROUILLON:    ['SOUMIS', 'ANNULE'],
   SOUMIS:       ['CONFIRME', 'ANNULE', 'LITIGE'],
@@ -131,6 +134,28 @@ export class PurchaseBoardComponent implements OnInit, OnDestroy {
     });
   }
 
+  approve(po: PurchaseOrder): void {
+    this.api.approvePurchaseOrder(po.po_id, 'manager').subscribe({
+      next: (updated) => this.boardStore.upsert(updated),
+      error: (err) => {
+        console.error('[PurchaseBoard] approve failed', err);
+        this.toastMsg.set("L'approbation a échoué.");
+        setTimeout(() => this.toastMsg.set(null), 3000);
+      },
+    });
+  }
+
+  reject(po: PurchaseOrder): void {
+    this.api.rejectPurchaseOrder(po.po_id, 'manager').subscribe({
+      next: (updated) => this.boardStore.upsert(updated),
+      error: (err) => {
+        console.error('[PurchaseBoard] reject failed', err);
+        this.toastMsg.set("Le rejet a échoué.");
+        setTimeout(() => this.toastMsg.set(null), 3000);
+      },
+    });
+  }
+
   priorityColor(priorite: string): string {
     switch (priorite) {
       case 'URGENTE': return '#DC2626';
@@ -144,6 +169,63 @@ export class PurchaseBoardComponent implements OnInit, OnDestroy {
     const days = Math.floor((Date.now() - new Date(po.date_commande).getTime()) / 86_400_000);
     if (days <= 0) return "aujourd'hui";
     return `${days}j`;
+  }
+
+  // ── Croisement stock × achat (champs calculés backend) ─────────────────
+
+  /** Couverture stock actuelle du SKU, capée pour l'affichage. */
+  coverageLabel(po: PurchaseOrder): string {
+    const d = po.days_to_stockout;
+    if (d == null) return '—';
+    if (d >= 999) return '> 1 an';
+    return `${Math.round(d)} j`;
+  }
+
+  coverageColor(po: PurchaseOrder): string {
+    const d = po.days_to_stockout;
+    if (d == null) return '#94A3B8';
+    if (d < 7)  return '#E74C3C';
+    if (d < 14) return '#F9A825';
+    return '#27AE60';
+  }
+
+  /** Temps restant avant réception (livraison prévue). */
+  etaLabel(po: PurchaseOrder): string {
+    const d = po.eta_days;
+    if (d == null) return '';
+    if (d < 0)  return `ETA dépassée de ${-d} j`;
+    if (d === 0) return 'Réception aujourd\'hui';
+    return `Réception dans ${d} j`;
+  }
+
+  /** Temps d'attente dans le statut courant. */
+  waitLabel(po: PurchaseOrder): string {
+    const d = po.waiting_days;
+    if (d == null || d <= 0) return '';
+    return `${d} j dans ce statut`;
+  }
+
+  waitIsLong(po: PurchaseOrder): boolean {
+    return (po.waiting_days ?? 0) > 5;
+  }
+
+  /** Prédiction rupture vs réception — bandeau de la carte. */
+  riskBanner(po: PurchaseOrder): { text: string; kind: 'danger' | 'ok' } | null {
+    if (po.stockout_before_delivery === true) {
+      const gap = Math.abs(Math.round(po.coverage_gap_days ?? 0));
+      return {
+        kind: 'danger',
+        text: `Rupture prévue ${gap > 0 ? gap + ' j ' : ''}avant réception — accélérer`,
+      };
+    }
+    if (po.stockout_before_delivery === false) {
+      const gap = Math.round(po.coverage_gap_days ?? 0);
+      return {
+        kind: 'ok',
+        text: `Stock couvre jusqu'à réception (+${gap} j de marge)`,
+      };
+    }
+    return null;
   }
 
   trackByPoId(_index: number, po: PurchaseOrder): string {

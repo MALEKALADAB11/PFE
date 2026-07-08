@@ -4,6 +4,7 @@ import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 
 export type PurchaseOrderStatut =
+  | 'SUGGERE'
   | 'BROUILLON'
   | 'SOUMIS'
   | 'CONFIRME'
@@ -35,6 +36,18 @@ export interface PurchaseOrder {
   updated_at: string;
   recommendation_id: string | null;
   product_name: string | null;
+  /** 'AGENT' when auto-suggested by the DecisionAgent, 'MANUEL' otherwise. */
+  source: 'AGENT' | 'MANUEL';
+  urgency: string | null;
+  confidence: number | null;
+  // ── Croisement stock × demande calculé par le backend (Kanban) ──
+  stock_current: number | null;            // stock disponible du SKU
+  avg_daily_sales: number | null;          // vélocité ventes 30 j
+  days_to_stockout: number | null;         // couverture (999 = demande quasi nulle)
+  eta_days: number | null;                 // jours avant livraison prévue
+  waiting_days: number | null;             // jours passés dans le statut courant
+  stockout_before_delivery: boolean | null; // prédiction : rupture avant réception ?
+  coverage_gap_days: number | null;        // couverture - ETA (négatif = rupture avant)
 }
 
 @Injectable({ providedIn: 'root' })
@@ -83,10 +96,29 @@ export class PurchaseOrderApiService {
   updatePurchaseOrderStatus(
     poId: string,
     statut: PurchaseOrderStatut,
+    quantiteRecue?: number,
   ): Observable<{ po_id: string; statut: string; updated: boolean }> {
     return this.http.patch<{ po_id: string; statut: string; updated: boolean }>(
       `${this.base}/purchase-orders/${poId}`,
-      { statut },
+      { statut, quantite_recue: quantiteRecue },
+      { headers: this._headers() },
+    );
+  }
+
+  /** Human approves an agent-suggested PO: recommendation -> approved, PO SUGGERE -> BROUILLON. */
+  approvePurchaseOrder(poId: string, decidedBy: string): Observable<PurchaseOrder> {
+    return this.http.post<PurchaseOrder>(
+      `${this.base}/purchase-orders/${poId}/approve`,
+      { decided_by: decidedBy },
+      { headers: this._headers() },
+    );
+  }
+
+  /** Human rejects an agent-suggested PO: recommendation -> rejected, PO -> ANNULE. */
+  rejectPurchaseOrder(poId: string, decidedBy: string, reason?: string): Observable<PurchaseOrder> {
+    return this.http.post<PurchaseOrder>(
+      `${this.base}/purchase-orders/${poId}/reject`,
+      { decided_by: decidedBy, reason },
       { headers: this._headers() },
     );
   }

@@ -51,6 +51,76 @@
         </svg>
         <strong>{{ upsellOpportunityCount() }}</strong> opportunités upsell
       </span>
+      <button class="adv-coach-cta" (click)="openChat()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+        </svg>
+        Demander au CoachAgent
+      </button>
+    </div>
+
+  </div>
+
+  <!-- ══ TEMPS RÉEL — ALERTES & RECOMMANDATIONS DES AGENTS (en premier) ══ -->
+  <div class="adv-rt-hero">
+
+    <!-- Alertes temps réel (Analyste / Inventory / ticker ventes) -->
+    <div class="adv-card adv-rt-card adv-rt-card--alerts">
+      <div class="adv-card-head">
+        <h2 class="adv-card-title">
+          <span class="adv-live-dot adv-live-dot--red"></span>
+          Alertes temps réel
+          <span class="adv-count-badge">{{ alerts().length }}</span>
+        </h2>
+        <span class="adv-rt-src">Analyste · Inventory · flux ventes</span>
+      </div>
+      <div class="adv-rt-list">
+        @for (al of alerts().slice(0, 4); track al.id) {
+          <button class="adv-rt-row" [style.border-left-color]="al.color" (click)="alertToChat(al)"
+                  title="Ouvrir dans le Coach Chat">
+            <div class="adv-rt-row-main">
+              <span class="adv-rt-label">{{ al.label }}</span>
+              <span class="adv-rt-detail">{{ al.detail }}</span>
+            </div>
+            <span class="adv-rt-chat-link">Coach&nbsp;→</span>
+          </button>
+        }
+        @if (!alerts().length) {
+          <div class="adv-rt-empty">Aucune alerte active — les agents surveillent le flux en continu.</div>
+        }
+      </div>
+    </div>
+
+    <!-- Recommandations des agents (Stratège + Superviseur) -->
+    <div class="adv-card adv-rt-card adv-rt-card--recos">
+      <div class="adv-card-head">
+        <h2 class="adv-card-title">Recommandations des agents</h2>
+        <span class="adv-rt-src">
+          @if (ws.ragUsed()) { Stratège · RAG {{ ws.nbRagScripts() }} scripts }
+          @else { Stratège · Superviseur }
+        </span>
+      </div>
+      <div class="adv-rt-list">
+        @for (r of agentRecos(); track r.id) {
+          <button class="adv-rt-row adv-rt-row--reco" (click)="recoToChat(r)"
+                  title="Demander le script au Coach">
+            <span class="adv-rt-prio">P{{ r.priorite }}</span>
+            <div class="adv-rt-row-main">
+              <span class="adv-rt-label">{{ r.action }}</span>
+              <span class="adv-rt-detail">
+                {{ r.produit }}@if (r.impact) { · impact {{ r.impact }} }
+              </span>
+              @if (r.argument) {
+                <span class="adv-rt-arg">« {{ r.argument }} »</span>
+              }
+            </div>
+            <span class="adv-rt-chat-link">Script&nbsp;→</span>
+          </button>
+        }
+        @if (!agentRecos().length) {
+          <div class="adv-rt-empty">En attente du prochain cycle Stratège…</div>
+        }
+      </div>
     </div>
 
   </div>
@@ -311,18 +381,19 @@
                 {{ vsObjDay(adv) >= 0 ? '+' : '' }}{{ vsObjDay(adv) | number:'1.0-0' }} DT
               </span>
             </div>
-            <div class="adv-focus-obj-row">
-              <span>Objectif du mois</span>
-              <span>{{ monthlyTarget(adv) | number:'1.0-0' }} DT</span>
-            </div>
-            <div class="adv-focus-obj-row">
-              <span>Réalisé mois</span>
-              <span>{{ monthlyRealized(adv) | number:'1.0-0' }} DT</span>
-            </div>
+            @if (eodForecast(adv) > 0) {
+              <div class="adv-focus-obj-row">
+                <span>Prévision fin de journée (TimesFM)</span>
+                <span>{{ eodForecast(adv) | number:'1.0-0' }} DT</span>
+                <span [style.color]="eodVsTarget(adv) >= 0 ? '#27AE60' : '#E74C3C'">
+                  {{ eodVsTarget(adv) >= 0 ? '+' : '' }}{{ eodVsTarget(adv) | number:'1.0-0' }} DT
+                </span>
+              </div>
+            }
             <div class="adv-focus-bar-track">
-              <div class="adv-focus-bar" [style.width.%]="monthlyProgress(adv)" [style.background]="advPerfColor(adv.performance)"></div>
+              <div class="adv-focus-bar" [style.width.%]="minPct(adv.performance)" [style.background]="advPerfColor(adv.performance)"></div>
             </div>
-            <span class="adv-focus-bar-pct" [style.color]="advPerfColor(adv.performance)">{{ monthlyProgress(adv) }}%</span>
+            <span class="adv-focus-bar-pct" [style.color]="advPerfColor(adv.performance)">{{ adv.performance }}%</span>
           </div>
         </div>
       }
@@ -356,12 +427,36 @@
       </div>
     </div>
 
-    <!-- Produits à prioriser -->
+    <!-- Produits à prioriser — scoring multi-critères du SupervisorAgent -->
     <div class="adv-card adv-products-card">
       <div class="adv-card-head">
         <h2 class="adv-card-title">Produits à prioriser</h2>
-        <span class="adv-margin-pill">High margin</span>
+        @if (scoredProducts().length) {
+          <span class="adv-margin-pill">Scoring agents</span>
+        } @else {
+          <span class="adv-margin-pill">High margin</span>
+        }
       </div>
+      @if (scoredProducts().length) {
+        <div class="adv-scored-list">
+          @for (p of scoredProducts().slice(0, 4); track p.sku) {
+            <div class="adv-scored-row">
+              <div class="adv-scored-main">
+                <span class="adv-scored-name">{{ p.name || 'SKU ' + p.sku }}</span>
+                <span class="adv-scored-reason">{{ p.recommendation_reason }}</span>
+              </div>
+              <div class="adv-scored-score">
+                <div class="adv-att-track">
+                  <div class="adv-att-bar"
+                       [style.width.%]="minPct(p.final_score * 100)"
+                       [style.background]="p.final_score >= 0.7 ? '#27AE60' : p.final_score >= 0.4 ? '#F9A825' : '#94A3B8'"></div>
+                </div>
+                <span class="adv-scored-pct">{{ (p.final_score * 100) | number:'1.0-0' }}</span>
+              </div>
+            </div>
+          }
+        </div>
+      } @else {
       <div class="adv-products-grid">
         @for (prod of priorityProducts; track prod.id) {
           <div class="adv-product-card">
@@ -388,6 +483,7 @@
           </div>
         }
       </div>
+      }
     </div>
 
     <!-- Actions IA en temps réel -->

@@ -166,6 +166,81 @@
   transition: transform 200ms ease;
 }
 
+.pb-card--suggested {
+  cursor: default;
+  border-style: dashed;
+  border-color: #A5B4FC;
+  background: #F5F6FF;
+}
+
+.pb-card__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.pb-card__badge {
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 6px;
+  padding: 1px 6px;
+  white-space: nowrap;
+  background: #E2E8F0;
+  color: #475569;
+
+  &--ia {
+    background: #4F46E5;
+    color: #fff;
+  }
+
+  &--confidence {
+    background: #E0E7FF;
+    color: #3730A3;
+  }
+
+  &--urgency-immediate {
+    background: #FEE2E2;
+    color: #991B1B;
+  }
+
+  &--urgency-this_week {
+    background: #FFEDD5;
+    color: #9A3412;
+  }
+
+  &--urgency-this_month {
+    background: #FEF9C3;
+    color: #854D0E;
+  }
+}
+
+.pb-card__actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.pb-btn {
+  flex: 1;
+  border: none;
+  border-radius: 6px;
+  padding: 5px 0;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+
+  &--approve {
+    background: #16A34A;
+    color: #fff;
+  }
+
+  &--reject {
+    background: #F1F5F9;
+    color: #64748B;
+  }
+}
+
 // ── Mobile responsive: horizontal scroll-snap, not grid-collapse ───────────
 // A Kanban board's columns are all equally primary — unlike a sidebar+main
 // layout, hiding one isn't an option, so this deliberately diverges from the
@@ -182,5 +257,99 @@
 
   .pb-column--problems {
     flex: 0 0 85vw;
+  }
+}
+
+// ── Bandeau intégration MCP Kanban ───────────────────────────────────────────
+
+.pb-mcp-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 10px 0 14px;
+  padding: 10px 14px;
+  background: #F8F7FF;
+  border: 1px solid #E4DEFF;
+  border-radius: 10px;
+}
+
+.pb-mcp-strip__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: #6C5CE7;
+  margin-right: 4px;
+}
+
+.pb-mcp-chip {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid #E4DEFF;
+  font-size: 11px;
+  font-weight: 600;
+  color: #4C4570;
+
+  &--hitl { border-color: #F5CBA7; color: #B9770E; background: #FEF9F2; }
+  &--pred { border-color: #A9DFBF; color: #1E8449; background: #F4FBF6; }
+}
+
+// ── Croisement stock × achat sur les cartes ──────────────────────────────────
+
+.pb-card__stock-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748B;
+}
+
+.pb-card__sep { color: #CBD5E0; }
+
+.pb-card__timing {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 5px;
+  font-size: 10.5px;
+}
+
+.pb-card__eta {
+  color: #2563EB;
+  font-weight: 700;
+
+  &--late { color: #DC2626; }
+}
+
+.pb-card__wait {
+  color: #94A3B8;
+  font-weight: 600;
+
+  &--long { color: #EA580C; font-weight: 700; }
+}
+
+.pb-card__risk {
+  margin-top: 7px;
+  padding: 6px 9px;
+  border-radius: 7px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.35;
+
+  &--danger {
+    background: #FDEDEC;
+    color: #C0392B;
+    border-left: 3px solid #E74C3C;
+  }
+  &--ok {
+    background: #E8F8F5;
+    color: #1E8449;
+    border-left: 3px solid #27AE60;
   }
 }

@@ -729,9 +729,10 @@
 }
 
 // ══ BOTTOM ROW ══
+// 2 colonnes depuis la fusion des "Recommandations IA" dans le Plan de commande
 .inv-bottom-row {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 16px;
   align-items: start;
 }
@@ -1242,4 +1243,259 @@
     grid-template-columns: 18px 1fr 52px 68px !important;
     > :nth-child(3) { display: none; }   // hide middle optional col
   }
+}
+
+// ── Plan de commande — DecisionAgent (tous les produits) ─────────────────────
+
+.inv-plan-card {
+  padding: 18px 20px;
+}
+
+.inv-plan-totals {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+
+.inv-plan-total {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+
+  &__val {
+    font-size: 18px;
+    font-weight: 800;
+    color: #1A1D2E;
+  }
+  &__lbl {
+    font-size: 10.5px;
+    color: #94A3B8;
+    white-space: nowrap;
+  }
+}
+
+.inv-plan-export {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 13px;
+  border: none;
+  border-radius: 8px;
+  background: #6C5CE7;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+
+  &:hover { background: #5A4BD1; }
+}
+
+.inv-plan-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 12px 0 10px;
+  flex-wrap: wrap;
+}
+
+.inv-plan-chips { display: flex; gap: 8px; }
+
+.inv-plan-chip {
+  padding: 6px 12px;
+  border: 1px solid #E2E8F0;
+  border-radius: 999px;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748B;
+  cursor: pointer;
+
+  &--active {
+    background: #6C5CE7;
+    border-color: #6C5CE7;
+    color: #fff;
+  }
+  &--order:not(&--active) { color: #D35400; border-color: #F5CBA7; }
+}
+
+.inv-plan-search {
+  width: 260px;
+  padding: 7px 12px;
+  border: 1px solid #E2E8F0;
+  border-radius: 8px;
+  font-size: 12.5px;
+  outline: none;
+
+  &:focus { border-color: #6C5CE7; }
+}
+
+.inv-plan-table { display: flex; flex-direction: column; }
+
+.inv-plan-thead,
+.inv-plan-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 2fr) 70px 75px 90px 120px 90px 130px 92px;
+  gap: 10px;
+  align-items: center;
+}
+
+.inv-plan-thead {
+  padding: 8px 12px;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: #94A3B8;
+  border-bottom: 1px solid #EDF1F7;
+}
+
+.inv-plan-row {
+  padding: 9px 12px;
+  border-bottom: 1px solid #F5F7FA;
+  cursor: pointer;
+  transition: background .12s;
+
+  &:hover { background: #F8F7FF; }
+  &--order { background: #FFFDF7; }
+  &--order:hover { background: #FFF7E8; }
+}
+
+.inv-plan-prod { display: flex; flex-direction: column; min-width: 0; }
+
+.inv-plan-prod-name {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #1A1D2E;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inv-plan-prod-sku {
+  font-size: 10.5px;
+  color: #94A3B8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inv-plan-num { font-size: 12.5px; color: #334155; text-align: right; }
+
+.inv-plan-qty-col { color: #6C5CE7; }
+
+.inv-plan-qty {
+  font-size: 15px;
+  font-weight: 800;
+  color: #6C5CE7;
+
+  &--zero { color: #CBD5E0; font-weight: 600; }
+}
+
+.inv-plan-cost { color: #64748B; }
+
+.inv-plan-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.inv-plan-report {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border: 1px solid #E2E8F0;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #6C5CE7;
+  cursor: pointer;
+
+  &:hover { background: #F3F0FF; border-color: #6C5CE7; }
+}
+
+.inv-plan-empty {
+  padding: 24px;
+  text-align: center;
+  font-size: 12.5px;
+  color: #94A3B8;
+}
+
+.inv-plan-more {
+  margin-top: 10px;
+  width: 100%;
+  padding: 9px;
+  border: 1px dashed #CBD5E0;
+  border-radius: 8px;
+  background: #FBFCFE;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #6C5CE7;
+  cursor: pointer;
+
+  &:hover { background: #F3F0FF; }
+}
+
+@media (max-width: 1100px) {
+  .inv-plan-thead, .inv-plan-row {
+    grid-template-columns: minmax(140px, 2fr) 60px 70px 100px 110px 80px;
+  }
+  .inv-plan-thead span:nth-child(6),
+  .inv-plan-row .inv-plan-cost,
+  .inv-plan-thead span:nth-child(8) { display: none; }
+}
+
+// ── Lignes du plan alignées sur les alertes (même sémantique couleur) ────────
+
+.inv-plan-row--critical {
+  background: #FDF3F2;
+  border-left: 3px solid #E74C3C;
+  padding-left: 9px;
+
+  &:hover { background: #FBE5E2; }
+
+  .inv-plan-prod-name { color: #C0392B; }
+  .inv-plan-qty       { color: #E74C3C; }
+}
+
+.inv-plan-row--high {
+  background: #FFFBF0;
+  border-left: 3px solid #F9A825;
+  padding-left: 9px;
+
+  &:hover { background: #FFF4D9; }
+}
+
+.inv-plan-risk-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: #E74C3C;
+  animation: inv-plan-pulse 1.4s ease-in-out infinite;
+  vertical-align: middle;
+}
+
+@keyframes inv-plan-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.45); }
+  50%      { box-shadow: 0 0 0 5px rgba(231, 76, 60, 0);  }
+}
+
+// Flash déclenché par le même signal WS que les points du quadrant
+@keyframes inv-plan-row-flash {
+  0%   { background: #FDECEA; }
+  100% { background: inherit; }
+}
+
+.inv-plan-row--flash {
+  animation: inv-plan-row-flash 0.9s ease-out;
 }

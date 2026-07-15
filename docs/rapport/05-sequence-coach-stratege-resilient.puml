@@ -1,0 +1,44 @@
+@startuml SD-04-coach-stratege-resilient
+' Cas d'utilisation interne : invocation résiliente du Stratège par le Coach
+title SD-04 — Invocation résiliente Coach → Stratège (cache LRU, retry, fallback à 4 niveaux)
+
+participant "CoachAgent\n(node invoke_stratege_for_coach)" as Coach
+participant "CoachStrategeOrchestrator" as CSO
+collections "Cache LRU\n(TTL 30 min)" as Cache
+participant "StrategistAgent" as Strat
+participant "Règles métier\n(fallback L2)" as Rules
+
+Coach -> CSO : invoke(state{gap_pct, urgence, store_id})
+
+CSO -> Cache : lookup(clé = store + gap stable)
+alt cache hit (< 30 min, gap stable)
+  Cache --> CSO : actions en cache
+  note right : latence < 1 ms
+else cache miss
+  loop retry ×3, backoff exponentiel, timeout 30 s
+    CSO -> Strat : ainvoke(state filtré)
+    alt succès
+      Strat --> CSO : StrategieOutput.actions
+      CSO -> Cache : met en cache les actions
+    else échec / timeout
+      note right of CSO : nouvelle tentative\naprès backoff
+    end
+  end
+  alt Stratège définitivement indisponible
+    CSO -> Cache : cherche une entrée périmée (stale)
+    alt stale cache disponible
+      Cache --> CSO : actions périmées\n(mieux que rien)
+    else aucun cache
+      CSO -> Rules : génère des actions\ncontextuelles par règles métier
+      alt règles applicables
+        Rules --> CSO : actions génériques (L2)
+      else tout échoue
+        CSO -> CSO : template statique (L3)
+        note right : le CoachAgent\nne plante jamais
+      end
+    end
+  end
+end
+
+CSO --> Coach : actions stratégiques\n+ indicateur de provenance\n(cache / live / stale / fallback)
+@enduml

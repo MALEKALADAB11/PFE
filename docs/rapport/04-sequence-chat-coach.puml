@@ -1,0 +1,56 @@
+@startuml SD-03-chat-coach
+' Cas d'utilisation : Converser avec le Coach IA (avec Guardrail et RAG)
+title SD-03 — Conversation Conseiller ↔ Coach IA (streaming SSE, guardrail, fallback LLM)
+
+actor "Conseiller de vente" as Vendeur
+participant "Angular\nChatComponent" as UI
+participant "FastAPI\nPOST /api/coach/stream" as API
+participant "GuardrailAgent" as Guard
+participant "Milvus (RAG)" as RAG
+participant "StrategistAgent\n(via orchestrateur résilient)" as Strat
+participant "LLM principal\n(OpenRouter)" as LLM1
+participant "LLM secours\n(Mistral → Ollama)" as LLM2
+database "PostgreSQL" as DB
+participant "WebSocket\nmonitoring" as WS
+
+Vendeur -> UI : pose une question au coach
+UI -> API : POST /stream {message, store_id, advisor}
+
+== Pré-traitements ==
+alt question hors sujet / salutation
+  API --> UI : réponse directe (guardrail / template),\nsans appel LLM
+  UI --> Vendeur : affichage immédiat
+else question métier
+  API -> RAG : recherche de scripts de vente pertinents
+  RAG --> API : passages top-k
+  API -> Strat : récupère actions stratégiques\n(cache LRU ou invocation — cf. SD-04)
+  Strat --> API : strategie_actions[]
+
+  == Génération ==
+  API -> LLM1 : prompt (contexte boutique + gap\n+ actions stratège + passages RAG)
+  alt LLM principal disponible
+    LLM1 --> API : réponse générée
+  else échec / timeout
+    API -> LLM2 : fallback Mistral, puis Ollama local
+    LLM2 --> API : réponse générée
+  end
+
+  == Validation Guardrail ==
+  API -> Guard : evaluate_guardrails(réponse)
+  alt statut = APPROVE
+    Guard --> API : réponse validée
+    loop streaming SSE mot à mot
+      API --> UI : data: {token}
+    end
+  else statut = BLOCK
+    Guard --> API : réponse bloquée + issues[]
+    API -> WS : broadcast guardrail_event\n(alerte supervision)
+    API -> DB : crée une revue HITL\n(source = guardrail_chat)
+    API --> UI : message de remplacement sécurisé
+  end
+
+  == Persistance asynchrone (non bloquante) ==
+  API ->> DB : sauvegarde conversation + télémétrie\n(agent_logs : coach / rag / guardrail)
+  UI --> Vendeur : conseil affiché en continu
+end
+@enduml

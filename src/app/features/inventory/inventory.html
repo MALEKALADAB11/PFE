@@ -45,7 +45,11 @@
   <!-- ══ KPI ROW ══ -->
   <div class="inv-kpi-row">
 
-    <div class="inv-kpi-card" [class.inv-kpi-card--alert]="criticalCount() > 0">
+    <div class="inv-kpi-card inv-kpi-card--clickable"
+         [class.inv-kpi-card--alert]="criticalCount() > 0"
+         [class.inv-kpi-card--active]="kpiFilter() === 'critical'"
+         (click)="focusKpi('critical')"
+         title="Voir les ruptures critiques dans le plan de commande">
       <div class="inv-kpi-icon inv-kpi-icon--red">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
@@ -61,7 +65,11 @@
       </div>
     </div>
 
-    <div class="inv-kpi-card" [class.inv-kpi-card--warn]="highCount() > 0">
+    <div class="inv-kpi-card inv-kpi-card--clickable"
+         [class.inv-kpi-card--warn]="highCount() > 0"
+         [class.inv-kpi-card--active]="kpiFilter() === 'high'"
+         (click)="focusKpi('high')"
+         title="Voir les produits à haut risque dans le plan de commande">
       <div class="inv-kpi-icon inv-kpi-icon--amber">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="12" cy="12" r="10"/>
@@ -77,7 +85,10 @@
       </div>
     </div>
 
-    <div class="inv-kpi-card">
+    <div class="inv-kpi-card inv-kpi-card--clickable"
+         [class.inv-kpi-card--active]="kpiFilter() === 'ok'"
+         (click)="focusKpi('ok')"
+         title="Voir les produits au stock optimal dans le plan de commande">
       <div class="inv-kpi-icon inv-kpi-icon--green">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polyline points="20,6 9,17 4,12"/>
@@ -91,7 +102,9 @@
       </div>
     </div>
 
-    <div class="inv-kpi-card">
+    <div class="inv-kpi-card inv-kpi-card--clickable"
+         (click)="focusKpi('all')"
+         title="Voir tout le plan de commande">
       <div class="inv-kpi-icon inv-kpi-icon--blue">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <rect x="2" y="3" width="20" height="14" rx="2"/>
@@ -107,7 +120,9 @@
       </div>
     </div>
 
-    <div class="inv-kpi-card">
+    <div class="inv-kpi-card inv-kpi-card--clickable"
+         (click)="focusKpi('all')"
+         title="Voir tout le plan de commande">
       <div class="inv-kpi-icon inv-kpi-icon--gray">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="12" cy="12" r="10"/>
@@ -125,7 +140,8 @@
   </div>
 
   <!-- ══ PLAN DE COMMANDE — DECISION AGENT (tous les produits) ══ -->
-  <div class="card inv-plan-card">
+  <div id="inv-plan-card" class="card inv-plan-card"
+       [class.inv-plan-card--focused]="kpiFilter() !== 'all'">
     <div class="card-header">
       <div>
         <h2 class="card-title">
@@ -160,6 +176,25 @@
         </button>
       </div>
     </div>
+
+    @if (kpiFilter() !== 'all') {
+      <div class="inv-plan-kpi-banner"
+           [class.inv-plan-kpi-banner--critical]="kpiFilter() === 'critical'"
+           [class.inv-plan-kpi-banner--high]="kpiFilter() === 'high'"
+           [class.inv-plan-kpi-banner--ok]="kpiFilter() === 'ok'">
+        <span class="inv-plan-kpi-banner__dot"></span>
+        <span>
+          Filtré depuis le KPI <strong>{{ kpiFilterLabel() }}</strong>
+          — {{ orderPlanAll().length }} produit{{ orderPlanAll().length !== 1 ? 's' : '' }}
+        </span>
+        <button class="inv-plan-kpi-banner__clear" (click)="clearKpiFilter()">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+          Réinitialiser
+        </button>
+      </div>
+    }
 
     <div class="inv-plan-controls">
       <div class="inv-plan-chips">
@@ -220,10 +255,30 @@
             {{ planActionBadge($any(p).recommendation).label }}
             @if ($any(p).escalateToHuman) { <span title="Escalade validation humaine">·&nbsp;HITL</span> }
           </span>
-          <button class="inv-plan-report" (click)="viewFullAnalysis(p, $event)">
-            Rapport
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9,18 15,12 9,6"/></svg>
-          </button>
+          <div class="inv-plan-actions">
+            @if (canCreateTicket(p)) {
+              <button class="inv-plan-kanban"
+                      [class.inv-plan-kanban--done]="kanbanState(p) === 'done' || kanbanState(p) === 'exists'"
+                      [class.inv-plan-kanban--error]="kanbanState(p) === 'error'"
+                      [disabled]="kanbanState(p) === 'pending'"
+                      [title]="kanbanState(p) === 'done' || kanbanState(p) === 'exists'
+                                 ? 'Carte présente sur le board — cliquez pour l\'ouvrir'
+                                 : 'Créer un ticket sur le Kanban des achats'"
+                      (click)="(kanbanState(p) === 'done' || kanbanState(p) === 'exists')
+                                 ? goToKanban($event) : createKanbanTicket(p, $event)">
+                @if (kanbanState(p) === 'done' || kanbanState(p) === 'exists') {
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20,6 9,17 4,12"/></svg>
+                } @else {
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                }
+                {{ kanbanLabel(p) }}
+              </button>
+            }
+            <button class="inv-plan-report" (click)="viewFullAnalysis(p, $event)">
+              Rapport
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9,18 15,12 9,6"/></svg>
+            </button>
+          </div>
         </div>
       }
 

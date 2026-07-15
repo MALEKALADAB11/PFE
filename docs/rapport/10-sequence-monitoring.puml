@@ -1,0 +1,43 @@
+@startuml SD-09-monitoring
+' Cas d'utilisation : Superviser l'activité des agents
+title SD-09 — Supervision des agents (monitoring, coûts, erreurs, KPIs d'évaluation)
+
+actor "Manager de boutique" as Manager
+participant "Angular\nMonitoringComponent" as UI
+participant "FastAPI\n/api/monitoring, /api/kpis" as API
+database "PostgreSQL\nagent_logs / agent_runs\ncycles / errors" as DB
+participant "Langfuse" as LF
+participant "Agents\n(tous modules)" as Agents
+
+== Collecte continue (asynchrone, non bloquante) ==
+Agents ->> DB : agent_logger — chaque nœud exécuté\n(agent, node, latence, tokens, statut)
+Agents ->> LF : traces hiérarchiques\n(trace cycle → span par agent)
+
+== Consultation ==
+Manager -> UI : ouvre /monitoring
+UI -> API : GET /monitoring/stats\nGET /monitoring/agents\nGET /monitoring/cycles
+API -> DB : agrégats (taux de succès,\nlatence moyenne, coût tokens par agent)
+API --> UI : tableaux de bord de santé
+UI --> Manager : état des agents, timeline des cycles
+
+opt inspection d'un agent
+  Manager -> UI : sélectionne un agent
+  UI -> API : GET /monitoring/health/{agent_id}\nGET /monitoring/performance
+  API --> UI : détail latences, erreurs, dépendances
+end
+
+== Gestion des erreurs ==
+UI -> API : GET /monitoring/errors
+API --> UI : erreurs ouvertes (+ événements guardrail)
+Manager -> UI : marque une erreur comme traitée
+UI -> API : POST /monitoring/errors/{id}/resolve
+API -> DB : statut → résolu
+API --> UI : 200
+
+== Évaluation de la valeur métier ==
+Manager -> UI : onglet KPIs d'évaluation
+UI -> API : GET /api/kpis\nGET /api/kpis/forecast-benchmark
+API -> DB : taux d'adoption des suggestions IA,\nprécision des prévisions (TimesFM vs réalisé :\nMAPE / biais), volumes HITL
+API --> UI : indicateurs consolidés
+UI --> Manager : ROI et fiabilité du système agentique
+@enduml

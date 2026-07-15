@@ -30,6 +30,11 @@ export interface PurchaseOrder {
   date_livraison_prevue: string | null;
   date_livraison_reelle: string | null;
   delai_reel_jours: number | null;
+  // ── Suivi livraison & auto-confirmation (migration 0010) ──
+  date_soumission: string | null;          // passage en SOUMIS (base du délai 24h)
+  date_confirmation: string | null;        // passage en CONFIRME (humain ou auto)
+  confirmed_auto: boolean;                 // true = confirmé automatiquement après 24h en SOUMIS
+  ecart_livraison_jours: number | null;    // réel - prévu : >0 retard, <0 avance, 0 à temps
   reference_externe: string | null;
   notes: string | null;
   created_at: string;
@@ -48,6 +53,8 @@ export interface PurchaseOrder {
   waiting_days: number | null;             // jours passés dans le statut courant
   stockout_before_delivery: boolean | null; // prédiction : rupture avant réception ?
   coverage_gap_days: number | null;        // couverture - ETA (négatif = rupture avant)
+  delivery_delay_days: number | null;      // retard/avance : réel si livré, projeté sinon
+  delivery_status: 'EN_RETARD' | 'EN_AVANCE' | 'A_TEMPS' | null;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -89,6 +96,21 @@ export class PurchaseOrderApiService {
     return this.http.post<PurchaseOrder>(
       `${this.base}/purchase-orders`,
       { recommendation_id: recommendationId, supplier_id: supplierId, priorite },
+      { headers: this._headers() },
+    );
+  }
+
+  /**
+   * Met une carte SUGGERE sur le Kanban pour cette recommandation, sans exiger
+   * d'approbation préalable. Idempotent côté backend : rappeler renvoie la
+   * carte existante avec already_exists=true (pas d'erreur, pas de doublon).
+   */
+  suggestPurchaseOrder(
+    recommendationId: string,
+  ): Observable<PurchaseOrder & { already_exists: boolean }> {
+    return this.http.post<PurchaseOrder & { already_exists: boolean }>(
+      `${this.base}/purchase-orders/suggest`,
+      { recommendation_id: recommendationId },
       { headers: this._headers() },
     );
   }

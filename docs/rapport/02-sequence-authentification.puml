@@ -1,0 +1,39 @@
+@startuml SD-01-authentification
+' Cas d'utilisation : S'authentifier
+title SD-01 — S'authentifier (session + contrôle d'accès par rôle)
+
+actor "Utilisateur\n(Vendeur / Manager)" as User
+participant "Angular\nLoginComponent" as UI
+participant "AuthService\n(frontend)" as Auth
+participant "FastAPI\n/api/auth" as API
+database "PostgreSQL\napp_users / sessions" as DB
+
+User -> UI : saisit identifiant + mot de passe + boutique
+UI -> Auth : login(username, password, store_id)
+Auth -> API : POST /api/auth/login
+API -> DB : SELECT user (username, hash, role, store_id)
+
+alt identifiants invalides
+  API --> Auth : 401 Unauthorized
+  Auth --> UI : erreur
+  UI --> User : message « identifiants incorrects »
+else vendeur sur une autre boutique
+  note right of API
+    role = vendeur → accès limité
+    à sa propre boutique ;
+    role = manager → toutes boutiques
+  end note
+  API --> Auth : 403 Forbidden
+else identifiants valides
+  API -> DB : INSERT session (token, expiration)
+  note right of API : durée : 24 h (manager)\n12 h (vendeur)
+  API --> Auth : 200 {token, user, role, store}
+  Auth -> Auth : stocke le token\net le profil courant
+  Auth --> UI : succès
+  alt role = manager
+    UI --> User : redirection → /dashboard
+  else role = vendeur
+    UI --> User : redirection → /conseiller
+  end
+end
+@enduml

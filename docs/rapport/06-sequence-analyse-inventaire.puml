@@ -1,0 +1,54 @@
+@startuml SD-05-analyse-inventaire
+' Cas d'utilisation : Lancer l'analyse d'inventaire multi-SKU
+title SD-05 — Analyse d'inventaire batch (Analysis ‖ Context → Decision)
+
+actor "Manager\nou Planificateur (Cron)" as Actor
+participant "FastAPI\nPOST /api/inventory/analyze" as API
+participant "InventoryOrchestrator\n(ThreadPool 8 workers)" as Orch
+participant "AnalysisAgent\n(fetch → compute → reason)" as Ana
+participant "ContextAgent\n(fetch_signals → interpret)" as Ctx
+participant "DecisionAgent\n(decide)" as Dec
+participant "LLM" as LLM
+database "PostgreSQL\n(schéma inventory)" as DB
+
+Actor -> API : lance l'analyse (store_id, SKUs)
+API -> Orch : analyze_batch(skus[], store_id)
+
+== Pré-chargement (3 requêtes au lieu de 3 × N) ==
+Orch -> DB : get_active_objective()\n→ objectif métier + niveau de service cible
+Orch -> DB : get_stock_levels_batch()\n→ stocks courants par SKU
+Orch -> DB : get_products_batch()\n→ fiches produits par SKU
+
+== Pipeline par SKU (8 SKUs en parallèle) ==
+loop pour chaque SKU du lot
+  par exécution parallèle
+    Orch -> Ana : run(sku, objectif, stock préchargé)
+    Ana -> Ana : compute — EOQ, stock de sécurité,\npoint de commande, jours de stock,\nprofil saisonnier 3 ans
+    Ana -> LLM : reason — classification du risque\n(CRITICAL / HIGH / MEDIUM / LOW)
+    Ana -> DB : met à jour remaining_days_of_stock
+    Ana --> Orch : analysis_report
+  else
+    Orch -> Ctx : run(sku, store_id)
+    Ctx -> DB : fetch_signals — météo, promotions,\njours fériés, historique des ventes
+    Ctx -> LLM : interpret — synthèse des signaux
+    Ctx -> DB : trace dans context_adjustments (audit 7 j)
+    Ctx --> Orch : context_report\n{demand_uplift_pct, confidence}
+  end
+
+  Orch -> Dec : run(analysis_report, context_report)
+  alt ContextAgent en échec
+    note right of Dec : dégradation contrôlée :\ndemand_uplift_pct = 0\n(baseline sans uplift)
+  end
+  Dec -> LLM : decide — recalcule les métriques ajustées,\nchoisit l'action (ORDER / HOLD /\nMONITOR / EXPEDITE) + quantité + justification
+  alt action = ORDER ou EXPEDITE
+    Dec -> DB : persiste dans inventory.recommendations
+  end
+  Dec --> Orch : décision finale
+end
+
+Orch -> DB : journalise chaque exécution\n(inventory.agent_runs : statut, latence)
+Orch --> API : synthèse du lot
+API --> Actor : 200 {recommandations, alertes, métriques}
+
+note over LLM : si le LLM est indisponible :\nuse_llm=False → les 3 agents basculent\nen mode règles (même structure de sortie)
+@enduml

@@ -1,0 +1,50 @@
+@startuml SD-06-po-suggere-hitl
+' Cas d'utilisation : Approuver / rejeter un bon de commande suggéré par l'agent (HITL)
+title SD-06 — Suggestion de bon de commande par l'agent et validation humaine (Kanban temps réel)
+
+participant "DecisionAgent /\nrecommandation IA" as Agent
+participant "FastAPI\n/api/supply/purchase-orders" as API
+database "PostgreSQL\npurchase_orders" as DB
+participant "po_ws_bus\n(WebSocket /ws/{store_id})" as WS
+participant "Angular\nPurchaseBoard (Kanban)" as UI
+actor "Manager de boutique" as Manager
+
+== Suggestion par l'agent ==
+Agent -> API : POST /purchase-orders/suggest\n(recommendation_id)
+API -> DB : vérifie la recommandation\n(existante, quantité exploitable)
+alt recommandation invalide
+  API --> Agent : 404 / 422 — suggestion refusée
+else recommandation valide
+  API -> DB : crée le PO avec statut = SUGGERE\n(état pré-approbation : la barrière humaine\nreste garantie)
+  API -> WS : broadcast_po_suggested(po)
+  WS --> UI : événement po_suggested
+  UI -> UI : insère la carte dans la colonne\n« Suggéré par l'agent »\n(indicateurs couverture / rupture)
+end
+
+== Validation humaine (Human-In-The-Loop) ==
+Manager -> UI : examine la carte suggérée\n(quantité, croisement stock × demande, justification)
+alt le manager approuve
+  UI -> API : POST /purchase-orders/{po_id}/approve
+  API -> DB : vérifie statut = SUGGERE\npuis transition → APPROVED
+  API -> DB : enregistre le feedback\n(adoption de la suggestion IA)
+  API -> WS : broadcast_po_status(APPROVED)
+  WS --> UI : la carte passe en colonne « Approuvé »
+else le manager rejette
+  UI -> API : POST /purchase-orders/{po_id}/reject\n(+ motif)
+  API -> DB : transition → REJECTED\n+ feedback négatif (apprentissage)
+  API -> WS : broadcast_po_status(REJECTED)
+  WS --> UI : la carte est retirée du flux actif
+end
+
+== Cycle de vie ultérieur ==
+Manager -> UI : fait progresser un PO approuvé
+UI -> API : PATCH /purchase-orders/{po_id}\n{statut suivant, quantité reçue}
+API -> API : contrôle ALLOWED_TRANSITIONS\n(machine à états des statuts)
+alt transition interdite
+  API --> UI : 400 — transition invalide
+else transition autorisée
+  API -> DB : update_status(po_id, statut)
+  API -> WS : broadcast_po_status
+  WS --> UI : Kanban synchronisé en temps réel\npour tous les clients connectés
+end
+@enduml

@@ -132,6 +132,19 @@
   &:hover { box-shadow: 0 3px 10px rgba(0,0,0,0.1); }
   &--alert { border-color: rgba(231,76,60,0.2); background: #FFFAFA; }
   &--warn  { border-color: rgba(249,168,37,0.2); }
+
+  // Cartes KPI cliquables → filtrent + scrollent vers le plan de commande.
+  &--clickable {
+    cursor: pointer;
+    &:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
+    &:active { transform: translateY(0); }
+  }
+
+  // Carte dont le filtre est actuellement appliqué au tableau.
+  &--active {
+    border-color: #6C5CE7;
+    box-shadow: 0 0 0 2px rgba(108,92,231,0.35);
+  }
 }
 
 .inv-kpi-icon {
@@ -1290,6 +1303,61 @@
   &:hover { background: #5A4BD1; }
 }
 
+// Carte plan de commande mise en avant lorsqu'un filtre KPI est actif.
+.inv-plan-card--focused {
+  box-shadow: 0 0 0 2px rgba(108,92,231,0.25), 0 4px 16px rgba(0,0,0,0.08);
+  scroll-margin-top: 16px;
+}
+
+// Bandeau indiquant qu'un filtre issu d'une carte KPI est appliqué au tableau.
+.inv-plan-kpi-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 0 4px;
+  padding: 9px 14px;
+  border-radius: 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #4A3FB8;
+  background: #F0ECFD;
+  border: 1px solid rgba(108,92,231,0.25);
+
+  &__dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #6C5CE7; flex-shrink: 0;
+  }
+  &__clear {
+    display: inline-flex; align-items: center; gap: 4px;
+    margin-left: auto;
+    padding: 4px 10px;
+    border: 1px solid rgba(108,92,231,0.35);
+    border-radius: 999px;
+    background: #fff;
+    color: #6C5CE7;
+    font-size: 11.5px;
+    font-weight: 700;
+    cursor: pointer;
+    &:hover { background: #6C5CE7; color: #fff; }
+  }
+
+  &--critical { color: #B0392B; background: #FDEDEC; border-color: rgba(231,76,60,0.28);
+    .inv-plan-kpi-banner__dot { background: #E74C3C; }
+    .inv-plan-kpi-banner__clear { color: #E74C3C; border-color: rgba(231,76,60,0.4);
+      &:hover { background: #E74C3C; color: #fff; } }
+  }
+  &--high { color: #92620A; background: #FFF8E1; border-color: rgba(249,168,37,0.3);
+    .inv-plan-kpi-banner__dot { background: #F9A825; }
+    .inv-plan-kpi-banner__clear { color: #B45309; border-color: rgba(249,168,37,0.45);
+      &:hover { background: #F9A825; color: #fff; } }
+  }
+  &--ok { color: #1E7A54; background: #E8F8F5; border-color: rgba(39,174,96,0.28);
+    .inv-plan-kpi-banner__dot { background: #27AE60; }
+    .inv-plan-kpi-banner__clear { color: #27AE60; border-color: rgba(39,174,96,0.4);
+      &:hover { background: #27AE60; color: #fff; } }
+  }
+}
+
 .inv-plan-controls {
   display: flex;
   align-items: center;
@@ -1330,12 +1398,51 @@
   &:focus { border-color: #6C5CE7; }
 }
 
+.inv-plan-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+// Bouton « créer un ticket Kanban » sur les lignes critiques / à risque.
+.inv-plan-kanban {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 9px;
+  border: 1px solid #6C5CE7;
+  border-radius: 7px;
+  background: #6C5CE7;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover:not(:disabled) { background: #5A4BD1; border-color: #5A4BD1; }
+  &:disabled { opacity: 0.6; cursor: default; }
+
+  &--done {
+    background: #E8F8F5;
+    border-color: rgba(39,174,96,0.45);
+    color: #1E7A54;
+    &:hover:not(:disabled) { background: #27AE60; border-color: #27AE60; color: #fff; }
+  }
+  &--error {
+    background: #FDEDEC;
+    border-color: rgba(231,76,60,0.45);
+    color: #C0392B;
+    &:hover:not(:disabled) { background: #E74C3C; border-color: #E74C3C; color: #fff; }
+  }
+}
+
 .inv-plan-table { display: flex; flex-direction: column; }
 
 .inv-plan-thead,
 .inv-plan-row {
   display: grid;
-  grid-template-columns: minmax(180px, 2fr) 70px 75px 90px 120px 90px 130px 92px;
+  grid-template-columns: minmax(170px, 2fr) 66px 72px 86px 112px 88px 122px 200px;
   gap: 10px;
   align-items: center;
 }

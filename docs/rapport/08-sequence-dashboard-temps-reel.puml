@@ -1,0 +1,41 @@
+@startuml SD-07-dashboard-temps-reel
+' Cas d'utilisation : Consulter le dashboard temps réel + prévisions
+title SD-07 — Dashboard manager temps réel (WebSocket + prévisions TimesFM)
+
+actor "Manager de boutique" as Manager
+participant "Angular\nDashboardComponent" as UI
+participant "WebSocketService\n(frontend)" as WSS
+participant "FastAPI\n/api/stores, /api/forecast" as API
+participant "Simulateur POS\n(realtime_simulator)" as POS
+participant "TimesFM" as TFM
+database "PostgreSQL" as DB
+
+Manager -> UI : ouvre /dashboard
+UI -> API : GET /stores/{id}/metrics\nGET /stores/{id}/advisors\nGET /stores/{id}/product-mix
+API -> DB : agrégats du jour (CA, objectif,\ntransactions, mix produits)
+API --> UI : métriques initiales
+UI --> Manager : KPIs, jauges de progression,\nclassement conseillers
+
+== Prévisions ==
+UI -> API : GET /forecast/eod/{store_id}\nGET /forecast/hourly/{store_id}
+API -> TFM : inférence sur l'historique\n(série temporelle des ventes)
+TFM --> API : prévision fin de journée\n+ courbe horaire + intervalle de confiance
+API --> UI : données de prévision
+UI --> Manager : courbe réalisé vs prévu
+
+== Flux temps réel ==
+UI -> WSS : connexion WebSocket /ws/{store_id}
+loop tant que la page est ouverte
+  POS -> API : nouvelle transaction simulée
+  API -> DB : persiste la transaction
+  API -> WSS : push {transaction, CA cumulé, gap}
+  WSS -> UI : mise à jour du state Angular (signals)
+  UI --> Manager : rafraîchissement instantané\n(sans rechargement)
+end
+
+opt le manager déclenche une simulation
+  Manager -> UI : bouton « Simuler »
+  UI -> API : POST /stores/{id}/simulate
+  API -> POS : démarre / accélère le flux de transactions
+end
+@enduml

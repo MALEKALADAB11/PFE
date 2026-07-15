@@ -93,6 +93,26 @@
                 </span>
               </div>
 
+              <!-- Suivi livraison : prévu / livré / retard-avance (persisté en base) -->
+              @if (expectedDeliveryLabel(po) || deliveredLabel(po)) {
+                <div class="pb-card__delivery" [class]="deliveryDeltaClass(po)">
+                  @if (deliveredLabel(po)) {
+                    <span>✅ {{ deliveredLabel(po) }}</span>
+                  } @else if (expectedDeliveryLabel(po)) {
+                    <span>🚚 {{ expectedDeliveryLabel(po) }}</span>
+                  }
+                  @if (deliveryDeltaLabel(po)) {
+                    <span class="pb-card__delivery-delta">{{ deliveryDeltaLabel(po) }}</span>
+                  }
+                </div>
+              }
+
+              @if (po.confirmed_auto && po.statut === 'CONFIRME') {
+                <div class="pb-card__auto-confirm" title="Aucune action humaine sous 24h — confirmé automatiquement">
+                  ⏱ Auto-confirmé après 24h
+                </div>
+              }
+
               <div class="pb-card__timing">
                 @if (etaLabel(po)) {
                   <span class="pb-card__eta" [class.pb-card__eta--late]="(po.eta_days ?? 0) < 0">

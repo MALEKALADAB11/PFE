@@ -1,0 +1,122 @@
+@startuml 01-cas-utilisation-global
+' ============================================================
+'  Diagramme de cas d'utilisation GLOBAL
+'  Plateforme multi-agents Retail — Ventes & Inventaire (Ooredoo Tunisia Retail)
+' ============================================================
+left to right direction
+skinparam packageStyle rectangle
+skinparam usecase {
+  BackgroundColor #FDFDFD
+  BorderColor #444444
+}
+skinparam actorStyle awesome
+
+' ---------- Acteurs humains ----------
+actor "Conseiller de vente\n(Vendeur)" as Vendeur
+actor "Manager de boutique" as Manager
+Manager --|> Vendeur : généralise
+
+' ---------- Acteurs systèmes ----------
+actor "Planificateur\n(Cron)" as Cron <<système>>
+actor "Système POS\n(flux temps réel)" as POS <<système>>
+actor "Fournisseur LLM\n(OpenRouter / Mistral / Ollama)" as LLM <<système>>
+actor "TimesFM\n(modèle de prévision)" as TimesFM <<système>>
+actor "Milvus\n(base vectorielle RAG)" as Milvus <<système>>
+
+rectangle "Plateforme multi-agents Ventes & Inventaire" {
+
+  package "Authentification & Administration" {
+    usecase "S'authentifier" as UC_Login
+    usecase "Se déconnecter" as UC_Logout
+    usecase "Gérer les utilisateurs\nde la boutique" as UC_Users
+    usecase "Réinitialiser un\nmot de passe" as UC_Pwd
+  }
+
+  package "Coaching commercial (module Sales)" {
+    usecase "Converser avec le\nCoach IA" as UC_Chat
+    usecase "Recevoir un conseil\npersonnalisé" as UC_Conseil
+    usecase "Consulter son tableau de bord\nconseiller (gap, urgence,\nprévision fin de journée)" as UC_ConseillerDash
+    usecase "Donner un feedback\nsur un conseil" as UC_Feedback
+    usecase "Valider la réponse\n(Guardrail)" as UC_Guardrail
+    usecase "Rechercher des scripts\nde vente (RAG)" as UC_RAG
+    usecase "Exécuter un cycle de coaching\n(Analyste → Stratège → Coach)" as UC_Cycle
+  }
+
+  package "Pilotage boutique (Manager)" {
+    usecase "Consulter le dashboard\ntemps réel de la boutique" as UC_Dash
+    usecase "Consulter les prévisions\n(fin de journée, horaire,\nmix produits)" as UC_Forecast
+    usecase "Déclencher manuellement\nun cycle d'analyse" as UC_Trigger
+    usecase "Simuler un flux\nde transactions POS" as UC_Simulate
+  }
+
+  package "Gestion des stocks (module Inventory)" {
+    usecase "Lancer l'analyse d'inventaire\nmulti-SKU" as UC_Analyze
+    usecase "Consulter les recommandations\nde réapprovisionnement" as UC_Reco
+    usecase "Définir l'objectif métier actif\n(niveau de service cible)" as UC_Objective
+    usecase "Gérer les alertes\nde stock" as UC_Alerts
+  }
+
+  package "Approvisionnement & HITL" {
+    usecase "Consulter le Kanban des\nbons de commande" as UC_Kanban
+    usecase "Créer un bon de commande\ndepuis une recommandation" as UC_CreatePO
+    usecase "Approuver / rejeter un bon de\ncommande suggéré par l'agent\n(validation humaine — HITL)" as UC_ApprovePO
+    usecase "Faire progresser le statut\nd'un bon de commande" as UC_MovePO
+    usecase "Valider une recommandation\nen attente (file HITL)" as UC_HITL
+  }
+
+  package "Supervision & Évaluation" {
+    usecase "Superviser l'activité des agents\n(latence, coûts, erreurs)" as UC_Monitor
+    usecase "Résoudre une erreur\nsignalée" as UC_Resolve
+    usecase "Consulter les KPIs d'adoption IA\net le benchmark des prévisions" as UC_KPI
+  }
+}
+
+' ---------- Relations acteurs ↔ cas ----------
+Vendeur --> UC_Login
+Vendeur --> UC_Logout
+Vendeur --> UC_Chat
+Vendeur --> UC_ConseillerDash
+Vendeur --> UC_Feedback
+
+Manager --> UC_Users
+Manager --> UC_Pwd
+Manager --> UC_Dash
+Manager --> UC_Forecast
+Manager --> UC_Trigger
+Manager --> UC_Simulate
+Manager --> UC_Analyze
+Manager --> UC_Reco
+Manager --> UC_Objective
+Manager --> UC_Alerts
+Manager --> UC_Kanban
+Manager --> UC_CreatePO
+Manager --> UC_ApprovePO
+Manager --> UC_MovePO
+Manager --> UC_HITL
+Manager --> UC_Monitor
+Manager --> UC_Resolve
+Manager --> UC_KPI
+
+' ---------- Relations include / extend ----------
+UC_Chat ..> UC_Guardrail : <<include>>
+UC_Chat ..> UC_RAG : <<include>>
+UC_Chat ..> UC_Conseil : <<include>>
+UC_Cycle ..> UC_Conseil : <<extend>>\n(si message conseiller)
+UC_Trigger ..> UC_Cycle : <<include>>
+UC_Analyze ..> UC_Reco : <<include>>
+UC_CreatePO ..> UC_Kanban : <<extend>>
+UC_ApprovePO ..> UC_Kanban : <<extend>>
+UC_HITL ..> UC_ApprovePO : <<extend>>\n(si origine agent)
+
+' ---------- Relations systèmes ----------
+Cron --> UC_Cycle
+Cron --> UC_Analyze
+POS --> UC_Dash
+POS --> UC_ConseillerDash
+LLM --> UC_Cycle
+LLM --> UC_Chat
+TimesFM --> UC_Forecast
+TimesFM --> UC_Cycle
+Milvus --> UC_RAG
+
+@enduml

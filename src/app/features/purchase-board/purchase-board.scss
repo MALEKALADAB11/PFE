@@ -334,6 +334,39 @@
   &--long { color: #EA580C; font-weight: 700; }
 }
 
+// ── Suivi livraison : prévu / livré / retard-avance ─────────────────────────
+
+.pb-card__delivery {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #475569;
+
+  &--late   .pb-card__delivery-delta { color: #DC2626; }
+  &--early  .pb-card__delivery-delta { color: #1E8449; }
+  &--ontime .pb-card__delivery-delta { color: #2563EB; }
+}
+
+.pb-card__delivery-delta {
+  font-weight: 700;
+}
+
+.pb-card__auto-confirm {
+  margin-top: 6px;
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #EEF2FF;
+  border: 1px solid #C7D2FE;
+  color: #4338CA;
+  font-size: 10px;
+  font-weight: 700;
+}
+
 .pb-card__risk {
   margin-top: 7px;
   padding: 6px 9px;

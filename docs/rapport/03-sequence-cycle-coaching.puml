@@ -1,0 +1,62 @@
+@startuml SD-02-cycle-coaching
+' Cas d'utilisation : Exécuter un cycle de coaching (Analyste → Stratège → Coach)
+title SD-02 — Cycle de coaching complet (déclenché par cron ou manuellement)
+
+actor "Planificateur (Cron)\nou Manager" as Trigger
+participant "FastAPI\nPOST /api/cycle/trigger" as API
+participant "CycleOrchestrator\n(LangGraph)" as Orch
+participant "AnalystAgent\n(pattern ReAct)" as Analyst
+participant "StrategistAgent\n(pattern Reflexion)" as Strat
+participant "CoachAgent\n(conversationnel)" as Coach
+participant "TimesFM\n(outils MCP)" as TFM
+participant "Milvus (RAG)" as RAG
+participant "LLM" as LLM
+database "PostgreSQL" as DB
+participant "Langfuse\n(observabilité)" as LF
+
+Trigger -> API : déclenchement du cycle (store_id)
+API -> Orch : run_cycle(store_id, triggered_by)
+Orch -> LF : ouvre la trace hiérarchique du cycle
+
+== Étape 1 : AnalystAgent (ReAct) ==
+Orch -> Analyst : ainvoke(state{pos_data})
+Analyst -> Analyst : receive_pos → validate_data
+Analyst -> DB : load_memory (historique boutique)
+loop boucle ReAct (raisonnement + outils)
+  Analyst -> LLM : raisonne sur la situation
+  Analyst -> TFM : forecast fin de journée (EOD)
+  Analyst -> Analyst : calcul gap objectif,\ndétection niveau d'urgence
+end
+Analyst -> Analyst : build_strategy_query
+Analyst -> DB : save_memory
+Analyst --> Orch : state enrichi {urgency_level,\ngap_objectif, forecast_eod, analyst_summary}
+
+== Étape 2 : StrategistAgent (Reflexion) — toujours exécuté ==
+Orch -> Strat : ainvoke(state)
+Strat -> Strat : fetch_context (météo,\njours fériés, événements)
+Strat -> RAG : rag_search (scripts de vente similaires)
+RAG --> Strat : top-k scripts
+Strat -> LLM : analyze_context (cause racine du gap)
+Strat -> LLM : generate_strategy (actions priorisées)
+Strat -> Strat : build_output
+Strat -> LLM : self_critique (auto-évaluation\ncohérence des actions)
+Strat --> Orch : state {strategie_actions[],\ncause_racine, focus_produits}
+
+== Étape 3 : CoachAgent — routage conditionnel ==
+alt coach_message présent (question d'un conseiller)
+  Orch -> Coach : ainvoke(state)
+  Coach -> DB : load_context + load_advisor_history
+  Coach -> RAG : rag_search
+  Coach -> Coach : invoke_stratege_for_coach\n(cf. SD-04 : cache / retry / fallback)
+  Coach -> LLM : generate_conseil (conseil personnalisé)
+  Coach -> DB : save_conseil (traçabilité + enrichissement RAG)
+  Coach --> Orch : conseil_final
+else pas de message conseiller
+  Orch -> Orch : fin du cycle après le Stratège
+end
+
+Orch -> DB : journalise le cycle (agent_logs)
+Orch -> LF : clôt la trace
+Orch --> API : résultat du cycle
+API --> Trigger : 200 OK {cycle_id, résumé}
+@enduml

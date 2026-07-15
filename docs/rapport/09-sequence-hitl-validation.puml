@@ -1,0 +1,39 @@
+@startuml SD-08-hitl-validation
+' Cas d'utilisation : Valider une recommandation en attente (file HITL)
+title SD-08 — File de validation Human-In-The-Loop (recommandations & alertes guardrail)
+
+actor "Manager de boutique" as Manager
+participant "Angular\nHITL Panel" as UI
+participant "FastAPI\n/api/hitl" as API
+database "PostgreSQL\nhitl_reviews" as DB
+participant "Agents\n(guardrail, decision…)" as Agents
+
+== Alimentation de la file ==
+Agents ->> DB : créent des revues en attente\n(réponse bloquée par guardrail,\nrecommandation sensible…)
+
+== Consultation ==
+Manager -> UI : ouvre le panneau HITL
+UI -> API : GET /hitl/pending
+API -> DB : SELECT revues en attente\n(par boutique, par source)
+API --> UI : liste {review_id, source,\ncontenu proposé, contexte}
+UI --> Manager : file de validation priorisée
+
+== Décision humaine ==
+Manager -> UI : examine une revue
+alt approbation
+  UI -> API : POST /hitl/validate/{review_id}\n{decision: approve, commentaire}
+  API -> DB : statut → validé\n+ trace de l'auditeur humain
+else rejet / correction
+  UI -> API : POST /hitl/validate/{review_id}\n{decision: reject, correction}
+  API -> DB : statut → rejeté + correction\n(réutilisable pour l'amélioration des agents)
+end
+API --> UI : 200 — revue traitée
+UI --> Manager : file mise à jour
+
+== Pilotage ==
+Manager -> UI : consulte les statistiques HITL
+UI -> API : GET /hitl/stats
+API -> DB : agrégats (taux d'approbation,\nvolume par source, délai moyen)
+API --> UI : indicateurs
+UI --> Manager : taux d'adoption des\npropositions de l'IA
+@enduml

@@ -198,6 +198,44 @@ export class PurchaseBoardComponent implements OnInit, OnDestroy {
     return `Réception dans ${d} j`;
   }
 
+  // ── Suivi livraison : livré quand, prévu quand, retard/avance ──────────
+
+  /** Date de livraison prévue, formatée pour la carte. */
+  expectedDeliveryLabel(po: PurchaseOrder): string {
+    if (!po.date_livraison_prevue) return '';
+    return `Prévu le ${new Date(po.date_livraison_prevue).toLocaleDateString('fr-FR')}`;
+  }
+
+  /** Date de livraison réelle ("délivré quand") — uniquement une fois reçu. */
+  deliveredLabel(po: PurchaseOrder): string {
+    if (!po.date_livraison_reelle) return '';
+    return `Livré le ${new Date(po.date_livraison_reelle).toLocaleDateString('fr-FR')}`;
+  }
+
+  /**
+   * Retard / avance : écart réel persisté (BC livré) ou projeté (ETA dépassée
+   * sur un BC en cours) — même convention backend : >0 retard, <0 avance.
+   */
+  deliveryDeltaLabel(po: PurchaseOrder): string {
+    const d = po.delivery_delay_days;
+    if (d == null || po.delivery_status == null) return '';
+    const projected = !po.date_livraison_reelle;
+    if (po.delivery_status === 'EN_RETARD') {
+      return projected ? `Retard de ${d} j (en cours)` : `Retard de ${d} j`;
+    }
+    if (po.delivery_status === 'EN_AVANCE') return `Avance de ${-d} j`;
+    return projected ? 'Dans les délais' : 'Livré à temps';
+  }
+
+  deliveryDeltaClass(po: PurchaseOrder): string {
+    switch (po.delivery_status) {
+      case 'EN_RETARD': return 'pb-card__delivery--late';
+      case 'EN_AVANCE': return 'pb-card__delivery--early';
+      case 'A_TEMPS':   return 'pb-card__delivery--ontime';
+      default:          return '';
+    }
+  }
+
   /** Temps d'attente dans le statut courant. */
   waitLabel(po: PurchaseOrder): string {
     const d = po.waiting_days;

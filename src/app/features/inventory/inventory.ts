@@ -3,7 +3,7 @@ import {
   inject, OnDestroy, DestroyRef, PLATFORM_ID,
 } from '@angular/core';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { HttpClientModule, HttpParams } from '@angular/common/http';
 import { HttpClient } from '@angular/common/http';
 import { timeout } from 'rxjs/operators';
@@ -57,6 +57,7 @@ export class InventoryComponent implements OnInit, OnDestroy {
   private invApi     = inject(InventoryApiService);
   private poApi      = inject(PurchaseOrderApiService);
   private http       = inject(HttpClient);
+  private router     = inject(Router);
   private destroyRef = inject(DestroyRef);
   private platformId = inject(PLATFORM_ID);
 
@@ -951,6 +952,45 @@ export class InventoryComponent implements OnInit, OnDestroy {
   planFilter  = signal<'all' | 'order' | 'watch'>('all');
   planShowAll = signal<boolean>(false);
 
+  // Filtre de risque piloté par les cartes KPI en haut de page. Un clic sur une
+  // carte (Ruptures critiques / Haut risque / Stock optimal) synchronise le
+  // tableau « Plan de commande » sur ce niveau et fait défiler jusqu'au tableau.
+  kpiFilter = signal<'all' | 'critical' | 'high' | 'ok'>('all');
+
+  /**
+   * Appelé au clic sur une carte KPI. Filtre le tableau plan de commande sur le
+   * niveau de risque correspondant et scrolle jusqu'au tableau. Recliquer la
+   * même carte annule le filtre (toggle).
+   */
+  focusKpi(risk: 'all' | 'critical' | 'high' | 'ok'): void {
+    const next = (this.kpiFilter() === risk) ? 'all' : risk;
+    this.kpiFilter.set(next);
+    // Réinitialise le chip d'action pour ne pas restreindre davantage la vue :
+    // la carte KPI doit montrer TOUS les produits de ce niveau de risque.
+    this.planFilter.set('all');
+    // Assez de lignes visibles pour voir l'ensemble du niveau sélectionné.
+    if (next !== 'all') this.planShowAll.set(true);
+
+    if (!isPlatformBrowser(this.platformId)) return;
+    // Laisse Angular re-render le tableau filtré avant de scroller.
+    setTimeout(() => {
+      document.getElementById('inv-plan-card')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 60);
+  }
+
+  clearKpiFilter(): void { this.kpiFilter.set('all'); }
+
+  /** Libellé lisible du filtre KPI actif, pour le bandeau au-dessus du tableau. */
+  kpiFilterLabel(): string {
+    switch (this.kpiFilter()) {
+      case 'critical': return 'Ruptures critiques';
+      case 'high':     return 'Haut risque';
+      case 'ok':       return 'Stock optimal';
+      default:         return '';
+    }
+  }
+
   private _actionRank(rec: string | null | undefined): number {
     const r = (rec || '').toUpperCase();
     if (r.includes('EXPEDITE')) return 0;
@@ -971,8 +1011,11 @@ export class InventoryComponent implements OnInit, OnDestroy {
   orderPlanAll = computed(() => {
     const q = this.planSearch().trim().toLowerCase();
     const f = this.planFilter();
+    const kpi = this.kpiFilter();
     return [...this.items()]
       .filter((p: any) => {
+        // Filtre de risque piloté par les cartes KPI (synchronisation haut ↔ tableau).
+        if (kpi !== 'all' && p.riskLevel !== kpi) return false;
         if (q && !(`${p.name ?? ''} ${p.sku ?? ''}`.toLowerCase().includes(q))) return false;
         const rank = this._actionRank(p.recommendation);
         if (f === 'order') return rank <= 1 && this.recommendedQty(p) > 0;
@@ -1014,6 +1057,63 @@ export class InventoryComponent implements OnInit, OnDestroy {
 
   onPlanSearch(e: Event): void {
     this.planSearch.set((e.target as HTMLInputElement).value);
+  }
+
+  // ── Ticket Kanban depuis un produit à risque ──────────────────────────────
+  // Un clic sur « Kanban » pousse une carte SUGGERE sur le board sans passer
+  // par l'approbation : la porte humaine reste sur les boutons approuver/rejeter
+  // du board. Le backend est idempotent (un PO par recommandation), donc
+  // recliquer ne crée jamais de doublon.
+
+  private _kanbanState = signal<Record<string, 'pending' | 'done' | 'exists' | 'error'>>({});
+
+  kanbanState(p: any): 'pending' | 'done' | 'exists' | 'error' | null {
+    return this._kanbanState()[p.id ?? p.sku] ?? null;
+  }
+
+  /** Un ticket n'a de sens que si le DecisionAgent a produit une recommandation. */
+  canCreateTicket(p: any): boolean {
+    return !!p.recommendationId && (p.riskLevel === 'critical' || p.riskLevel === 'high');
+  }
+
+  createKanbanTicket(p: any, e: Event): void {
+    e.stopPropagation();  // n'ouvre pas la modale d'analyse
+    const recId: string | null = p.recommendationId ?? null;
+    if (!recId) return;
+
+    const key = p.id ?? p.sku;
+    if (this._kanbanState()[key] === 'pending') return;
+    this._kanbanState.update(s => ({ ...s, [key]: 'pending' }));
+
+    this.poApi.suggestPurchaseOrder(recId).subscribe({
+      next: po => {
+        this._kanbanState.update(s => ({ ...s, [key]: po.already_exists ? 'exists' : 'done' }));
+        console.log(
+          `[Kanban] ${po.already_exists ? 'carte déjà présente' : 'ticket créé'}:`,
+          po.po_id, `(${po.quantite_commandee} u.)`,
+        );
+      },
+      error: err => {
+        this._kanbanState.update(s => ({ ...s, [key]: 'error' }));
+        console.warn('[Kanban] création du ticket échouée:', err?.status, recId);
+      },
+    });
+  }
+
+  /** Libellé du bouton selon l'état de la requête. */
+  kanbanLabel(p: any): string {
+    switch (this.kanbanState(p)) {
+      case 'pending': return 'Envoi…';
+      case 'done':    return 'Sur le board';
+      case 'exists':  return 'Déjà au board';
+      case 'error':   return 'Réessayer';
+      default:        return 'Kanban';
+    }
+  }
+
+  goToKanban(e: Event): void {
+    e.stopPropagation();
+    this.router.navigate(['/purchase-board']);
   }
 
   /** Export CSV du plan de commande complet (tous produits, décision agents). */

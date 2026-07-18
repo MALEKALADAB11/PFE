@@ -50,6 +50,13 @@ export const routes: Routes = [
       import('./features/purchase-board/purchase-board')
         .then(m => m.PurchaseBoardComponent),
   },
+  {
+    path: 'purchase-board/:poId',
+    canActivate: [managerGuard],
+    loadComponent: () =>
+      import('./features/purchase-board/purchase-detail')
+        .then(m => m.PurchaseDetailComponent),
+  },
 
   // ── Manager + Vendeur ───────────────────────────────────
   {

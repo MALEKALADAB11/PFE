@@ -342,8 +342,6 @@ export class Dashboard implements OnInit, OnDestroy {
     this._buildDefaultHourlyPerf()
   );
 
-  hourlyPerfFilter = signal<'all' | 'risk'>('all');
-
   perfMax = computed(() => {
     const arr = this.hourlyPerf();
     if (!arr.length) return 3000;
@@ -864,8 +862,6 @@ export class Dashboard implements OnInit, OnDestroy {
 
   // ── Construction horaire par défaut avec ratios réels I63 ──
   private _buildDefaultHourlyPerf(): HourlyPerf[] {
-    const now         = new Date();
-    const currentHour = now.getHours();
     const dailyTarget = REAL_TARGET_DT;
 
     const hours = [9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
@@ -879,19 +875,12 @@ export class Dashboard implements OnInit, OnDestroy {
       const ratio    = (this.HOURLY_RATIOS[h] ?? 5) / 100;
       const target   = Math.round(dailyTarget * ratio);
       const forecast = Math.round(target * 1.05); // +5% forecast
-      
-      // For all hours up to (and including) current hour: show actual values
-      // For future hours: show 0 actual
-      const isPast   = h <= currentHour;
 
-      // For past hours: generate realistic actual values using target ratio
-      // Add some variance (80-100% of target) to simulate realistic performance
-      const actualVariance = 0.80 + Math.random() * 0.20;
-      const actual   = isPast ? Math.round(target * actualVariance) : 0;
-
+      // Pas de CA inventé côté client : actual reste à 0 tant que le
+      // backend n'a pas envoyé les vraies valeurs horaires.
       return {
         hour:     labels[h],
-        actual,
+        actual:   0,
         target,
         forecast,
         risk:     false,
@@ -947,6 +936,15 @@ export class Dashboard implements OnInit, OnDestroy {
   realTimeAlerts = computed(() =>
     (this.ws.liveMetrics()?.real_time_alerts ?? []) as any[]
   );
+
+  // ── Stats du bandeau ventes en direct ─────────────────
+  tickerStats = computed(() => {
+    const list = this.ws.liveSalesTicker();
+    return {
+      count: list.length,
+      total: list.reduce((s, tx) => s + (tx.amount ?? 0), 0),
+    };
+  });
 
   bestNba = computed(() => {
     const actions = this.strateActions();
@@ -1050,15 +1048,6 @@ export class Dashboard implements OnInit, OnDestroy {
 
   avatarColor(i: number): string { return ['#2D9CDB','#9B51E0','#27AE60','#F2994A'][i % 4]; }
   mixColor(i: number):    string { return ['#2D9CDB','#27AE60','#9B51E0','#F2994A','#E74C3C'][i % 5]; }
-
-  simulatePOS() {
-    this.api.simulatePOS(this.storeId)
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: () => setTimeout(() => this.loadData(), 1000),
-        error: () => {},
-      });
-  }
 
   triggerAgent() {
     this.api.triggerCycle(this.storeId)

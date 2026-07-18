@@ -1,0 +1,556 @@
+.pd-page {
+  padding: 24px 32px;
+}
+
+.pd-loading {
+  color: #64748B;
+  font-size: 14px;
+  padding: 40px 0;
+  text-align: center;
+}
+
+.pb-toast {
+  background: #FEF3C7;
+  color: #92400E;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  margin-bottom: 12px;
+  display: inline-block;
+}
+
+.pb-error {
+  background: #FEE2E2;
+  color: #991B1B;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+// ── Header ───────────────────────────────────────────────────────────────────
+
+.pd-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+.pd-header__left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+
+  h1 {
+    font-size: 24px;
+    font-weight: 800;
+    margin: 0;
+    color: #1E293B;
+  }
+}
+
+.pd-breadcrumb {
+  background: #F1F5F9;
+  border: 1px solid #E2E8F0;
+  border-radius: 8px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748B;
+  white-space: nowrap;
+}
+
+.pd-back {
+  border: 1px solid #E2E8F0;
+  background: #fff;
+  border-radius: 8px;
+  padding: 7px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+
+  &:hover { background: #F8FAFC; }
+}
+
+.pd-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+// Bouton outline bleu du header (comme « Recommander » sur la maquette)
+.pd-btn-outline {
+  border: 1px solid #BFDBFE;
+  background: #fff;
+  color: #2563EB;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+
+  &:hover { background: #EFF6FF; }
+}
+
+.pd-card__chips {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pd-approved-chip {
+  background: #DCFCE7;
+  border: 1px solid #86EFAC;
+  color: #15803D;
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 11.5px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+// ── Mini-liste « Purchase Tickets » dans la fiche ────────────────────────────
+
+.pd-related {
+  border: 1px solid #F1F5F9;
+  border-radius: 10px;
+  margin-top: 12px;
+  overflow: hidden;
+}
+
+.pd-related__head {
+  background: #F8FAFC;
+  padding: 9px 14px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #64748B;
+  border-bottom: 1px solid #F1F5F9;
+}
+
+.pd-related__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #F8FAFC;
+  cursor: pointer;
+
+  &:last-child { border-bottom: none; }
+  &:hover { background: #F8FAFC; }
+}
+
+.pd-related__check {
+  color: #16A34A;
+  font-weight: 800;
+  width: 16px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.pd-related__id {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #1E293B;
+
+  &:hover { color: #2563EB; }
+}
+
+.pd-related__sub {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  color: #94A3B8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pd-related__amount {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1E293B;
+  white-space: nowrap;
+}
+
+// ── Stepper en chevrons (façon maquette) ─────────────────────────────────────
+
+.pd-stepper {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-bottom: 18px;
+  overflow-x: auto;
+  padding: 4px 0;
+}
+
+.pd-chev {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 130px;
+  padding: 9px 26px 9px 30px;
+  margin-left: -14px;
+  background: #E9EEF5;
+  color: #64748B;
+  clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 50%, calc(100% - 16px) 100%, 0 100%, 14px 50%);
+
+  &:first-child {
+    margin-left: 0;
+    padding-left: 20px;
+    border-radius: 8px 0 0 8px;
+    clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 50%, calc(100% - 16px) 100%, 0 100%);
+  }
+
+  &__label {
+    font-size: 12.5px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  &__date {
+    font-size: 10px;
+    white-space: nowrap;
+    opacity: 0.8;
+  }
+
+  &--done {
+    background: #DCFCE7;
+    color: #15803D;
+  }
+
+  &--current {
+    background: #2563EB;
+    color: #fff;
+  }
+}
+
+// Ligne de progression à droite du stepper, comme sur la maquette
+.pd-stepper__track {
+  flex: 1 1 60px;
+  min-width: 40px;
+  height: 3px;
+  margin-left: 4px;
+  border-radius: 2px;
+  background: #E2E8F0;
+  position: relative;
+}
+
+.pd-stepper__dot {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #CBD5E1;
+}
+
+.pd-offtrack {
+  background: #F1F5F9;
+  color: #64748B;
+  border-radius: 12px;
+  padding: 14px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 18px;
+
+  &--litige {
+    background: #FEE2E2;
+    color: #B91C1C;
+  }
+}
+
+// ── Corps : fiche + panneau ──────────────────────────────────────────────────
+
+.pd-body {
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+}
+
+.pd-card {
+  flex: 1 1 auto;
+  min-width: 0;
+  background: #fff;
+  border: 1px solid #E2E8F0;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.pd-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.pd-card__product {
+  font-size: 17px;
+  font-weight: 800;
+  color: #1E293B;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pd-card__sub {
+  font-size: 12px;
+  color: #64748B;
+  margin-top: 2px;
+}
+
+.pd-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.pd-kpi {
+  background: #F8FAFC;
+  border: 1px solid #F1F5F9;
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+
+  &__label {
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #94A3B8;
+  }
+
+  &__value {
+    font-size: 15px;
+    font-weight: 800;
+    color: #1E293B;
+  }
+}
+
+.pd-lines {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 14px;
+
+  th {
+    text-align: left;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #64748B;
+    background: #F8FAFC;
+    padding: 9px 12px;
+    border-bottom: 1px solid #E2E8F0;
+  }
+
+  td {
+    padding: 11px 12px;
+    border-bottom: 1px solid #F1F5F9;
+    font-size: 13px;
+    color: #334155;
+  }
+
+  tfoot td {
+    border-bottom: none;
+    font-weight: 700;
+    color: #1E293B;
+    background: #F8FAFC;
+  }
+
+  &__total-col { text-align: right; }
+}
+
+.pd-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid #F1F5F9;
+}
+
+.pd-card__footer-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+// ── Panneau latéral ──────────────────────────────────────────────────────────
+
+.pd-side {
+  flex: 0 0 320px;
+  background: #fff;
+  border: 1px solid #E2E8F0;
+  border-radius: 12px;
+  padding: 18px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+
+  h2 {
+    font-size: 15px;
+    font-weight: 800;
+    color: #1E293B;
+    margin: 0 0 14px;
+  }
+}
+
+.pd-side__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 0;
+  font-size: 12.5px;
+
+  span { color: #64748B; }
+
+  b {
+    color: #1E293B;
+    font-weight: 700;
+    text-align: right;
+  }
+}
+
+.pd-side__delta {
+  display: block;
+  font-size: 11px;
+  color: #64748B;
+  font-weight: 600;
+}
+
+.pd-side__sep {
+  height: 1px;
+  background: #F1F5F9;
+  margin: 10px 0;
+}
+
+.pd-side__notes {
+  font-size: 12px;
+  color: #475569;
+  background: #F8FAFC;
+  border-radius: 8px;
+  padding: 10px;
+  white-space: pre-wrap;
+}
+
+.pd-side__cta {
+  width: 100%;
+  margin-top: 14px;
+  padding: 10px 0 !important;
+  font-size: 13px !important;
+}
+
+.pd-auto-chip {
+  background: #EEF2FF;
+  border: 1px solid #C7D2FE;
+  color: #4338CA;
+  font-size: 9.5px;
+  font-weight: 700;
+  border-radius: 5px;
+  padding: 1px 5px;
+  margin-left: 4px;
+}
+
+// ── Éléments partagés avec la vue liste (styles scopés → redéclarés ici) ────
+
+.pt-ia-chip {
+  background: #4F46E5;
+  color: #fff;
+  font-size: 9.5px;
+  font-weight: 700;
+  border-radius: 5px;
+  padding: 1px 5px;
+}
+
+.pt-po-id {
+  font-weight: 700;
+  color: #1E293B;
+  font-size: 13px;
+}
+
+.pt-td-amount { font-weight: 700; color: #1E293B; }
+
+.pt-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+
+  &--suggere      { background: #EEF2FF; color: #4338CA; border: 1px dashed #A5B4FC; }
+  &--brouillon    { background: #F1F5F9; color: #475569; }
+  &--soumis       { background: #DBEAFE; color: #1D4ED8; }
+  &--confirme     { background: #CCFBF1; color: #0F766E; }
+  &--expedie      { background: #FFEDD5; color: #C2410C; }
+  &--recu_partiel { background: #FEF9C3; color: #854D0E; }
+  &--recu         { background: #DCFCE7; color: #15803D; }
+  &--annule       { background: #F1F5F9; color: #94A3B8; text-decoration: line-through; }
+  &--litige       { background: #FEE2E2; color: #B91C1C; }
+}
+
+.pt-action {
+  border: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+
+  &--approve { background: #16A34A; &:hover { background: #15803D; } }
+  &--submit  { background: #2563EB; &:hover { background: #1D4ED8; } }
+  &--ship    { background: #EA580C; &:hover { background: #C2410C; } }
+  &--receive { background: #0D9488; &:hover { background: #0F766E; } }
+  &--reject  { background: #fff; color: #DC2626; border: 1px solid #FECACA; box-shadow: none;
+               &:hover { background: #FEF2F2; } }
+}
+
+.pb-card__risk {
+  margin-top: 4px;
+  margin-bottom: 4px;
+  padding: 8px 11px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+
+  &--danger {
+    background: #FDEDEC;
+    color: #C0392B;
+    border-left: 3px solid #E74C3C;
+  }
+  &--ok {
+    background: #E8F8F5;
+    color: #1E8449;
+    border-left: 3px solid #27AE60;
+  }
+}
+
+// ── Mobile ──────────────────────────────────────────────────────────────────
+
+@media (max-width: 900px) {
+  .pd-body { flex-direction: column; }
+  .pd-side { flex: 1 1 auto; width: 100%; }
+}

@@ -24,7 +24,7 @@
       </div>
       <div class="dash-skeleton__status">
         <div class="skel-pulse"></div>
-        <span>Connexion aux agents en cours...</span>
+        <span>Chargement du tableau de bord…</span>
       </div>
     </div>
   }
@@ -61,24 +61,43 @@
     </div>
     <div class="page-header__right">
       <app-hitl-panel />
-      <button class="btn-outline" (click)="simulatePOS()">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2">
-          <polyline points="1,4 1,10 7,10"/>
-          <path d="M3.51 15a9 9 0 102.13-9.36L1 10"/>
-        </svg>
-        Simulate POS
-      </button>
-      <button class="btn-primary">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2">
-          <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
-          <circle cx="9" cy="7" r="4"/>
-          <path d="M23 21v-2a4 4 0 00-3-3.87"/>
-          <path d="M16 3.13a4 4 0 010 7.75"/>
-        </svg>
-        Team Coaching
-      </button>
+    </div>
+  </div>
+
+  <!-- ══ BANDEAU VENTES EN DIRECT — ticker temps réel ══ -->
+  <div class="sales-ticker" [class.sales-ticker--off]="!ws.connected()">
+    <div class="sales-ticker__label">
+      <span class="dash-live-dot" [class.dash-live-dot--off]="!ws.connected()"></span>
+      <span class="sales-ticker__title">Ventes en direct</span>
+      @if (tickerStats().count > 0) {
+        <span class="sales-ticker__stats">
+          {{ tickerStats().count }} vente{{ tickerStats().count > 1 ? 's' : '' }}
+          · {{ tickerStats().total | number:'1.0-0' }} DT
+        </span>
+      }
+    </div>
+    <div class="sales-ticker__viewport">
+      @if (ws.liveSalesTicker().length === 0) {
+        <span class="sales-ticker__empty">En attente de la première vente…</span>
+      } @else {
+        <div class="sales-ticker__track">
+          @for (tx of ws.liveSalesTicker().slice(0, 12); track tx.timestamp) {
+            <div class="ticker-card"
+                 [class.ticker-card--warn]="tx.severity === 'critical' || tx.severity === 'rupture'">
+              <span class="ticker-card__amount">{{ tx.amount ?? 0 | number:'1.0-0' }} DT</span>
+              <span class="ticker-card__name">{{ tx.product_name || tx.sku }}</span>
+              <span class="ticker-card__meta">
+                {{ tx.timestamp | date:'HH:mm:ss' }}
+                @if (tx.severity === 'critical' || tx.severity === 'rupture') {
+                  <span class="ticker-card__flag">rupture</span>
+                } @else {
+                  <span class="ticker-card__stock">stock {{ tx.stock_after }}</span>
+                }
+              </span>
+            </div>
+          }
+        </div>
+      }
     </div>
   </div>
 
@@ -224,14 +243,6 @@
               <span class="perf-leg perf-leg--dash2">
                 <span class="perf-leg__line--prev"></span>Prévision
               </span>
-            </div>
-            <div class="perf-filter">
-              <button class="perf-filter-btn"
-                      [class.is-active]="hourlyPerfFilter() === 'all'"
-                      (click)="hourlyPerfFilter.set('all')">Heure</button>
-              <button class="perf-filter-btn"
-                      [class.is-active]="hourlyPerfFilter() === 'risk'"
-                      (click)="hourlyPerfFilter.set('risk')">Cumul</button>
             </div>
           </div>
         </div>
@@ -410,7 +421,6 @@
         <div class="card alerts-card">
           <div class="card-header">
             <h2 class="card-title">Alertes Actives</h2>
-            <button class="card-link">Voir toutes</button>
           </div>
 
           <div class="alerts-list">
@@ -528,7 +538,6 @@
               <span class="ws-dot"></span>
               {{ ws.connected() ? 'Live' : 'Polling' }}
             </span>
-            <button class="card-link">Voir tout</button>
           </div>
         </div>
 
@@ -699,30 +708,6 @@
               </div>
             }
 
-            <div class="nba-checks">
-              <span class="nba-check">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
-                     stroke="#E2001A" stroke-width="2.5">
-                  <polyline points="20,6 9,17 4,12"/>
-                </svg>
-                {{ attainment() >= 100 ? 'Objectif atteint' : 'En progression' }}
-              </span>
-              <span class="nba-check">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
-                     stroke="#E2001A" stroke-width="2.5">
-                  <polyline points="20,6 9,17 4,12"/>
-                </svg>
-                Stock disponible
-              </span>
-              <span class="nba-check">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
-                     stroke="#E2001A" stroke-width="2.5">
-                  <polyline points="20,6 9,17 4,12"/>
-                </svg>
-                Marge attractive
-              </span>
-            </div>
-
             @if (strateActions().length > 1) {
               <div class="nba-more-actions">
                 @for (action of strateActions().slice(1, 3); track action.priorite) {
@@ -763,7 +748,7 @@
             <div class="skel" style="height:12px;width:75%"></div>
             <p class="nba-skel-status">
               <span class="skel-pulse"></span>
-              Agents analyste + stratège en cours de raisonnement…
+              Préparation des recommandations…
             </p>
           }
         </div>
@@ -775,11 +760,8 @@
           <div class="card-header">
             <div>
               <h2 class="card-title">Plan Stratégique</h2>
-              <p class="card-sub">{{ strateActions().length }} action(s) · Agent Stratège</p>
+              <p class="card-sub">{{ strateActions().length }} action(s) prioritaire(s)</p>
             </div>
-            @if (ws.ragUsed()) {
-              <span class="strate-rag-badge">✦ RAG {{ ws.nbRagScripts() }}</span>
-            }
           </div>
 
           @if (strategie()) {
@@ -872,117 +854,6 @@
       </div>
     </div>
   }
-
-  <!-- ══ RAISONNEMENT MULTI-AGENT (SupervisorAgent) ══ -->
-  @if (ws.supervisorInsights().agents_invoked.length === 0) {
-    <div class="dash-supervisor-section">
-      <div class="dash-coaching-header">
-        <div>
-          <h2 class="card-title">Raisonnement Multi-Agent</h2>
-          <p class="card-sub">Analyste · Stratège · Inventaire · Guardrail — cycle en cours</p>
-        </div>
-      </div>
-      <div class="supervisor-agents-row">
-        @for (agent of ['analyst', 'strategist', 'inventory', 'guardrail']; track agent) {
-          <span class="agent-chip agent-chip--pending">
-            <span class="skel-pulse"></span>{{ agent }}
-          </span>
-        }
-      </div>
-    </div>
-  } @else {
-    <div class="dash-supervisor-section">
-      <div class="dash-coaching-header">
-        <div>
-          <h2 class="card-title">Raisonnement Multi-Agent</h2>
-          <p class="card-sub">{{ ws.supervisorInsights().agents_invoked.length }} agents exécutés ce cycle</p>
-        </div>
-        <span class="guardrail-pill"
-              [class.guardrail-pill--block]="ws.supervisorInsights().guardrail_status === 'BLOCK'"
-              [class.guardrail-pill--escalate]="ws.supervisorInsights().guardrail_status === 'ESCALATE'"
-              [class.guardrail-pill--rewrite]="ws.supervisorInsights().guardrail_status === 'REWRITE'">
-          @if (ws.supervisorInsights().guardrail_status === 'BLOCK') { 🚫 }
-          @else if (ws.supervisorInsights().guardrail_status === 'ESCALATE') { ⚠️ }
-          @else if (ws.supervisorInsights().guardrail_status === 'REWRITE') { ✏️ }
-          @else { ✅ }
-          Guardrail {{ ws.supervisorInsights().guardrail_status }}
-        </span>
-      </div>
-
-      @if (ws.supervisorInsights().hitl_required) {
-        <div class="supervisor-hitl-banner">
-          ⏳ Validation manager requise avant diffusion de cette recommandation
-        </div>
-      }
-
-      <div class="supervisor-agents-row">
-        @for (agent of ws.supervisorInsights().agents_invoked; track agent) {
-          <span class="agent-chip">{{ agent }}</span>
-        }
-      </div>
-
-      <div class="supervisor-body">
-        @if (ws.supervisorInsights().coach_recommendation.message_for_advisor) {
-          <div class="supervisor-block">
-            <span class="supervisor-block-label">Recommandation coach</span>
-            <p class="supervisor-coach-msg">{{ ws.supervisorInsights().coach_recommendation.message_for_advisor }}</p>
-          </div>
-        }
-
-        @if (ws.supervisorInsights().scored_products.length > 0) {
-          <div class="supervisor-block">
-            <span class="supervisor-block-label">Produits recommandés (scoring cross-domaine)</span>
-            <div class="scored-products">
-              @for (p of ws.supervisorInsights().scored_products.slice(0, 3); track p.sku) {
-                <div class="scored-product-chip" [title]="p.recommendation_reason">
-                  <span class="spc-score"
-                        [style.color]="p.final_score >= 0.75 ? '#10B981' : p.final_score >= 0.5 ? '#F59E0B' : '#94A3B8'">
-                    {{ (p.final_score * 100).toFixed(0) }}%
-                  </span>
-                  <span class="spc-name">{{ p.name || p.sku }}</span>
-                </div>
-              }
-            </div>
-          </div>
-        }
-
-        @if (ws.supervisorInsights().critical_stock_alerts.length > 0) {
-          <div class="supervisor-block">
-            <span class="supervisor-block-label">⚠️ {{ ws.supervisorInsights().critical_stock_alerts.length }} alerte(s) stock critique</span>
-            <div class="supervisor-stock-alerts">
-              @for (a of ws.supervisorInsights().critical_stock_alerts.slice(0, 3); track a.sku) {
-                <span class="stock-alert-chip">{{ a.name || a.sku }}</span>
-              }
-            </div>
-          </div>
-        }
-      </div>
-    </div>
-  }
-
-  <!-- Phase 2-lite: live sales ticker, fed by realtime_stock_update WS messages -->
-  <div class="dash-live-sales-section">
-    <div class="dash-coaching-header">
-      <div>
-        <h2 class="card-title">Ventes en direct</h2>
-        <p class="card-sub">Flux temps réel — stock et transactions</p>
-      </div>
-      <span class="dash-live-dot" [class.dash-live-dot--off]="!ws.connected()"></span>
-    </div>
-    @if (ws.liveSalesTicker().length === 0) {
-      <p class="dash-live-sales-empty">En attente de la première vente…</p>
-    } @else {
-      <div class="dash-live-sales-list">
-        @for (tx of ws.liveSalesTicker().slice(0, 8); track tx.timestamp) {
-          <div class="dash-live-sales-item"
-               [class.dash-live-sales-item--warn]="tx.severity === 'critical' || tx.severity === 'rupture'">
-            <span class="dash-live-sales-msg">{{ tx.message }}</span>
-            <span class="dash-live-sales-time">{{ tx.timestamp | date:'HH:mm:ss' }}</span>
-          </div>
-        }
-      </div>
-    }
-  </div>
 
   <!-- ══ MODAL — Offres Ooredoo actives ══ -->
   @if (showOffersModal()) {

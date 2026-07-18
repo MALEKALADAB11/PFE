@@ -386,3 +386,286 @@
     border-left: 3px solid #27AE60;
   }
 }
+
+// ═══ Vue liste « Purchase Tickets » (design maquette) ════════════════════════
+
+.pt-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+
+  h1 {
+    font-size: 22px;
+    font-weight: 700;
+    margin: 0;
+  }
+}
+
+.pt-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.pt-pending-chip {
+  background: #EEF2FF;
+  border: 1px solid #C7D2FE;
+  color: #4338CA;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 5px 12px;
+}
+
+.pt-bulk-approve {
+  border: none;
+  border-radius: 8px;
+  padding: 9px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  background: #16A34A;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+
+  &:hover:not(:disabled) { background: #15803D; }
+
+  &:disabled {
+    background: #CBD5E1;
+    cursor: not-allowed;
+  }
+}
+
+.pt-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.pt-search {
+  flex: 1 1 280px;
+  max-width: 420px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #fff;
+  border: 1px solid #E2E8F0;
+  border-radius: 10px;
+  padding: 8px 12px;
+  color: #94A3B8;
+
+  input {
+    flex: 1;
+    border: none;
+    outline: none;
+    font-size: 13px;
+    color: #1E293B;
+    background: transparent;
+
+    &::placeholder { color: #94A3B8; }
+  }
+}
+
+.pt-select {
+  border: 1px solid #E2E8F0;
+  border-radius: 10px;
+  background: #fff;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: #334155;
+  cursor: pointer;
+}
+
+.pt-view-toggle {
+  margin-left: auto;
+  display: inline-flex;
+  background: #F1F5F9;
+  border-radius: 10px;
+  padding: 3px;
+
+  button {
+    border: none;
+    background: transparent;
+    border-radius: 8px;
+    padding: 6px 14px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #64748B;
+    cursor: pointer;
+
+    &.active {
+      background: #fff;
+      color: #1E293B;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+    }
+  }
+}
+
+.pt-table-wrap {
+  background: #fff;
+  border: 1px solid #E2E8F0;
+  border-radius: 12px;
+  overflow-x: auto;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.pt-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 860px;
+
+  th {
+    text-align: left;
+    font-size: 11.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #64748B;
+    background: #F8FAFC;
+    padding: 11px 14px;
+    border-bottom: 1px solid #E2E8F0;
+    white-space: nowrap;
+
+    span { color: #94A3B8; font-weight: 600; }
+  }
+
+  td {
+    padding: 12px 14px;
+    border-bottom: 1px solid #F1F5F9;
+    font-size: 13px;
+    color: #334155;
+    vertical-align: middle;
+  }
+
+  tbody tr:last-child td { border-bottom: none; }
+
+  tbody tr:hover { background: #F8FAFC; }
+}
+
+.pt-th-sort { cursor: pointer; user-select: none; }
+.pt-th-check { width: 36px; }
+.pt-th-action { text-align: right; }
+
+.pt-row--selected { background: #EFF6FF !important; }
+.pt-row--suggested td { background: rgba(99, 102, 241, 0.04); }
+
+.pt-td-check input {
+  width: 15px;
+  height: 15px;
+  accent-color: #4F46E5;
+  cursor: pointer;
+}
+
+.pt-td-po { cursor: pointer; }
+
+.pt-po-id {
+  font-weight: 700;
+  color: #1E293B;
+  font-size: 13px;
+}
+
+.pt-td-po:hover .pt-po-id {
+  color: #2563EB;
+  text-decoration: underline;
+}
+
+.pt-po-product {
+  color: #64748B;
+  font-size: 12px;
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pt-ia-chip {
+  background: #4F46E5;
+  color: #fff;
+  font-size: 9.5px;
+  font-weight: 700;
+  border-radius: 5px;
+  padding: 1px 5px;
+}
+
+.pt-td-num { white-space: nowrap; }
+.pt-td-amount { font-weight: 700; color: #1E293B; }
+.pt-td-date { white-space: nowrap; color: #64748B; font-size: 12.5px; }
+
+.pt-priority {
+  font-size: 11.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.pt-risk {
+  margin-left: 6px;
+  font-weight: 700;
+  color: #1E8449;
+
+  &--danger { color: #DC2626; }
+}
+
+// Badges de statut — pastilles colorées comme la maquette
+.pt-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+
+  &--suggere      { background: #EEF2FF; color: #4338CA; border: 1px dashed #A5B4FC; }
+  &--brouillon    { background: #F1F5F9; color: #475569; }
+  &--soumis       { background: #DBEAFE; color: #1D4ED8; }
+  &--confirme     { background: #CCFBF1; color: #0F766E; }
+  &--expedie      { background: #FFEDD5; color: #C2410C; }
+  &--recu_partiel { background: #FEF9C3; color: #854D0E; }
+  &--recu         { background: #DCFCE7; color: #15803D; }
+  &--annule       { background: #F1F5F9; color: #94A3B8; text-decoration: line-through; }
+  &--litige       { background: #FEE2E2; color: #B91C1C; }
+}
+
+// Boutons d'action de ligne — pleins et colorés comme « To Approve »
+.pt-td-action {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.pt-action {
+  border: none;
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+
+  & + & { margin-left: 6px; }
+
+  &--approve { background: #16A34A; &:hover { background: #15803D; } }
+  &--submit  { background: #2563EB; &:hover { background: #1D4ED8; } }
+  &--ship    { background: #EA580C; &:hover { background: #C2410C; } }
+  &--receive { background: #0D9488; &:hover { background: #0F766E; } }
+  &--reject  { background: #fff; color: #DC2626; border: 1px solid #FECACA; box-shadow: none;
+               &:hover { background: #FEF2F2; } }
+}
+
+.pt-action-none { color: #CBD5E1; }
+
+.pt-empty {
+  text-align: center;
+  color: #94A3B8;
+  padding: 32px 0 !important;
+  font-size: 13px;
+}
+
+@media (max-width: 768px) {
+  .pt-view-toggle { margin-left: 0; }
+}

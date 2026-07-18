@@ -1,0 +1,228 @@
+<div class="pd-page">
+
+  @if (loading()) {
+    <div class="pd-loading">Chargement du bon de commande…</div>
+  } @else if (errorMsg()) {
+    <div class="pb-error">{{ errorMsg() }}</div>
+    <button type="button" class="pd-back" (click)="back()">← Retour aux achats</button>
+  } @else if (po(); as order) {
+
+    <!-- ── Header : n° BC + fil d'ariane + action principale ─────────────── -->
+    <div class="pd-header">
+      <div class="pd-header__left">
+        <button type="button" class="pd-back" (click)="back()">← Retour</button>
+        <h1>#{{ order.po_id }}</h1>
+        <span class="pd-breadcrumb">{{ breadcrumb() }}</span>
+      </div>
+      <div class="pd-header__actions">
+        <button type="button" class="pd-btn-outline" (click)="back()">
+          🗂 Voir le Kanban
+        </button>
+        @if (primaryAction(order); as action) {
+          <button type="button" class="pt-action" [class]="'pt-action ' + action.css" (click)="runPrimaryAction()">
+            {{ action.label }}
+          </button>
+        }
+      </div>
+    </div>
+
+    @if (toastMsg()) {
+      <div class="pb-toast">{{ toastMsg() }}</div>
+    }
+
+    <!-- ── Stepper de workflow ───────────────────────────────────────────── -->
+    @if (!isOffTrack()) {
+      <div class="pd-stepper">
+        @for (step of steps(); track step.key; let i = $index) {
+          <div class="pd-chev" [class]="'pd-chev pd-chev--' + stepState(i)">
+            <span class="pd-chev__label">
+              @if (stepState(i) === 'done') { ✓ }
+              {{ step.label }}
+              @if (step.key === 'EXPEDIE' && order.statut === 'RECU_PARTIEL') { (partiel) }
+            </span>
+            @if (step.date) {
+              <span class="pd-chev__date">{{ step.date | date:'dd/MM HH:mm' }}</span>
+            }
+          </div>
+        }
+        <div class="pd-stepper__track"><span class="pd-stepper__dot"></span></div>
+      </div>
+    } @else {
+      <div class="pd-offtrack" [class.pd-offtrack--litige]="order.statut === 'LITIGE'">
+        {{ order.statut === 'LITIGE'
+            ? '⚠ Ce bon de commande est en litige — résolvez-le depuis le Kanban.'
+            : 'Ce bon de commande a été annulé.' }}
+      </div>
+    }
+
+    <!-- ── Corps : fiche BC + panneau latéral ────────────────────────────── -->
+    <div class="pd-body">
+
+      <!-- Fiche principale -->
+      <div class="pd-card">
+        <div class="pd-card__head">
+          <div>
+            <div class="pd-card__product">
+              {{ order.product_name || ('SKU ' + order.sku) }}
+              @if (order.source === 'AGENT') { <span class="pt-ia-chip">IA</span> }
+            </div>
+            <div class="pd-card__sub">SKU {{ order.sku }} · Store {{ order.store_id }}</div>
+          </div>
+          <div class="pd-card__chips">
+            @if (isApprovedSuggestion(order)) {
+              <span class="pd-approved-chip">✓ Approved</span>
+            }
+            <span [class]="statusClass(order.statut)">{{ statusLabel(order.statut) }}</span>
+          </div>
+        </div>
+
+        <div class="pd-kpis">
+          <div class="pd-kpi">
+            <span class="pd-kpi__label">Commandé</span>
+            <span class="pd-kpi__value">{{ order.quantite_commandee }}</span>
+          </div>
+          <div class="pd-kpi">
+            <span class="pd-kpi__label">Reçu</span>
+            <span class="pd-kpi__value">{{ order.quantite_recue }}</span>
+          </div>
+          <div class="pd-kpi">
+            <span class="pd-kpi__label">Prix unitaire HT</span>
+            <span class="pd-kpi__value">{{ order.prix_unitaire_ht | number:'1.2-2' }} {{ order.devise }}</span>
+          </div>
+          <div class="pd-kpi">
+            <span class="pd-kpi__label">Priorité</span>
+            <span class="pd-kpi__value" [style.color]="priorityColor(order.priorite)">{{ order.priorite }}</span>
+          </div>
+        </div>
+
+        <table class="pd-lines">
+          <thead>
+            <tr>
+              <th>Ligne</th>
+              <th>Qté</th>
+              <th>PU HT</th>
+              <th>Réception</th>
+              <th class="pd-lines__total-col">Total HT</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>
+                <div class="pt-po-id">{{ order.product_name || ('SKU ' + order.sku) }}</div>
+                <div class="pd-card__sub">{{ order.date_commande | date:'dd/MM/yyyy HH:mm' }}</div>
+              </td>
+              <td>{{ order.quantite_recue }}/{{ order.quantite_commandee }}</td>
+              <td>{{ order.prix_unitaire_ht | number:'1.2-2' }}</td>
+              <td>{{ order.date_livraison_prevue ? (order.date_livraison_prevue | date:'dd/MM/yyyy') : '—' }}</td>
+              <td class="pd-lines__total-col pt-td-amount">{{ order.montant_total_ht | number:'1.2-2' }} {{ order.devise }}</td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colspan="4">Total</td>
+              <td class="pd-lines__total-col pt-td-amount">{{ order.montant_total_ht | number:'1.2-2' }} {{ order.devise }}</td>
+            </tr>
+          </tfoot>
+        </table>
+
+        @if (riskBanner(order); as rb) {
+          <div class="pb-card__risk"
+               [class.pb-card__risk--danger]="rb.kind === 'danger'"
+               [class.pb-card__risk--ok]="rb.kind === 'ok'">
+            {{ rb.kind === 'danger' ? '⚠' : '✓' }} {{ rb.text }}
+          </div>
+        }
+
+        <!-- Mini-liste « Purchase Tickets » du store (comme la maquette) -->
+        @if (related().length > 0) {
+          <div class="pd-related">
+            <div class="pd-related__head">Autres purchase tickets · Store {{ order.store_id }}</div>
+            @for (rel of related(); track rel.po_id) {
+              <div class="pd-related__row" (click)="openRelated(rel)" title="Ouvrir ce bon de commande">
+                <span class="pd-related__check">
+                  @if (['RECU', 'CONFIRME'].includes(rel.statut)) { ✓ } @else { ○ }
+                </span>
+                <span class="pd-related__id">
+                  #{{ rel.po_id }}
+                  <span class="pd-related__sub">{{ rel.product_name || ('SKU ' + rel.sku) }} · {{ rel.date_commande | date:'dd/MM/yyyy HH:mm' }}</span>
+                </span>
+                <span [class]="statusClass(rel.statut)">{{ statusLabel(rel.statut) }}</span>
+                <span class="pd-related__amount">{{ rel.montant_total_ht | number:'1.2-2' }} {{ rel.devise }}</span>
+              </div>
+            }
+          </div>
+        }
+
+        <div class="pd-card__footer">
+          <button type="button" class="pd-back" (click)="back()">← Retour à la liste</button>
+          <div class="pd-card__footer-actions">
+            @if (canCancel(order)) {
+              <button type="button" class="pt-action pt-action--reject" (click)="cancel()">Annuler le BC</button>
+            }
+            @if (canReject(order)) {
+              <button type="button" class="pt-action pt-action--reject" (click)="reject()">Rejeter</button>
+            }
+            @if (primaryAction(order); as action) {
+              <button type="button" class="pt-action" [class]="'pt-action ' + action.css" (click)="runPrimaryAction()">
+                {{ action.label }}
+              </button>
+            }
+          </div>
+        </div>
+      </div>
+
+      <!-- Panneau latéral « Purchase Ticket » -->
+      <aside class="pd-side">
+        <h2>Purchase Ticket</h2>
+
+        <div class="pd-side__row"><span>Date de commande</span><b>{{ order.date_commande | date:'dd/MM/yyyy HH:mm' }}</b></div>
+        <div class="pd-side__row"><span>Soumis le</span><b>{{ order.date_soumission ? (order.date_soumission | date:'dd/MM/yyyy HH:mm') : '—' }}</b></div>
+        <div class="pd-side__row">
+          <span>Confirmé le</span>
+          <b>
+            {{ order.date_confirmation ? (order.date_confirmation | date:'dd/MM/yyyy HH:mm') : '—' }}
+            @if (order.confirmed_auto) { <span class="pd-auto-chip" title="Aucune action humaine sous 24h">auto</span> }
+          </b>
+        </div>
+        <div class="pd-side__row"><span>Livraison prévue</span><b>{{ order.date_livraison_prevue ? (order.date_livraison_prevue | date:'dd/MM/yyyy') : '—' }}</b></div>
+        <div class="pd-side__row">
+          <span>Livraison réelle</span>
+          <b>
+            {{ order.date_livraison_reelle ? (order.date_livraison_reelle | date:'dd/MM/yyyy') : '—' }}
+            @if (deliveryDeltaLabel(order)) { <span class="pd-side__delta">{{ deliveryDeltaLabel(order) }}</span> }
+          </b>
+        </div>
+
+        <div class="pd-side__sep"></div>
+
+        <div class="pd-side__row"><span>Fournisseur</span><b>{{ order.supplier_id || '—' }}</b></div>
+        <div class="pd-side__row"><span>Référence externe</span><b>{{ order.reference_externe || '—' }}</b></div>
+        <div class="pd-side__row"><span>Source</span><b>{{ order.source === 'AGENT' ? 'Agent Décision (IA)' : 'Manuel' }}</b></div>
+        @if (order.urgency) {
+          <div class="pd-side__row"><span>Urgence</span><b>{{ order.urgency }}</b></div>
+        }
+        @if (order.confidence != null) {
+          <div class="pd-side__row"><span>Confiance IA</span><b>{{ order.confidence | percent:'1.0-0' }}</b></div>
+        }
+
+        <div class="pd-side__sep"></div>
+
+        <div class="pd-side__row"><span>Stock actuel</span><b>{{ order.stock_current ?? '—' }}</b></div>
+        <div class="pd-side__row"><span>Ventes / jour (30 j)</span><b>{{ order.avg_daily_sales != null ? (order.avg_daily_sales | number:'1.0-1') : '—' }}</b></div>
+        <div class="pd-side__row"><span>Couverture</span><b>{{ coverageLabel(order) }}</b></div>
+
+        @if (order.notes) {
+          <div class="pd-side__sep"></div>
+          <div class="pd-side__notes">{{ order.notes }}</div>
+        }
+
+        @if (primaryAction(order); as action) {
+          <button type="button" class="pt-action pd-side__cta" [class]="'pt-action pd-side__cta ' + action.css" (click)="runPrimaryAction()">
+            {{ action.label }}
+          </button>
+        }
+      </aside>
+
+    </div>
+  }
+</div>

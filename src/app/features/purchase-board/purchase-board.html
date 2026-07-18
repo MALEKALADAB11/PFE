@@ -1,9 +1,131 @@
 <div class="pb-page">
 
-  <div class="pb-header">
-    <h1>Approvisionnement — Suivi des commandes</h1>
-    <p class="pb-sub">Store {{ selectedStore() }}</p>
+  <!-- ── Header façon « Purchase Tickets » ─────────────────────────────── -->
+  <div class="pt-header">
+    <div class="pt-header__titles">
+      <h1>Achats — Purchase Tickets</h1>
+      <p class="pb-sub">Bons de commande &amp; suggestions de l'agent · Store {{ selectedStore() }}</p>
+    </div>
+    <div class="pt-header__actions">
+      @if (pendingSuggestions() > 0) {
+        <span class="pt-pending-chip">{{ pendingSuggestions() }} suggestion(s) IA en attente</span>
+      }
+      <button
+        type="button"
+        class="pt-bulk-approve"
+        [disabled]="selectedApprovable().length === 0"
+        (click)="approveSelected()"
+      >
+        ✓ Approuver la sélection
+        @if (selectedApprovable().length > 0) { ({{ selectedApprovable().length }}) }
+      </button>
+    </div>
   </div>
+
+  <!-- ── Barre recherche / filtres / bascule de vue ────────────────────── -->
+  <div class="pt-toolbar">
+    <div class="pt-search">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+      </svg>
+      <input
+        type="text"
+        placeholder="Rechercher un BC, produit, SKU, fournisseur…"
+        [ngModel]="searchTerm()"
+        (ngModelChange)="searchTerm.set($event)"
+      />
+    </div>
+
+    <select class="pt-select" [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)">
+      @for (opt of statusOptions; track opt.key) {
+        <option [value]="opt.key">{{ opt.label }}</option>
+      }
+    </select>
+
+    <div class="pt-view-toggle">
+      <button type="button" [class.active]="viewMode() === 'liste'" (click)="viewMode.set('liste')">☰ Liste</button>
+      <button type="button" [class.active]="viewMode() === 'kanban'" (click)="viewMode.set('kanban')">▦ Kanban</button>
+    </div>
+  </div>
+
+  @if (toastMsg()) {
+    <div class="pb-toast">{{ toastMsg() }}</div>
+  }
+
+  @if (errorMsg()) {
+    <div class="pb-error">{{ errorMsg() }}</div>
+  }
+
+  <!-- ── Vue liste (design maquette, sans vignettes) ───────────────────── -->
+  @if (viewMode() === 'liste') {
+    <div class="pt-table-wrap">
+      <table class="pt-table">
+        <thead>
+          <tr>
+            <th class="pt-th-check"></th>
+            <th class="pt-th-sort" (click)="setSort('produit')">Bon de commande <span>{{ sortArrow('produit') }}</span></th>
+            <th>Qté</th>
+            <th class="pt-th-sort" (click)="setSort('montant')">Montant HT <span>{{ sortArrow('montant') }}</span></th>
+            <th class="pt-th-sort" (click)="setSort('statut')">Statut <span>{{ sortArrow('statut') }}</span></th>
+            <th>Priorité</th>
+            <th class="pt-th-sort" (click)="setSort('date')">Commandé le <span>{{ sortArrow('date') }}</span></th>
+            <th>Livraison prévue</th>
+            <th class="pt-th-action">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (po of filteredOrders(); track trackByPoId($index, po)) {
+            <tr [class.pt-row--selected]="isSelected(po.po_id)" [class.pt-row--suggested]="po.statut === 'SUGGERE'">
+              <td class="pt-td-check">
+                <input type="checkbox" [checked]="isSelected(po.po_id)" (change)="toggleSelect(po.po_id)" />
+              </td>
+              <td class="pt-td-po" (click)="openDetail(po)" title="Ouvrir le détail du bon de commande">
+                <div class="pt-po-id">#{{ po.po_id }}</div>
+                <div class="pt-po-product">
+                  {{ po.product_name || ('SKU ' + po.sku) }}
+                  @if (po.source === 'AGENT') { <span class="pt-ia-chip">IA</span> }
+                </div>
+              </td>
+              <td class="pt-td-num">{{ po.quantite_recue }}/{{ po.quantite_commandee }}</td>
+              <td class="pt-td-num pt-td-amount">{{ po.montant_total_ht | number:'1.2-2' }} {{ po.devise }}</td>
+              <td><span [class]="statusClass(po.statut)">{{ statusLabel(po.statut) }}</span></td>
+              <td>
+                <span class="pt-priority" [style.color]="priorityColor(po.priorite)">● {{ po.priorite }}</span>
+              </td>
+              <td class="pt-td-date">{{ po.date_commande | date:'dd/MM/yyyy HH:mm' }}</td>
+              <td class="pt-td-date">
+                {{ po.date_livraison_prevue ? (po.date_livraison_prevue | date:'dd/MM/yyyy') : '—' }}
+                @if (riskBanner(po); as rb) {
+                  <span class="pt-risk" [class.pt-risk--danger]="rb.kind === 'danger'" [title]="rb.text">
+                    {{ rb.kind === 'danger' ? '⚠' : '✓' }}
+                  </span>
+                }
+              </td>
+              <td class="pt-td-action">
+                @if (rowAction(po); as action) {
+                  <button type="button" class="pt-action" [class]="'pt-action ' + action.css" (click)="runRowAction(po)">
+                    {{ action.label }}
+                  </button>
+                  @if (po.statut === 'SUGGERE') {
+                    <button type="button" class="pt-action pt-action--reject" (click)="reject(po)">Rejeter</button>
+                  }
+                } @else {
+                  <span class="pt-action-none">—</span>
+                }
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="9" class="pt-empty">Aucun bon de commande ne correspond aux filtres.</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
+  <!-- ── Vue Kanban (inchangée) ────────────────────────────────────────── -->
+  @if (viewMode() === 'kanban') {
 
   <!-- Chaîne d'intégration : agents → MCP Kanban → base → HITL -->
   <div class="pb-mcp-strip">
@@ -19,14 +141,6 @@
     <span class="pb-mcp-chip pb-mcp-chip--hitl">Porte HITL : Approuver / Rejeter humain</span>
     <span class="pb-mcp-chip pb-mcp-chip--pred">Prédiction rupture × réception sur chaque carte</span>
   </div>
-
-  @if (toastMsg()) {
-    <div class="pb-toast">{{ toastMsg() }}</div>
-  }
-
-  @if (errorMsg()) {
-    <div class="pb-error">{{ errorMsg() }}</div>
-  }
 
   <div class="pb-board">
 
@@ -195,4 +309,5 @@
     </div>
 
   </div>
+  }
 </div>
